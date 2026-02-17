@@ -14,20 +14,26 @@ The full specification lives in `coverteda_implementation_guide.md` (2,300+ line
 
 ```bash
 # Prerequisites
-rustup                          # Rust toolchain
-cargo install tauri-cli         # Tauri CLI
+rustup                          # Rust toolchain (~/.cargo/bin/)
+npm install                     # Frontend dependencies
+# System deps (Tauri): libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
-# Development (hot reload)
-cargo tauri dev
+# Frontend only (no Tauri — runs in browser with mock data)
+npm run dev                     # Vite dev server on http://localhost:1420
+npm run build                   # Production build to dist/
 
-# Production build (.deb/.AppImage on Linux, .msi/.exe on Windows)
-cargo tauri build
+# Full Tauri app (requires system WebKitGTK deps)
+npx tauri dev                   # Run dev version with hot reload
+npx tauri build                 # Create distributable binary
+
+# Type checking
+npx tsc --noEmit                # TypeScript check (should be zero errors)
 
 # Rust tests (uses fixture files in tests/fixtures/)
-cargo test
+cargo test --manifest-path src-tauri/Cargo.toml
 
 # Frontend tests
-npm test                        # Vitest + Testing Library
+npx vitest                      # Vitest + Testing Library
 ```
 
 ## Architecture
