@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CovertEDA v3 — Unified FPGA Development Platform</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06080c;overflow:hidden}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#1a2235;border-radius:3px}
+::selection{background:rgba(59,158,255,.3)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useMemo}=React;
+const M="'IBM Plex Mono',monospace";
+const S="'Outfit',sans-serif";
+const C={bg:"#06080c",s1:"#0c1018",s2:"#121a26",s3:"#1a2438",b1:"#1c2840",b2:"#2a4060",t1:"#e8f0fa",t2:"#9ab0cc",t3:"#546880",accent:"#3b9eff",accentDim:"#122a48",ok:"#2ecc71",okDim:"#0a2816",warn:"#f0a030",warnDim:"#2a1c06",err:"#e74c3c",errDim:"#2a0c0c",cyan:"#22d3ee",purple:"#a78bfa",pink:"#f472b6",orange:"#fb923c"};
+
+// ═══════════════════ GIT STATE ═══════════════════
+const GIT={
+  branch:"feature/pqc-kyber-engine",
+  commit:"a3f7c2e",
+  commitMsg:"Add Kyber round function pipeline stage",
+  author:"Travis",
+  time:"14 min ago",
+  ahead:2,behind:0,
+  remote:"origin/feature/pqc-kyber-engine",
+  dirty:true,
+  staged:3,unstaged:2,untracked:1,
+  stashes:1,
+  tags:["v0.4.1-rc2"],
+  recentCommits:[
+    {hash:"a3f7c2e",msg:"Add Kyber round function pipeline stage",time:"14m",author:"Travis"},
+    {hash:"b91d4f8",msg:"Fix I2C NACK handling in multi-master mode",time:"2h",author:"Travis"},
+    {hash:"e5c0a12",msg:"Update .lpf constraints for bank 2 LVCMOS25",time:"5h",author:"Travis"},
+    {hash:"7f3b901",msg:"Refactor SPI flash controller state machine",time:"1d",author:"Wei"},
+    {hash:"c42e8d6",msg:"Add SHA3 Keccak-f[1600] permutation core",time:"2d",author:"Travis"},
+    {hash:"1a9e7b3",msg:"Initial DC-SCM top-level integration",time:"4d",author:"Travis"},
+  ],
+};
+
+// ═══════════════════ PROJECT FILES ═══════════════════
+// Each file: name, depth, type (folder/rtl/tb/constr/ip/output/config/doc), 
+// save status, git status (M/A/U/D/clean), in synthesis, in sim
+const FILES=[
+  {n:"src",d:0,ty:"folder",open:true},
+  {n:"top_level.sv",d:1,ty:"rtl",saved:false,git:"M",synth:true,sim:true,lines:342,lang:"SystemVerilog"},
+  {n:"i2c_master.sv",d:1,ty:"rtl",saved:true,git:"clean",synth:true,sim:true,lines:287,lang:"SystemVerilog"},
+  {n:"spi_flash_ctrl.sv",d:1,ty:"rtl",saved:true,git:"clean",synth:true,sim:true,lines:198,lang:"SystemVerilog"},
+  {n:"pqc_engine.sv",d:1,ty:"rtl",saved:false,git:"M",synth:true,sim:true,lines:524,lang:"SystemVerilog"},
+  {n:"sha3_core.v",d:1,ty:"rtl",saved:true,git:"clean",synth:true,sim:true,lines:412,lang:"Verilog"},
+  {n:"keccak_round.v",d:1,ty:"rtl",saved:true,git:"A",synth:true,sim:true,lines:156,lang:"Verilog"},
+  {n:"uart_tx.v",d:1,ty:"rtl",saved:true,git:"clean",synth:true,sim:false,lines:89,lang:"Verilog"},
+  {n:"gpio_ctrl.v",d:1,ty:"rtl",saved:true,git:"clean",synth:true,sim:false,lines:67,lang:"Verilog"},
+  {n:"debug_bus.sv",d:1,ty:"rtl",saved:true,git:"clean",synth:false,sim:false,lines:44,lang:"SystemVerilog"},
+  {n:"testbench",d:0,ty:"folder",open:true},
+  {n:"tb_top.sv",d:1,ty:"tb",saved:true,git:"A",synth:false,sim:true,lines:256,lang:"SystemVerilog"},
+  {n:"tb_i2c_model.sv",d:1,ty:"tb",saved:true,git:"A",synth:false,sim:true,lines:134,lang:"SystemVerilog"},
+  {n:"tb_spi_flash.sv",d:1,ty:"tb",saved:true,git:"clean",synth:false,sim:true,lines:98,lang:"SystemVerilog"},
+  {n:"wave_config.do",d:1,ty:"config",saved:true,git:"U",synth:false,sim:false,lines:32,lang:"TCL"},
+  {n:"constraints",d:0,ty:"folder",open:true},
+  {n:"dc_scm.lpf",d:1,ty:"constr",saved:true,git:"M",synth:true,sim:false,lines:147,lang:"LPF"},
+  {n:"timing.sdc",d:1,ty:"constr",saved:true,git:"clean",synth:true,sim:false,lines:23,lang:"SDC"},
+  {n:"ip",d:0,ty:"folder",open:false},
+  {n:"pll_core.v",d:1,ty:"ip",saved:true,git:"clean",synth:true,sim:true,lines:45,lang:"Verilog"},
+  {n:"i2c_hard_ip.v",d:1,ty:"ip",saved:true,git:"clean",synth:true,sim:false,lines:12,lang:"Verilog"},
+  {n:"impl",d:0,ty:"folder",open:false},
+  {n:"output.jed",d:1,ty:"output",saved:true,git:"clean",synth:false,sim:false,lines:0,lang:"Binary"},
+  {n:"output.bit",d:1,ty:"output",saved:true,git:"clean",synth:false,sim:false,lines:0,lang:"Binary"},
+  {n:"timing_report.txt",d:1,ty:"output",saved:true,git:"clean",synth:false,sim:false,lines:890,lang:"Report"},
+  {n:"docs",d:0,ty:"folder",open:false},
+  {n:"README.md",d:1,ty:"doc",saved:true,git:"clean",synth:false,sim:false,lines:78,lang:"Markdown"},
+  {n:"CHANGELOG.md",d:1,ty:"doc",saved:false,git:"M",synth:false,sim:false,lines:145,lang:"Markdown"},
+];
+
+// ═══════════════════ REPORT DATA ═══════════════════
+const REPORTS={
+  timing:{
+    title:"Timing Analysis Report",generated:"2025-02-15 14:24:07",tool:"Lattice Diamond 3.13 / Synplify Pro",
+    summary:{status:"PASS",fmax:"148.3 MHz",target:"125.0 MHz",margin:"+23.3 MHz (+18.6%)",wns:"+1.87 ns",tns:"0.000 ns",whs:"+0.42 ns",ths:"0.000 ns",failingPaths:0,totalPaths:847,clocks:2},
+    clocks:[
+      {name:"clk_25mhz",period:"40.000 ns",freq:"25.0 MHz",source:"Pin A4",type:"Primary",wns:"+5.21 ns",paths:124},
+      {name:"pll_clk_125",period:"8.000 ns",freq:"125.0 MHz",source:"PLL output",type:"Generated",wns:"+1.87 ns",paths:723},
+    ],
+    criticalPaths:[
+      {rank:1,from:"pqc_engine/round_reg[3]",to:"sha3_core/state_in[127]",slack:"+1.87 ns",req:"8.000 ns",delay:"6.130 ns",levels:4,clk:"pll_clk_125",type:"Setup"},
+      {rank:2,from:"pqc_engine/key_sched/rcon[7]",to:"pqc_engine/round_fn/mix_col[31]",slack:"+2.14 ns",req:"8.000 ns",delay:"5.860 ns",levels:4,clk:"pll_clk_125",type:"Setup"},
+      {rank:3,from:"i2c_master/bit_cnt[2]",to:"i2c_master/state_nxt[0]",slack:"+2.34 ns",req:"8.000 ns",delay:"5.660 ns",levels:3,clk:"pll_clk_125",type:"Setup"},
+      {rank:4,from:"spi_ctrl/addr_reg[23]",to:"spi_ctrl/data_out[7]",slack:"+3.12 ns",req:"8.000 ns",delay:"4.880 ns",levels:2,clk:"pll_clk_125",type:"Setup"},
+      {rank:5,from:"sha3_core/theta/xor_plane[2]",to:"sha3_core/chi/out_state[63]",slack:"+3.41 ns",req:"8.000 ns",delay:"4.590 ns",levels:3,clk:"pll_clk_125",type:"Setup"},
+      {rank:6,from:"uart_tx/baud_cnt[15]",to:"uart_tx/bit_idx[3]",slack:"+5.21 ns",req:"40.000 ns",delay:"34.790 ns",levels:2,clk:"clk_25mhz",type:"Setup"},
+    ],
+    holdPaths:[
+      {rank:1,from:"i2c_master/sda_oe_reg",to:"i2c_master/sda_out",slack:"+0.42 ns",levels:1,type:"Hold"},
+      {rank:2,from:"gpio_ctrl/out_reg[0]",to:"gpio_ctrl/out_pad[0]",slack:"+0.48 ns",levels:1,type:"Hold"},
+    ],
+    unconstrained:["debug_bus/probe[7:0] — no clock constraint (excluded from synthesis)"],
+  },
+  utilization:{
+    title:"Resource Utilization Report",generated:"2025-02-15 14:24:07",device:"LCMXO3LF-6900C-5BG256C",
+    summary:[
+      {cat:"Logic",items:[{r:"LUT4",used:4217,total:6864,detail:"61.4% — ⚠ Consider optimization above 70%"},{r:"Registers (FF)",used:1842,total:6864,detail:"26.8%"},{r:"Carry Chain",used:87,total:3432,detail:"2.5%"}]},
+      {cat:"Memory",items:[{r:"EBR (18Kb blocks)",used:12,total:26,detail:"46.2% — PQC engine key storage + FIFO"},{r:"Distributed RAM",used:840,total:5120,detail:"16.4% — bits"}]},
+      {cat:"I/O",items:[{r:"User I/O Pins",used:47,total:206,detail:"22.8%"},{r:"Differential Pairs",used:0,total:72,detail:"0.0%"},{r:"I/O Banks Used",used:4,total:6,detail:"Banks 0,1,2,3"}]},
+      {cat:"Clock",items:[{r:"PLL/DLL",used:1,total:2,detail:"PLL0 → 125 MHz from 25 MHz input"},{r:"Global Clock Nets",used:2,total:8,detail:"clk_25mhz, pll_clk_125"}]},
+    ],
+    byModule:[
+      {module:"pqc_engine",lut:1847,ff:812,ebr:8,pct:"43.8%"},
+      {module:"sha3_core",lut:1234,ff:456,ebr:2,pct:"29.3%"},
+      {module:"i2c_master",lut:412,ff:189,ebr:1,pct:"9.8%"},
+      {module:"spi_flash_ctrl",lut:367,ff:178,ebr:1,pct:"8.7%"},
+      {module:"uart_tx",lut:89,ff:67,ebr:0,pct:"2.1%"},
+      {module:"gpio_ctrl",lut:67,ff:34,ebr:0,pct:"1.6%"},
+      {module:"top_level (glue)",lut:201,ff:106,ebr:0,pct:"4.8%"},
+    ],
+  },
+  power:{
+    title:"Power Estimation Report",generated:"2025-02-15 14:24:07",
+    junction:"52.3 °C",ambient:"25 °C",theta_ja:"23.4 °C/W",
+    total:"280 mW",confidence:"Medium (toggle rates estimated)",
+    breakdown:[
+      {cat:"Static (Quiescent)",mw:42,pct:15,color:C.t3},
+      {cat:"Dynamic — Clocks",mw:118,pct:42,color:C.accent},
+      {cat:"Dynamic — Logic",mw:67,pct:24,color:C.purple},
+      {cat:"Dynamic — I/O",mw:31,pct:11,color:C.cyan},
+      {cat:"Dynamic — Block RAM",mw:22,pct:8,color:C.ok},
+    ],
+    byRail:[{rail:"VCCIO (3.3V)",mw:38},{rail:"VCCIO (2.5V)",mw:12},{rail:"VCC (1.2V core)",mw:198},{rail:"VCCAUX",mw:32}],
+  },
+  drc:{
+    title:"Design Rule Check Report",generated:"2025-02-15 14:24:07",
+    summary:{errors:0,critWarns:1,warnings:4,info:12,waived:2},
+    items:[
+      {sev:"crit_warn",code:"DRC-LUTPZ",msg:"LUT4 at pqc_engine/round_fn has all constant inputs — may be optimized away",loc:"pqc_engine.sv:247",action:"Verify intent or add (* keep *) attribute"},
+      {sev:"warning",code:"DRC-IOBUF",msg:"I/O pin D5 (spi_mosi) has no SLEWRATE constraint specified",loc:"dc_scm.lpf",action:"Add SLEWRATE=SLOW for signal integrity"},
+      {sev:"warning",code:"DRC-IOBUF",msg:"I/O pin D6 (spi_miso) has no SLEWRATE constraint specified",loc:"dc_scm.lpf",action:"Add SLEWRATE=SLOW for signal integrity"},
+      {sev:"warning",code:"DRC-CLKNET",msg:"Clock 'clk_25mhz' drives 124 FFs but could use secondary clock network",loc:"top_level.sv:18",action:"Consider using DCCA buffer"},
+      {sev:"warning",code:"DRC-FLOAT",msg:"Net 'debug_bus[7]' has no load — will be trimmed",loc:"debug_bus.sv:12",action:"Connect or remove"},
+      {sev:"info",code:"DRC-UTIL",msg:"LUT utilization at 61.4% — approaching density threshold",loc:"—",action:"Monitor after next feature add"},
+      {sev:"info",code:"DRC-HOLD",msg:"All hold violations fixed by router — minimum slack +0.42 ns",loc:"—",action:"None"},
+      {sev:"info",code:"DRC-EBR",msg:"EBR utilization 46.2% — adequate headroom",loc:"—",action:"None"},
+      {sev:"waived",code:"DRC-JTAG",msg:"JTAG pins not constrained (handled by programmer)",loc:"—",action:"Waived per design spec"},
+      {sev:"waived",code:"DRC-CONFIG",msg:"Configuration pins not in constraint file",loc:"—",action:"Waived — handled by device defaults"},
+    ],
+  },
+  io:{
+    title:"I/O Pin Assignment & Banking Report",generated:"2025-02-15 14:24:07",
+    banks:[
+      {id:"0",vccio:"3.3V",used:4,total:42,pins:["A4 clk_25mhz IN","B2 rst_n IN","A3 cfg_done OUT","B3 cfg_initn IN"]},
+      {id:"1",vccio:"3.3V",used:8,total:48,pins:["C3 i2c_sda BIDIR","C4 i2c_scl OUT","D5 spi_mosi OUT","D6 spi_miso IN","D7 spi_clk OUT","D8 spi_cs_n OUT","C5 gpio[0] OUT","C6 gpio[1] OUT"]},
+      {id:"2",vccio:"2.5V",used:6,total:38,pins:["E9 uart_tx OUT","E10 uart_rx IN","F8 bmc_alert_n OUT","E8 bmc_ready IN","F9 spare[0] OUT","G8 spare[1] OUT"]},
+      {id:"3",vccio:"3.3V",used:8,total:44,pins:["G1 led[0] OUT","G2 led[1] OUT","G3 led[2] OUT","G4 led[3] OUT","H1 sw[0] IN","H2 sw[1] IN","H3 sw[2] IN","H4 sw[3] IN"]},
+    ],
+  },
+};
+
+// ═══════════════════ BACKENDS (condensed) ═══════════════════
+const BACKENDS={
+diamond:{id:"diamond",name:"Lattice Diamond",short:"Diamond",color:"#e74c3c",icon:"◆",version:"3.13",cli:"pnmainc",defaultDev:"LCMXO3LF-6900C-5BG256C",constrExt:".lpf",
+  pipeline:[{id:"synth",label:"Synthesis",cmd:"prj_run Synthesis -impl impl1"},{id:"translate",label:"Translate",cmd:"prj_run Translate"},{id:"map",label:"Map",cmd:"prj_run Map"},{id:"par",label:"Place & Route",cmd:"prj_run PAR"},{id:"bit",label:"Bitstream",cmd:"prj_run Export -task Bitgen"},{id:"sta",label:"Timing",cmd:"prj_run Export -task TimingSimFileVer"}],
+  resources:[{l:"LUT4",u:4217,t:6864},{l:"Registers",u:1842,t:6864},{l:"I/O",u:47,t:206},{l:"EBR",u:12,t:26},{l:"PLL",u:1,t:2}],
+  timing:{fmax:"148.3",target:"125.0",setup:"+1.87",hold:"+0.42"},
+  log:[{t:"cmd",m:"pnmainc -t build.tcl"},{t:"info",m:"CovertEDA → Diamond 3.13"},{t:"cmd",m:"prj_run Synthesis -impl impl1"},{t:"out",m:"Synplify: reading sources..."},{t:"ok",m:"Synthesis: 0E 2W"},{t:"warn",m:"W: net 'debug_bus[7]' no load"},{t:"cmd",m:"prj_run PAR -impl impl1"},{t:"out",m:"LUT4: 4,217/6,864 (61.4%)"},{t:"ok",m:"PAR complete"},{t:"ok",m:"Fmax=148.3 MHz ✓"},{t:"info",m:"═══ DONE ═══ 1m 6s"}],
+  history:[{time:"14:24",ok:true,fmax:"148.3",util:"61.4%",w:2},{time:"13:51",ok:true,fmax:"142.7",util:"63.1%",w:3},{time:"12:08",ok:false,fmax:"—",util:"—",w:0}],
+},
+quartus:{id:"quartus",name:"Intel Quartus Prime",short:"Quartus",color:"#0091ff",icon:"◇",version:"23.1",cli:"quartus_sh",defaultDev:"5CSEMA5F31C6",constrExt:".sdc",
+  pipeline:[{id:"syn",label:"Synthesis",cmd:"quartus_syn"},{id:"fit",label:"Fitter",cmd:"quartus_fit"},{id:"asm",label:"Assembler",cmd:"quartus_asm"},{id:"sta",label:"TimeQuest",cmd:"quartus_sta"},{id:"eda",label:"EDA Netlist",cmd:"quartus_eda"}],
+  resources:[{l:"ALMs",u:3412,t:32070},{l:"Registers",u:4891,t:128280},{l:"M10K",u:28,t:397},{l:"DSP",u:2,t:87},{l:"I/O",u:89,t:457}],
+  timing:{fmax:"203.7",target:"100.0",setup:"+2.34",hold:"+0.19"},
+  log:[{t:"cmd",m:"quartus_sh --flow compile"},{t:"info",m:"CovertEDA → Quartus 23.1"},{t:"out",m:"ALMs: 3,412/32,070 (10.6%)"},{t:"ok",m:"Fmax=203.7 MHz ✓"},{t:"info",m:"═══ DONE ═══ 2m 34s"}],
+  history:[{time:"16:42",ok:true,fmax:"203.7",util:"10.6%",w:3},{time:"15:18",ok:true,fmax:"198.2",util:"11.2%",w:4}],
+},
+vivado:{id:"vivado",name:"AMD Vivado",short:"Vivado",color:"#8cc63f",icon:"▲",version:"2024.1",cli:"vivado -mode tcl",defaultDev:"xc7a100tcsg324-1",constrExt:".xdc",
+  pipeline:[{id:"syn",label:"synth_design",cmd:"synth_design -top top_level"},{id:"opt",label:"opt_design",cmd:"opt_design"},{id:"place",label:"place_design",cmd:"place_design"},{id:"phys",label:"phys_opt",cmd:"phys_opt_design"},{id:"route",label:"route_design",cmd:"route_design"},{id:"bit",label:"write_bitstream",cmd:"write_bitstream"}],
+  resources:[{l:"Slice LUTs",u:5841,t:63400},{l:"Registers",u:3217,t:126800},{l:"BRAM",u:17,t:270},{l:"DSP48",u:4,t:240},{l:"I/O",u:89,t:210}],
+  timing:{fmax:"178.4",target:"100.0",setup:"+1.92",hold:"+0.03"},
+  log:[{t:"cmd",m:"vivado -mode tcl -source build.tcl"},{t:"info",m:"CovertEDA → Vivado 2024.1"},{t:"out",m:"LUTs: 5,841/63,400"},{t:"ok",m:"Fmax=178.4 MHz ✓"},{t:"info",m:"═══ DONE ═══ 3m 13s"}],
+  history:[{time:"17:03",ok:true,fmax:"178.4",util:"9.2%",w:1},{time:"15:45",ok:true,fmax:"174.1",util:"9.5%",w:2}],
+},
+opensource:{id:"opensource",name:"OSS CAD Suite",short:"OSS",color:"#fb923c",icon:"✦",version:"yosys 0.40",cli:"yosys+nextpnr",defaultDev:"LFE5U-85F-6BG381C",constrExt:".lpf",
+  pipeline:[{id:"syn",label:"Yosys Synth",cmd:"yosys -p 'synth_ecp5'"},{id:"pnr",label:"nextpnr PnR",cmd:"nextpnr-ecp5 --85k"},{id:"pack",label:"ecppack",cmd:"ecppack --compress"}],
+  resources:[{l:"LUT4",u:6123,t:83640},{l:"FFs",u:2981,t:83640},{l:"I/O",u:47,t:197},{l:"EBR",u:18,t:208},{l:"PLL",u:1,t:4}],
+  timing:{fmax:"131.2",target:"125.0",setup:"+0.62",hold:"+0.28"},
+  log:[{t:"cmd",m:"yosys -p 'synth_ecp5'"},{t:"info",m:"CovertEDA → OSS CAD"},{t:"ok",m:"6,123 LCs"},{t:"ok",m:"Fmax=131.2 MHz ✓"},{t:"info",m:"═══ DONE ═══ 42s"}],
+  history:[{time:"09:14",ok:true,fmax:"131.2",util:"7.3%",w:0}],
+},
+};
+
+// ═══════════════════ MICRO COMPONENTS ═══════════════════
+const Badge=({children,color=C.accent,style:sx})=><span style={{display:"inline-flex",alignItems:"center",padding:"1px 6px",borderRadius:3,fontSize:9,fontFamily:M,fontWeight:600,color,background:`${color}18`,letterSpacing:.3,...sx}}>{children}</span>;
+
+function Btn({children,onClick,primary,small,disabled,style:sx,icon}){
+  const[h,setH]=useState(false);
+  return <button onClick={disabled?undefined:onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"inline-flex",alignItems:"center",gap:4,padding:small?"2px 8px":"6px 12px",borderRadius:4,
+      border:primary?"none":`1px solid ${C.b1}`,fontFamily:M,fontSize:small?9:10,fontWeight:600,
+      background:primary?(h?"#4da6ff":C.accent):(h?C.s3:"transparent"),
+      color:primary?"#fff":C.t2,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,transition:"all .1s",...sx}}>
+    {icon&&<span style={{display:"flex"}}>{icon}</span>}{children}
+  </button>;
+}
+
+function HoverRow({children,style:sx,onClick}){const[h,setH]=useState(false);return <div onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)} style={{background:h?C.s3:"transparent",cursor:onClick?"pointer":"default",transition:"background .06s",...sx}}>{children}</div>;}
+
+function NavBtn({icon,label,active,onClick,accent,badge}){
+  const[h,setH]=useState(false);
+  return <div onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)} title={label}
+    style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"8px 4px",cursor:"pointer",borderRadius:5,position:"relative",
+      background:active?C.accentDim:(h?C.s3:"transparent"),color:active?(accent||C.accent):(h?C.t2:C.t3),
+      borderLeft:active?`2px solid ${accent||C.accent}`:"2px solid transparent",transition:"all .1s",minWidth:52}}>
+    <span style={{display:"flex"}}>{icon}</span>
+    <span style={{fontSize:7,fontFamily:M,fontWeight:600,letterSpacing:.3}}>{label}</span>
+    {badge&&<span style={{position:"absolute",top:4,right:6,width:6,height:6,borderRadius:3,background:accent||C.accent}}/>}
+  </div>;
+}
+
+function BackendOption({b,active,onPick}){const[h,setH]=useState(false);return <div onClick={onPick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:active?`${b.color}15`:(h?C.s3:"transparent"),borderLeft:`3px solid ${active?b.color:"transparent"}`,cursor:"pointer",transition:"all .1s"}}><span style={{fontSize:16,color:b.color}}>{b.icon}</span><div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.t1}}>{b.name}</div><div style={{fontSize:9,fontFamily:M,color:C.t3}}>{b.cli} • {b.defaultDev}</div></div><Badge color={b.color}>{b.version}</Badge></div>;}
+
+// File type colors & icons
+const FTC={rtl:C.accent,tb:C.purple,constr:C.warn,ip:C.cyan,output:C.t3,config:C.t3,doc:C.t3,folder:C.warn};
+const GTC={M:C.warn,A:C.ok,U:C.orange,D:C.err,clean:null};
+
+function FileTreeRow({f,active,onPick}){
+  const[h,setH]=useState(false);
+  if(f.ty==="folder") return <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 8px",paddingLeft:8+f.d*12,fontSize:10,fontFamily:M,fontWeight:700,color:C.t2,letterSpacing:.3,borderBottom:`1px solid ${C.b1}08`,marginTop:f.d===0?4:0}}>
+    <span style={{color:C.warn,fontSize:8}}>{f.open?"▼":"▶"}</span>{f.n.toUpperCase()}
+    <span style={{fontSize:8,color:C.t3,fontWeight:400}}>{"/"}</span>
+  </div>;
+  return <div onClick={onPick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"grid",gridTemplateColumns:"1fr 14px 14px 14px",gap:2,alignItems:"center",
+      padding:"3px 6px 3px "+(8+f.d*12)+"px",fontSize:10,fontFamily:M,
+      background:active?C.accentDim:(h?`${C.s3}88`:"transparent"),
+      borderLeft:active?`2px solid ${C.accent}`:"2px solid transparent",
+      cursor:"pointer",transition:"all .08s"}}>
+    <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0,overflow:"hidden"}}>
+      {/* Git status letter */}
+      {f.git&&f.git!=="clean"?<span style={{color:GTC[f.git],fontSize:9,fontWeight:700,width:10,textAlign:"center",flexShrink:0}}>{f.git}</span>
+        :<span style={{width:10,flexShrink:0}}/>}
+      {/* File name */}
+      <span style={{color:active?C.t1:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.n}</span>
+      {/* Unsaved dot */}
+      {!f.saved&&<span style={{width:5,height:5,borderRadius:"50%",background:C.err,flexShrink:0}} title="Unsaved"/>}
+    </div>
+    {/* Synth indicator */}
+    <span title={f.synth?"In synthesis":"Not in synthesis"} style={{fontSize:8,textAlign:"center",color:f.synth?C.ok:C.t3,opacity:f.synth?1:.25}}>S</span>
+    {/* Sim indicator */}
+    <span title={f.sim?"In simulation":"Not in simulation"} style={{fontSize:8,textAlign:"center",color:f.sim?C.purple:C.t3,opacity:f.sim?1:.25}}>T</span>
+    {/* Type badge */}
+    <span style={{fontSize:7,textAlign:"center",color:FTC[f.ty],opacity:.7}}>{f.ty==="rtl"?"⬡":f.ty==="tb"?"◈":f.ty==="constr"?"◉":f.ty==="ip"?"◎":"·"}</span>
+  </div>;
+}
+
+// SVG icons
+const I={
+  Play:()=><svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1l8 5-8 5z"/></svg>,
+  Check:()=><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 6l3 3L10 3"/></svg>,
+  Search:()=><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="6" cy="6" r="4"/><path d="M9 9l3 3"/></svg>,
+  Chip:()=><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="4" y="4" width="10" height="10" rx="1"/><path d="M7 4V2M11 4V2M7 14v2M11 14v2M4 7H2M4 11H2M14 7h2M14 11h2"/></svg>,
+  Git:()=><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="3.5" r="1.5"/><circle cx="8" cy="12.5" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M8 5v6M9.3 7.2l1.5.3"/></svg>,
+  Branch:()=><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="5" cy="4" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="7" r="2"/><path d="M5 6v4M7 5.5l3 1"/></svg>,
+  Arrow:()=><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 8h8M9 5l3 3-3 3"/></svg>,
+  Zap:()=><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M7.5 1L3 8h4l-1 5 5-7H7l.5-5z"/></svg>,
+  Gauge:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 11a6 6 0 1112 0"/><path d="M8 11V5.5"/><circle cx="8" cy="11" r="1" fill="currentColor"/></svg>,
+  Pin:()=><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="3" y="1" width="8" height="6" rx="1"/><path d="M5 7v3M9 7v3M7 10v3"/></svg>,
+  Term:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M4 6l3 2.5L4 11M9 11h3"/></svg>,
+  Doc:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8h4M6 10.5h3"/></svg>,
+  Clock:()=><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v3.5l2.5 1.5"/></svg>,
+  Warn:()=><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M7 1L1 13h12z"/><path d="M7 5.5v3M7 10.5v.5"/></svg>,
+  Bolt:()=><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 1v5H2L7 13V8h2z"/></svg>,
+  Key:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="5.5" cy="10.5" r="3"/><path d="M8 8l5-5M11 3l2 2"/></svg>,
+  Settings:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M3.8 12.2l1.4-1.4M10.8 5.2l1.4-1.4"/></svg>,
+  Box:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 1L2 4v8l6 3 6-3V4z"/><path d="M2 4l6 3 6-3M8 7v8"/></svg>,
+  Brain:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 14V8"/><path d="M5 3a3 3 0 013-1 3 3 0 013 1"/><circle cx="5" cy="6" r="2.5"/><circle cx="11" cy="6" r="2.5"/><path d="M5 8.5C5 10 6 11 8 11s3-1 3-2.5"/></svg>,
+  Link:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4 8h8"/><rect x="1" y="5" width="5" height="6" rx="1"/><rect x="10" y="5" width="5" height="6" rx="1"/></svg>,
+  Map:()=><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="1" y="3" width="14" height="10" rx="1"/><path d="M5 3v10M11 3v10M1 8h14"/></svg>,
+};
+
+// ═══════════════════ MAIN APP ═══════════════════
+function App(){
+  const[bid,setBid]=useState("diamond");
+  const[sec,setSec]=useState("build");
+  const[building,setBuilding]=useState(false);
+  const[bStep,setBStep]=useState(-1);
+  const[logs,setLogs]=useState([]);
+  const[cmdOpen,setCmdOpen]=useState(false);
+  const[cmdQ,setCmdQ]=useState("");
+  const[devOpen,setDevOpen]=useState(false);
+  const[aFile,setAFile]=useState("pqc_engine.sv");
+  const[showFiles,setShowFiles]=useState(true);
+  const[rptTab,setRptTab]=useState("timing");
+  const[gitExpanded,setGitExpanded]=useState(false);
+  const logRef=useRef(null);
+  const B=BACKENDS[bid];
+
+  const switchBackend=(id)=>{setBid(id);setBStep(-1);setLogs([]);setBuilding(false);};
+  const runBuild=()=>{
+    setBuilding(true);setBStep(0);setLogs([]);setSec("build");
+    let step=0,li=0;
+    const si=setInterval(()=>{step++;setBStep(step);if(step>=B.pipeline.length){clearInterval(si);setBuilding(false);}},950);
+    const ti=setInterval(()=>{if(li<B.log.length){setLogs(p=>[...p,B.log[li]]);li++;}else clearInterval(ti);},200);
+  };
+  useEffect(()=>{if(logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;},[logs]);
+  useEffect(()=>{const h=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();setCmdOpen(p=>!p);}if(e.key==="Escape"){setCmdOpen(false);setDevOpen(false);}};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[]);
+
+  const panel={background:C.s1,borderRadius:7,border:`1px solid ${C.b1}`,overflow:"hidden"};
+  const panelP={...panel,padding:14};
+  const hdr=(t,icon)=><div style={{fontSize:11,fontWeight:700,color:C.t1,marginBottom:10,display:"flex",alignItems:"center",gap:5}}>{icon}{t}</div>;
+
+  const RBar=({l,u,t})=>{const p=Math.round(u/t*100);const col=p>85?C.err:p>65?C.warn:C.accent;return <div style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:M,marginBottom:2}}><span style={{color:C.t2}}>{l}</span><span style={{color:col}}>{u.toLocaleString()}/{t.toLocaleString()} ({p}%)</span></div><div style={{height:4,borderRadius:2,background:C.b1,overflow:"hidden"}}><div style={{height:"100%",borderRadius:2,width:`${p}%`,background:`linear-gradient(90deg,${col}88,${col})`}}/></div></div>;};
+
+  const PStep=({s,i,total})=>{let st="pending";if(building){if(i<bStep)st="done";else if(i===bStep)st="run";}else if(bStep>=total&&bStep>=0)st="done";const col={done:C.ok,run:C.accent,pending:C.t3}[st];return <div style={{display:"flex",gap:8,alignItems:"flex-start"}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:18}}><div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${col}`,background:st!=="pending"?`${col}15`:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{st==="done"&&<I.Check/>}{st==="run"&&<div style={{width:5,height:5,borderRadius:3,background:col,animation:"pulse 1s infinite"}}/>}</div>{i<total-1&&<div style={{width:1.5,height:22,background:st==="done"?col:C.b1}}/>}</div><div style={{paddingBottom:i<total-1?2:0}}><div style={{fontSize:10,fontFamily:M,fontWeight:600,color:st==="pending"?C.t3:C.t1}}>{s.label}</div>{st!=="pending"&&<div style={{fontSize:8,fontFamily:M,color:C.t3,marginTop:1}}>{s.cmd}</div>}</div></div>;};
+
+  const CLine=({l})=>{const col={info:C.t3,cmd:C.cyan,ok:C.ok,warn:C.warn,err:C.err,out:C.t2}[l.t];const pre={cmd:"$ ",err:"✗ ",warn:"⚠ ",ok:"✓ ",info:"› ",out:"  "}[l.t]||"";return <div style={{fontSize:10,fontFamily:M,lineHeight:1.6,color:col}}><span style={{opacity:.5}}>{pre}</span>{l.m}</div>;};
+
+  // Synthesis file counts
+  const synthFiles=FILES.filter(f=>f.synth);
+  const unsavedFiles=FILES.filter(f=>!f.saved&&f.ty!=="folder");
+  const dirtyGitFiles=FILES.filter(f=>f.git&&f.git!=="clean"&&f.ty!=="folder");
+
+  return <div style={{width:"100vw",height:"100vh",background:C.bg,color:C.t2,fontFamily:S,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+    {/* ══════════════ GIT STATUS BAR ══════════════ */}
+    <div style={{display:"flex",alignItems:"center",height:28,padding:"0 12px",background:"#080a10",borderBottom:`1px solid ${C.b1}`,gap:8,fontSize:9,fontFamily:M,flexShrink:0}}>
+      <span style={{display:"flex",color:C.t3}}><I.Branch/></span>
+      <span style={{color:C.accent,fontWeight:700,cursor:"pointer"}} onClick={()=>setGitExpanded(p=>!p)}>{GIT.branch}</span>
+      {GIT.tags.length>0&&<Badge color={C.cyan} style={{fontSize:8}}>{GIT.tags[0]}</Badge>}
+      <span style={{color:C.t3,opacity:.4}}>│</span>
+      <span style={{color:C.t3}}>{GIT.commit}</span>
+      <span style={{color:C.t2,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>"{GIT.commitMsg}"</span>
+      <span style={{color:C.t3}}>— {GIT.time}</span>
+      <span style={{color:C.t3,opacity:.4}}>│</span>
+      {GIT.ahead>0&&<span style={{color:C.ok}}>↑{GIT.ahead}</span>}
+      {GIT.behind>0&&<span style={{color:C.warn}}>↓{GIT.behind}</span>}
+      {GIT.ahead===0&&GIT.behind===0&&<span style={{color:C.t3}}>in sync</span>}
+      <span style={{color:C.t3,opacity:.4}}>│</span>
+      {GIT.dirty?<>
+        {GIT.staged>0&&<span style={{color:C.ok}}>+{GIT.staged} staged</span>}
+        {GIT.unstaged>0&&<span style={{color:C.warn}}>~{GIT.unstaged} modified</span>}
+        {GIT.untracked>0&&<span style={{color:C.orange}}>?{GIT.untracked} untracked</span>}
+      </>:<span style={{color:C.ok}}>✓ clean</span>}
+      {GIT.stashes>0&&<><span style={{color:C.t3,opacity:.4}}>│</span><span style={{color:C.purple}}>{GIT.stashes} stash</span></>}
+      <div style={{flex:1}}/>
+      <Btn small style={{padding:"1px 6px",fontSize:8}}>Pull</Btn>
+      <Btn small style={{padding:"1px 6px",fontSize:8}}>Push ↑{GIT.ahead}</Btn>
+      <Btn small style={{padding:"1px 6px",fontSize:8}}>Stash</Btn>
+    </div>
+
+    {/* Git commit log dropdown */}
+    {gitExpanded&&<div onClick={()=>setGitExpanded(false)} style={{position:"fixed",inset:0,zIndex:700}}>
+      <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:28,left:80,width:520,background:C.s1,border:`1px solid ${C.b2}`,borderRadius:8,overflow:"hidden",boxShadow:"0 12px 40px rgba(0,0,0,.5)",animation:"slideDown .12s ease",zIndex:701}}>
+        <div style={{padding:"10px 14px",fontSize:10,fontFamily:M,fontWeight:700,color:C.t3,borderBottom:`1px solid ${C.b1}`,display:"flex",gap:8,alignItems:"center"}}>
+          <I.Git/>RECENT COMMITS — {GIT.branch}
+          <div style={{flex:1}}/>
+          <Badge color={C.ok}>↑{GIT.ahead} ahead</Badge>
+        </div>
+        {GIT.recentCommits.map((c,i)=><HoverRow key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderBottom:`1px solid ${C.b1}`,fontSize:10,fontFamily:M}}>
+          <span style={{color:i<GIT.ahead?C.ok:C.accent,fontWeight:700,width:56}}>{c.hash}</span>
+          <span style={{color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.msg}</span>
+          <span style={{color:C.t3,flexShrink:0}}>{c.author}</span>
+          <span style={{color:C.t3,flexShrink:0,width:28,textAlign:"right"}}>{c.time}</span>
+          {i<GIT.ahead&&<Badge color={C.ok} style={{fontSize:7}}>LOCAL</Badge>}
+        </HoverRow>)}
+      </div>
+    </div>}
+
+    {/* CMD PALETTE */}
+    {cmdOpen&&<div onClick={()=>{setCmdOpen(false);setCmdQ("");}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:480,background:C.s1,border:`1px solid ${C.b2}`,borderRadius:10,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.5)",animation:"slideDown .12s ease"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 12px",borderBottom:`1px solid ${C.b1}`}}>
+          <I.Search/><input autoFocus value={cmdQ} onChange={e=>setCmdQ(e.target.value)} placeholder="Commands: build, switch, reports, git..."
+            style={{flex:1,background:"transparent",border:"none",color:C.t1,fontSize:12,fontFamily:S,outline:"none"}}/>
+          <span style={{fontSize:8,fontFamily:M,color:C.t3,padding:"1px 4px",border:`1px solid ${C.b1}`,borderRadius:2}}>ESC</span>
+        </div>
+        <div style={{maxHeight:280,overflowY:"auto"}}>
+          {[{l:"Build All",c:"Build",d:`${B.short} flow`,a:runBuild},{l:"Reports",c:"View",d:"Timing, Utilization, Power, DRC, I/O",a:()=>setSec("reports")},
+            {l:"Switch: Diamond",c:"Backend",a:()=>switchBackend("diamond")},{l:"Switch: Quartus",c:"Backend",a:()=>switchBackend("quartus")},
+            {l:"Switch: Vivado",c:"Backend",a:()=>switchBackend("vivado")},{l:"Switch: OSS",c:"Backend",a:()=>switchBackend("opensource")},
+            {l:"Git: Commit",c:"Git",d:"Stage & commit changes"},{l:"Git: Push",c:"Git",d:`Push ${GIT.ahead} commits to remote`},
+            {l:"Git: Pull",c:"Git"},{l:"Git: Stash",c:"Git"},{l:"Git: Log",c:"Git",a:()=>setGitExpanded(true)},
+          ].filter(c=>!cmdQ||(c.l+c.c).toLowerCase().includes(cmdQ.toLowerCase()))
+           .map((cmd,i)=><HoverRow key={i} onClick={()=>{setCmdOpen(false);setCmdQ("");cmd.a&&cmd.a();}}
+            style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px"}}>
+            <span style={{fontSize:8,fontFamily:M,color:C.t3,width:48,letterSpacing:.5}}>{cmd.c}</span>
+            <div style={{flex:1}}><div style={{fontSize:11,color:C.t1}}>{cmd.l}</div>{cmd.d&&<div style={{fontSize:9,fontFamily:M,color:C.t3}}>{cmd.d}</div>}</div>
+          </HoverRow>)}
+        </div>
+      </div>
+    </div>}
+
+    {/* Backend switcher */}
+    {devOpen&&<div onClick={()=>setDevOpen(false)} style={{position:"fixed",inset:0,zIndex:800}}>
+      <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:70,left:56,width:320,background:C.s1,border:`1px solid ${C.b2}`,borderRadius:8,overflow:"hidden",boxShadow:"0 12px 40px rgba(0,0,0,.5)",animation:"slideDown .1s ease"}}>
+        <div style={{padding:"8px 12px",fontSize:8,fontFamily:M,fontWeight:700,letterSpacing:1.5,color:C.t3,borderBottom:`1px solid ${C.b1}`}}>SELECT BACKEND</div>
+        {Object.values(BACKENDS).map(b=><BackendOption key={b.id} b={b} active={b.id===bid} onPick={()=>{switchBackend(b.id);setDevOpen(false);}}/>)}
+      </div>
+    </div>}
+
+    <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+
+      {/* ══════ LEFT NAV ══════ */}
+      <div style={{width:56,flexShrink:0,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:6,gap:1}}>
+        <div onClick={()=>setDevOpen(p=>!p)} style={{padding:"6px 0 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:1,borderBottom:`1px solid ${C.b1}`,marginBottom:4,width:"100%"}}>
+          <span style={{color:C.accent}}><I.Chip/></span>
+          <span style={{fontSize:6,fontFamily:M,fontWeight:700,color:B.color,letterSpacing:.3}}>{B.short.toUpperCase()}</span>
+        </div>
+        <NavBtn icon={<I.Zap/>} label="Build" active={sec==="build"} onClick={()=>setSec("build")} badge={building}/>
+        <NavBtn icon={<I.Doc/>} label="Reports" active={sec==="reports"} onClick={()=>setSec("reports")} accent={C.cyan}/>
+        <NavBtn icon={<I.Box/>} label="IP" active={sec==="ip"} onClick={()=>setSec("ip")} accent={C.purple}/>
+        <NavBtn icon={<I.Link/>} label="Interc" active={sec==="interconnect"} onClick={()=>setSec("interconnect")} accent={C.cyan}/>
+        <NavBtn icon={<I.Brain/>} label="AI" active={sec==="ai"} onClick={()=>setSec("ai")} accent={C.pink}/>
+        <NavBtn icon={<I.Map/>} label="Regs" active={sec==="regmap"} onClick={()=>setSec("regmap")} accent={C.orange}/>
+        <NavBtn icon={<I.Pin/>} label="Constr" active={sec==="constraints"} onClick={()=>setSec("constraints")}/>
+        <NavBtn icon={<I.Gauge/>} label="Rsrc" active={sec==="resources"} onClick={()=>setSec("resources")}/>
+        <NavBtn icon={<I.Term/>} label="Log" active={sec==="console"} onClick={()=>setSec("console")}/>
+        <div style={{flex:1}}/>
+        <NavBtn icon={<I.Key/>} label="Lic" accent={C.warn}/>
+        <NavBtn icon={<I.Settings/>} label="Cfg"/>
+        <div style={{height:6}}/>
+      </div>
+
+      {/* ══════ FILE TREE PANEL ══════ */}
+      {showFiles&&<div style={{width:230,flexShrink:0,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",fontSize:10}}>
+        {/* File panel header */}
+        <div style={{padding:"7px 10px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:5}}>
+          <span style={{fontSize:9,fontFamily:M,fontWeight:700,color:C.t3,letterSpacing:1}}>PROJECT FILES</span>
+          <div style={{flex:1}}/>
+          {unsavedFiles.length>0&&<Badge color={C.err}>{unsavedFiles.length} unsaved</Badge>}
+        </div>
+        {/* Legend row */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 14px 14px 14px",gap:2,padding:"4px 6px 4px 20px",fontSize:7,fontFamily:M,color:C.t3,borderBottom:`1px solid ${C.b1}`,letterSpacing:.3}}>
+          <span>NAME</span><span title="In Synthesis" style={{textAlign:"center",color:C.ok}}>S</span><span title="In Simulation" style={{textAlign:"center",color:C.purple}}>T</span><span style={{textAlign:"center"}}>⌂</span>
+        </div>
+        {/* File list */}
+        <div style={{flex:1,overflowY:"auto"}}>
+          {FILES.map((f,i)=><FileTreeRow key={i} f={f} active={f.n===aFile} onPick={()=>f.ty!=="folder"&&setAFile(f.n)}/>)}
+        </div>
+        {/* File panel footer stats */}
+        <div style={{padding:"6px 10px",borderTop:`1px solid ${C.b1}`,fontSize:8,fontFamily:M,color:C.t3,display:"flex",flexWrap:"wrap",gap:6}}>
+          <span><span style={{color:C.ok}}>{synthFiles.length}</span> in synth</span>
+          <span><span style={{color:C.warn}}>{dirtyGitFiles.length}</span> git dirty</span>
+          <span><span style={{color:C.err}}>{unsavedFiles.length}</span> unsaved</span>
+        </div>
+        {/* Selected file detail */}
+        {(()=>{const f=FILES.find(x=>x.n===aFile);if(!f||f.ty==="folder")return null;return <div style={{padding:"8px 10px",borderTop:`1px solid ${C.b1}`,background:C.bg}}>
+          <div style={{fontSize:10,fontFamily:M,fontWeight:600,color:C.t1,marginBottom:4}}>{f.n}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            <Badge color={FTC[f.ty]}>{f.ty}</Badge>
+            <Badge color={C.t3}>{f.lang}</Badge>
+            {f.lines>0&&<Badge color={C.t3}>{f.lines} lines</Badge>}
+            {!f.saved&&<Badge color={C.err}>UNSAVED</Badge>}
+            {f.git==="clean"&&<Badge color={C.ok}>committed</Badge>}
+            {f.git==="M"&&<Badge color={C.warn}>modified</Badge>}
+            {f.git==="A"&&<Badge color={C.ok}>staged</Badge>}
+            {f.git==="U"&&<Badge color={C.orange}>untracked</Badge>}
+            {f.synth&&<Badge color={C.ok}>synthesis</Badge>}
+            {f.sim&&<Badge color={C.purple}>simulation</Badge>}
+            {!f.synth&&f.ty!=="folder"&&<Badge color={C.t3}>excluded</Badge>}
+          </div>
+        </div>;})()}
+      </div>}
+
+      {/* ══════ MAIN CONTENT ══════ */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Top bar */}
+        <div style={{display:"flex",alignItems:"center",padding:"5px 14px",background:C.s1,borderBottom:`1px solid ${C.b1}`,height:36,gap:8,flexShrink:0}}>
+          <span style={{cursor:"pointer",color:C.t3,fontSize:10}} onClick={()=>setShowFiles(p=>!p)}>{showFiles?"◀":"▶"}</span>
+          <span style={{color:B.color,fontSize:12}}>{B.icon}</span>
+          <span style={{fontSize:10,fontFamily:M,fontWeight:600,color:C.t1}}>{B.name}</span>
+          <span style={{color:C.t3,fontSize:9,fontFamily:M}}>→ {B.defaultDev}</span>
+          <div style={{flex:1}}/>
+          <div onClick={()=>setCmdOpen(true)} style={{display:"flex",alignItems:"center",gap:5,padding:"3px 10px",background:C.bg,border:`1px solid ${C.b1}`,borderRadius:4,fontSize:9,fontFamily:M,color:C.t3,cursor:"pointer"}}>
+            <I.Search/>Commands <span style={{fontSize:7,padding:"0 3px",border:`1px solid ${C.b1}`,borderRadius:2}}>⌘K</span>
+          </div>
+          <Btn primary small icon={<I.Play/>} onClick={runBuild} disabled={building}>{building?"Building...":"Build"}</Btn>
+        </div>
+
+        <div style={{flex:1,overflow:"auto",padding:12}}>
+
+          {/* ════════════════ BUILD ════════════════ */}
+          {sec==="build"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={panelP}>
+              {hdr(<>Build Pipeline <Badge color={B.color}>{B.short}</Badge></>,<I.Zap/>)}
+              {B.pipeline.map((s,i)=><PStep key={s.id} s={s} i={i} total={B.pipeline.length}/>)}
+              {!building&&bStep>=B.pipeline.length&&bStep>=0&&<div style={{marginTop:10,padding:"6px 8px",background:C.okDim,borderRadius:4,fontSize:9,fontFamily:M,color:C.ok,display:"flex",gap:5,alignItems:"center"}}><I.Check/> Fmax {B.timing.fmax} MHz — {B.timing.setup} ns slack</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={panelP}>
+                {hdr("Quick Actions",<I.Bolt/>)}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+                  {B.pipeline.map((s,i)=><Btn key={i} small style={{justifyContent:"flex-start",fontSize:8}}>{s.label}</Btn>)}
+                </div>
+              </div>
+              <div style={panelP}>
+                {hdr("Build History",null)}
+                {B.history.map((h,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:i<B.history.length-1?`1px solid ${C.b1}`:"none",fontSize:9,fontFamily:M}}>
+                  <span style={{width:5,height:5,borderRadius:3,background:h.ok?C.ok:C.err}}/><span style={{color:C.t3,width:34}}>{h.time}</span><span style={{color:C.t1,flex:1}}>Fmax: {h.fmax}</span><span style={{color:C.t3}}>{h.util}</span>{h.w>0&&<Badge color={C.warn}>{h.w}W</Badge>}
+                </div>)}
+              </div>
+            </div>
+          </div>}
+
+          {/* ════════════════ REPORTS ════════════════ */}
+          {sec==="reports"&&<div style={{display:"flex",flexDirection:"column",gap:12,height:"calc(100vh - 120px)"}}>
+            {/* Report tab bar */}
+            <div style={{display:"flex",gap:1,background:C.s1,borderRadius:7,border:`1px solid ${C.b1}`,padding:3}}>
+              {[{id:"timing",l:"⏱ Timing",c:REPORTS.timing.summary.failingPaths>0?C.err:C.ok},
+                {id:"util",l:"📊 Utilization"},{id:"power",l:"⚡ Power"},{id:"drc",l:"⚠ DRC",c:REPORTS.drc.summary.critWarns>0?C.warn:C.ok},{id:"io",l:"📌 I/O Banking"}
+              ].map(t=><button key={t.id} onClick={()=>setRptTab(t.id)} style={{flex:1,padding:"7px 0",background:rptTab===t.id?C.accentDim:"transparent",border:"none",borderRadius:4,color:rptTab===t.id?C.t1:C.t3,fontSize:10,fontFamily:S,fontWeight:600,cursor:"pointer",transition:"all .1s",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                {t.l}
+                {t.c&&<span style={{width:5,height:5,borderRadius:3,background:t.c}}/>}
+              </button>)}
+            </div>
+
+            {/* ── TIMING REPORT ── */}
+            {rptTab==="timing"&&<div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+              {/* Hero card */}
+              <div style={{background:`linear-gradient(135deg, ${C.s1}, ${REPORTS.timing.summary.failingPaths===0?C.okDim:C.errDim})`,borderRadius:8,border:`1px solid ${REPORTS.timing.summary.failingPaths===0?`${C.ok}30`:`${C.err}30`}`,padding:18}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                  <I.Clock/>
+                  <span style={{fontSize:14,fontWeight:700,color:C.t1}}>Timing Analysis</span>
+                  <Badge color={REPORTS.timing.summary.failingPaths===0?C.ok:C.err} style={{fontSize:10,padding:"3px 10px"}}>{REPORTS.timing.summary.status}</Badge>
+                  <div style={{flex:1}}/>
+                  <span style={{fontSize:8,fontFamily:M,color:C.t3}}>{REPORTS.timing.generated} — {REPORTS.timing.tool}</span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:10}}>
+                  {[{l:"Fmax Achieved",v:REPORTS.timing.summary.fmax,c:C.ok},{l:"Target",v:REPORTS.timing.summary.target,c:C.t2},{l:"Margin",v:REPORTS.timing.summary.margin,c:C.ok},{l:"Failing Paths",v:String(REPORTS.timing.summary.failingPaths)+` / ${REPORTS.timing.summary.totalPaths}`,c:REPORTS.timing.summary.failingPaths>0?C.err:C.ok}]
+                    .map((m,i)=><div key={i} style={{padding:10,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`}}>
+                      <div style={{fontSize:8,fontFamily:M,fontWeight:600,color:C.t3,marginBottom:4,letterSpacing:.8}}>{m.l}</div>
+                      <div style={{fontSize:16,fontFamily:M,fontWeight:700,color:m.c}}>{m.v}</div>
+                    </div>)}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:10,marginTop:10}}>
+                  {[{l:"WNS (Setup)",v:REPORTS.timing.summary.wns},{l:"TNS",v:REPORTS.timing.summary.tns},{l:"WHS (Hold)",v:REPORTS.timing.summary.whs},{l:"THS",v:REPORTS.timing.summary.ths}]
+                    .map((m,i)=><div key={i} style={{padding:8,background:C.bg,borderRadius:5,border:`1px solid ${C.b1}`,fontSize:10,fontFamily:M}}>
+                      <span style={{color:C.t3}}>{m.l}: </span><span style={{color:parseFloat(m.v)>=0?C.ok:C.err,fontWeight:700}}>{m.v}</span>
+                    </div>)}
+                </div>
+              </div>
+
+              {/* Clock domains */}
+              <div style={panelP}>
+                {hdr("Clock Domains",<I.Clock/>)}
+                <div style={{display:"grid",gridTemplateColumns:"140px 90px 80px 120px 60px 60px",gap:6,padding:"5px 8px",fontSize:8,fontFamily:M,fontWeight:700,color:C.t3,letterSpacing:.8,borderBottom:`1px solid ${C.b1}`}}>
+                  <span>CLOCK</span><span>PERIOD</span><span>FREQUENCY</span><span>SOURCE</span><span>WNS</span><span>PATHS</span>
+                </div>
+                {REPORTS.timing.clocks.map((ck,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"140px 90px 80px 120px 60px 60px",gap:6,padding:"7px 8px",fontSize:10,fontFamily:M,borderBottom:`1px solid ${C.b1}`}}>
+                  <span style={{color:C.cyan,fontWeight:600}}>{ck.name}</span>
+                  <span style={{color:C.t2}}>{ck.period}</span>
+                  <span style={{color:C.t1,fontWeight:600}}>{ck.freq}</span>
+                  <span style={{color:C.t3}}>{ck.source}</span>
+                  <span style={{color:C.ok,fontWeight:600}}>{ck.wns}</span>
+                  <span style={{color:C.t3}}>{ck.paths}</span>
+                </div>)}
+              </div>
+
+              {/* Critical paths */}
+              <div style={panelP}>
+                {hdr(<>Critical Paths — Setup <Badge color={C.t3}>{REPORTS.timing.criticalPaths.length} shown</Badge></>,<I.Warn/>)}
+                {REPORTS.timing.criticalPaths.map((p,i)=><div key={i} style={{padding:"10px 12px",marginBottom:6,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`,borderLeft:`3px solid ${parseFloat(p.slack)<1?C.warn:C.ok}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                    <span style={{fontSize:10,fontFamily:M,fontWeight:700,color:C.t3,width:20}}>#{p.rank}</span>
+                    <span style={{fontSize:10,fontFamily:M,color:C.cyan,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.from}</span>
+                    <I.Arrow/>
+                    <span style={{fontSize:10,fontFamily:M,color:C.cyan,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.to}</span>
+                  </div>
+                  <div style={{display:"flex",gap:10,fontSize:9,fontFamily:M}}>
+                    <span><span style={{color:C.t3}}>Slack: </span><span style={{color:parseFloat(p.slack)<1?C.warn:C.ok,fontWeight:700}}>{p.slack}</span></span>
+                    <span><span style={{color:C.t3}}>Req: </span><span style={{color:C.t2}}>{p.req}</span></span>
+                    <span><span style={{color:C.t3}}>Delay: </span><span style={{color:C.t2}}>{p.delay}</span></span>
+                    <span><span style={{color:C.t3}}>Levels: </span><span style={{color:C.t2}}>{p.levels}</span></span>
+                    <span><span style={{color:C.t3}}>Clock: </span><span style={{color:C.cyan}}>{p.clk}</span></span>
+                  </div>
+                  {/* Visual slack bar */}
+                  <div style={{marginTop:6,height:3,borderRadius:2,background:C.b1,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:2,width:`${(parseFloat(p.delay)/parseFloat(p.req))*100}%`,background:`linear-gradient(90deg, ${C.accent}, ${parseFloat(p.slack)<1?C.warn:C.ok})`}}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:7,fontFamily:M,color:C.t3,marginTop:2}}>
+                    <span>0 ns</span><span>delay: {p.delay}</span><span>{p.req} (req)</span>
+                  </div>
+                </div>)}
+              </div>
+
+              {/* Hold paths */}
+              <div style={panelP}>
+                {hdr("Hold Analysis (worst paths)",null)}
+                {REPORTS.timing.holdPaths.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",fontSize:10,fontFamily:M,borderBottom:`1px solid ${C.b1}`}}>
+                  <span style={{color:C.t3}}>#{p.rank}</span>
+                  <span style={{color:C.cyan,flex:1}}>{p.from} → {p.to}</span>
+                  <Badge color={parseFloat(p.slack)<0.1?C.warn:C.ok}>{p.slack}</Badge>
+                </div>)}
+              </div>
+
+              {/* Unconstrained */}
+              {REPORTS.timing.unconstrained.length>0&&<div style={{...panelP,borderLeft:`3px solid ${C.warn}`}}>
+                {hdr("Unconstrained Paths",<I.Warn/>)}
+                {REPORTS.timing.unconstrained.map((u,i)=><div key={i} style={{fontSize:10,fontFamily:M,color:C.warn,padding:"4px 0"}}>{u}</div>)}
+              </div>}
+            </div>}
+
+            {/* ── UTILIZATION REPORT ── */}
+            {rptTab==="util"&&<div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{...panelP,background:`linear-gradient(135deg, ${C.s1}, ${C.accentDim})`}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <I.Gauge/>
+                  <span style={{fontSize:14,fontWeight:700,color:C.t1}}>Resource Utilization</span>
+                  <Badge color={C.accent}>{REPORTS.utilization.device}</Badge>
+                </div>
+                {REPORTS.utilization.summary.map((cat,ci)=><div key={ci} style={{marginBottom:16}}>
+                  <div style={{fontSize:9,fontFamily:M,fontWeight:700,color:C.t3,letterSpacing:1,marginBottom:6}}>{cat.cat.toUpperCase()}</div>
+                  {cat.items.map((r,ri)=>{const pct=Math.round(r.used/r.total*100);const col=pct>85?C.err:pct>65?C.warn:C.accent;
+                    return <div key={ri} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:10,fontFamily:M,marginBottom:3}}>
+                        <span style={{color:C.t1,fontWeight:600}}>{r.r}</span>
+                        <span style={{color:col,fontWeight:600}}>{r.used.toLocaleString()} / {r.total.toLocaleString()} ({pct}%)</span>
+                      </div>
+                      <div style={{height:6,borderRadius:3,background:C.b1,overflow:"hidden",marginBottom:2}}>
+                        <div style={{height:"100%",borderRadius:3,width:`${pct}%`,background:`linear-gradient(90deg,${col}88,${col})`}}/>
+                      </div>
+                      {r.detail&&<div style={{fontSize:8,fontFamily:M,color:C.t3}}>{r.detail}</div>}
+                    </div>;
+                  })}
+                </div>)}
+              </div>
+              {/* By module breakdown */}
+              <div style={panelP}>
+                {hdr("Utilization by Module",null)}
+                <div style={{display:"grid",gridTemplateColumns:"140px 1fr 70px 60px 40px 50px",gap:6,padding:"5px 8px",fontSize:8,fontFamily:M,fontWeight:700,color:C.t3,borderBottom:`1px solid ${C.b1}`}}>
+                  <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
+                </div>
+                {REPORTS.utilization.byModule.map((m,i)=>{const pct=parseFloat(m.pct);return <div key={i} style={{display:"grid",gridTemplateColumns:"140px 1fr 70px 60px 40px 50px",gap:6,padding:"7px 8px",fontSize:10,fontFamily:M,borderBottom:`1px solid ${C.b1}`,alignItems:"center"}}>
+                  <span style={{color:C.cyan,fontWeight:600}}>{m.module}</span>
+                  <div style={{height:4,borderRadius:2,background:C.b1,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:C.accent,borderRadius:2}}/></div>
+                  <span style={{color:C.t2}}>{m.lut.toLocaleString()}</span>
+                  <span style={{color:C.t3}}>{m.ff.toLocaleString()}</span>
+                  <span style={{color:C.t3}}>{m.ebr}</span>
+                  <span style={{color:C.t1,fontWeight:600}}>{m.pct}</span>
+                </div>;})}
+              </div>
+            </div>}
+
+            {/* ── POWER REPORT ── */}
+            {rptTab==="power"&&<div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{...panelP,background:`linear-gradient(135deg, ${C.s1}, ${C.warnDim})`}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <I.Bolt/><span style={{fontSize:14,fontWeight:700,color:C.t1}}>Power Estimation</span>
+                  <Badge color={C.warn}>Medium Confidence</Badge>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+                  {[{l:"Total Power",v:REPORTS.power.total,c:C.warn},{l:"Junction Temp",v:REPORTS.power.junction,c:C.t1},{l:"Ambient",v:REPORTS.power.ambient,c:C.t2},{l:"Θ_JA",v:REPORTS.power.theta_ja,c:C.t3}]
+                    .map((m,i)=><div key={i} style={{padding:10,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`}}>
+                      <div style={{fontSize:8,fontFamily:M,color:C.t3,marginBottom:3}}>{m.l}</div>
+                      <div style={{fontSize:16,fontFamily:M,fontWeight:700,color:m.c}}>{m.v}</div>
+                    </div>)}
+                </div>
+                {/* Power pie (horizontal stacked bar) */}
+                <div style={{height:24,borderRadius:6,overflow:"hidden",display:"flex",marginBottom:10}}>
+                  {REPORTS.power.breakdown.map((b,i)=><div key={i} style={{width:`${b.pct}%`,background:b.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontFamily:M,color:"#fff",fontWeight:700}}>{b.pct>8?`${b.pct}%`:""}</div>)}
+                </div>
+                {REPORTS.power.breakdown.map((b,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.b1}`,fontSize:10,fontFamily:M}}>
+                  <span style={{width:8,height:8,borderRadius:2,background:b.color,flexShrink:0}}/>
+                  <span style={{color:C.t1,flex:1}}>{b.cat}</span>
+                  <span style={{color:b.color,fontWeight:700}}>{b.mw} mW</span>
+                  <span style={{color:C.t3,width:35,textAlign:"right"}}>{b.pct}%</span>
+                </div>)}
+              </div>
+              <div style={panelP}>
+                {hdr("Power by Rail",null)}
+                {REPORTS.power.byRail.map((r,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.b1}`,fontSize:10,fontFamily:M}}>
+                  <span style={{color:C.t1,flex:1}}>{r.rail}</span>
+                  <span style={{color:C.warn,fontWeight:600}}>{r.mw} mW</span>
+                </div>)}
+              </div>
+            </div>}
+
+            {/* ── DRC REPORT ── */}
+            {rptTab==="drc"&&<div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{display:"flex",gap:10}}>
+                {[{l:"Errors",v:REPORTS.drc.summary.errors,c:C.err},{l:"Critical Warnings",v:REPORTS.drc.summary.critWarns,c:C.warn},{l:"Warnings",v:REPORTS.drc.summary.warnings,c:C.orange},{l:"Info",v:REPORTS.drc.summary.info,c:C.accent},{l:"Waived",v:REPORTS.drc.summary.waived,c:C.t3}]
+                  .map((m,i)=><div key={i} style={{flex:1,padding:10,background:C.s1,borderRadius:6,border:`1px solid ${C.b1}`,borderTop:`3px solid ${m.c}`,textAlign:"center"}}>
+                    <div style={{fontSize:22,fontFamily:M,fontWeight:700,color:m.v>0?m.c:C.t3}}>{m.v}</div>
+                    <div style={{fontSize:8,fontFamily:M,color:C.t3,marginTop:2}}>{m.l}</div>
+                  </div>)}
+              </div>
+              {REPORTS.drc.items.map((d,i)=>{
+                const sc={crit_warn:C.warn,warning:C.orange,info:C.accent,waived:C.t3};
+                const sl={crit_warn:"CRIT",warning:"WARN",info:"INFO",waived:"WAIVED"};
+                return <div key={i} style={{padding:"10px 12px",background:C.s1,borderRadius:6,border:`1px solid ${C.b1}`,borderLeft:`3px solid ${sc[d.sev]}`,display:"flex",gap:10}}>
+                  <Badge color={sc[d.sev]} style={{flexShrink:0,alignSelf:"flex-start"}}>{sl[d.sev]}</Badge>
+                  <div style={{flex:1,fontSize:10,fontFamily:M}}>
+                    <div style={{color:C.t1,fontWeight:600,marginBottom:3}}><span style={{color:sc[d.sev]}}>[{d.code}]</span> {d.msg}</div>
+                    <div style={{display:"flex",gap:12,color:C.t3,fontSize:9}}>
+                      {d.loc!=="—"&&<span>📍 {d.loc}</span>}
+                      <span>→ {d.action}</span>
+                    </div>
+                  </div>
+                </div>;
+              })}
+            </div>}
+
+            {/* ── I/O BANKING REPORT ── */}
+            {rptTab==="io"&&<div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={panelP}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <I.Pin/><span style={{fontSize:14,fontWeight:700,color:C.t1}}>I/O Pin Assignments</span>
+                  <Badge color={C.accent}>{REPORTS.utilization.device}</Badge>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                  {REPORTS.io.banks.map((bk,i)=>{const pct=Math.round(bk.used/bk.total*100);return <div key={i} style={{padding:12,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`,borderTop:`3px solid ${pct>80?C.warn:C.accent}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                      <span style={{fontSize:12,fontFamily:M,fontWeight:700,color:C.t1}}>Bank {bk.id}</span>
+                      <Badge color={C.cyan}>{bk.vccio}</Badge>
+                    </div>
+                    <div style={{fontSize:10,fontFamily:M,color:C.t3,marginBottom:4}}>{bk.used}/{bk.total} pins ({pct}%)</div>
+                    <div style={{height:4,borderRadius:2,background:C.b1,overflow:"hidden",marginBottom:8}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:pct>80?C.warn:C.accent,borderRadius:2}}/>
+                    </div>
+                    {bk.pins.map((p,pi)=>{const[pin,net,dir]=p.split(" ");return <div key={pi} style={{fontSize:9,fontFamily:M,padding:"2px 0",display:"flex",gap:4}}>
+                      <span style={{color:C.cyan,width:28,flexShrink:0}}>{pin}</span>
+                      <span style={{color:C.t1,flex:1}}>{net}</span>
+                      <span style={{color:{IN:C.accent,OUT:C.ok,BIDIR:C.purple}[dir]||C.t3,fontSize:8}}>{dir}</span>
+                    </div>;})}
+                  </div>;})}
+                </div>
+              </div>
+            </div>}
+          </div>}
+
+          {/* ════════════════ RESOURCES (quick view) ════════════════ */}
+          {sec==="resources"&&<div style={panelP}>
+            {hdr(<>Utilization — <span style={{color:B.color}}>{B.defaultDev}</span></>,<I.Gauge/>)}
+            {B.resources.map((r,i)=><RBar key={i} {...r}/>)}
+            <div style={{marginTop:10}}><Btn small onClick={()=>{setSec("reports");setRptTab("util");}}>Open Full Utilization Report →</Btn></div>
+          </div>}
+
+          {/* ════════════════ CONSOLE ════════════════ */}
+          {sec==="console"&&<div style={{...panel,height:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderBottom:`1px solid ${C.b1}`,fontSize:9,fontFamily:M,color:C.t3}}>
+              <span style={{color:B.color}}>{B.icon}</span>{B.short} Output<span style={{flex:1}}/>{logs.length} lines
+              <Btn small onClick={()=>setLogs([])}>Clear</Btn>
+            </div>
+            <div ref={logRef} style={{flex:1,overflowY:"auto",padding:"6px 12px",background:"#030508"}}>
+              {logs.length===0&&<div style={{color:C.t3,fontSize:10,fontFamily:M,padding:12,textAlign:"center"}}>Hit Build or ⌘K</div>}
+              {logs.map((l,i)=><CLine key={i} l={l}/>)}
+              {building&&<div style={{fontSize:10,color:C.accent,fontFamily:M}}><span style={{animation:"pulse 1s infinite"}}>●</span> Building...</div>}
+            </div>
+          </div>}
+
+          {/* ════════════════ CONSTRAINTS (quick) ════════════════ */}
+          {sec==="constraints"&&<div style={panelP}>
+            {hdr("Pin Constraints",<I.Pin/>)}
+            <Btn small onClick={()=>{setSec("reports");setRptTab("io");}}>Open Full I/O Report →</Btn>
+          </div>}
+
+          {/* placeholder for other sections */}
+          {["ip","interconnect","ai","regmap"].includes(sec)&&<div style={panelP}>
+            {hdr(`${sec.charAt(0).toUpperCase()+sec.slice(1)} — carried from v2`,null)}
+            <div style={{color:C.t3,fontSize:10,fontFamily:M}}>This section is identical to v2. Use the nav to explore Reports, Build, or Console — the new features in v3.</div>
+          </div>}
+
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>

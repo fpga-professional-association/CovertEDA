@@ -1,0 +1,36 @@
+# Rust / Cargo
+/src-tauri/target/
+**/*.rs.bk
+
+# Node / npm
+node_modules/
+dist/
+.vite/
+
+# Tauri
+/src-tauri/WixTools/
+/src-tauri/gen/
+
+# OS
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.jed
+*.bit
+*.sof
+*.bin
+*.svf

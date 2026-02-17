@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FPGAForge v2 — Unified FPGA Development Platform</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06080c;overflow:hidden}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#1a2235;border-radius:3px}
+::selection{background:rgba(59,158,255,.3)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes typing{from{width:0}to{width:100%}}
+@keyframes blink{50%{border-color:transparent}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useMemo,useCallback}=React;
+const M="'IBM Plex Mono','Fira Code',monospace";
+const S="'Outfit',sans-serif";
+const C={
+  bg:"#06080c",s1:"#0c1018",s2:"#121a26",s3:"#1a2438",
+  b1:"#1c2840",b2:"#2a4060",
+  t1:"#e8f0fa",t2:"#9ab0cc",t3:"#546880",
+  accent:"#3b9eff",accentDim:"#122a48",
+  ok:"#2ecc71",okDim:"#0a2816",
+  warn:"#f0a030",warnDim:"#2a1c06",
+  err:"#e74c3c",errDim:"#2a0c0c",
+  cyan:"#22d3ee",purple:"#a78bfa",pink:"#f472b6",orange:"#fb923c",
+};
+
+// ════════════════════════════════════════════════════════════════
+// BACKEND DATA (condensed from previous version)
+// ════════════════════════════════════════════════════════════════
+const BACKENDS={
+diamond:{id:"diamond",name:"Lattice Diamond",short:"Diamond",color:"#e74c3c",icon:"◆",version:"3.13",cli:"pnmainc",
+  projExt:".ldf",constrExt:".lpf",bitExt:".jed/.bit",constrFmt:"LOCATE/IOBUF",
+  defaultDev:"LCMXO3LF-6900C-5BG256C",
+  licFile:"license.dat",licEnv:"LM_LICENSE_FILE",licTool:"lmutil lmstat -c",licPort:"1710@license-srv",
+  ipCatalog:[
+    {cat:"Memory",items:[{name:"pmi_ram_dp",desc:"Dual-Port Block RAM",params:["Width: 8-256","Depth: 2-65536","Output Reg: on/off"]},
+      {name:"pmi_ram_dp_true",desc:"True Dual-Port RAM",params:["Width A/B: 8-256","Depth: 2-65536"]},
+      {name:"pmi_fifo",desc:"FIFO (First-In First-Out)",params:["Width: 1-256","Depth: 16-65536","Almost Full/Empty"]}]},
+    {cat:"Math/DSP",items:[{name:"pmi_mult",desc:"Multiplier",params:["Width A: 2-36","Width B: 2-36","Signed/Unsigned"]},
+      {name:"pmi_add",desc:"Adder/Subtractor",params:["Width: 2-256","Carry In","Pipeline stages"]}]},
+    {cat:"I/O",items:[{name:"pmi_iobuf",desc:"I/O Buffer",params:["Standard: LVCMOS/LVDS","Drive: 4/8/12/16mA"]},
+      {name:"DCCA",desc:"Clock Divider/Buffer",params:["Division: 1-128"]}]},
+    {cat:"Communication",items:[{name:"I2C Controller",desc:"Lattice I2C Hard IP",params:["Speed: 100k/400k/1M","Address: 7/10 bit","Multi-master"]},
+      {name:"SPI Controller",desc:"Lattice SPI Hard IP",params:["Clock Div: 2-512","CPOL/CPHA","Width: 8-32"]}]},
+  ],
+  pipeline:[
+    {id:"synth",label:"Synthesis (Synplify)",cmd:"prj_run Synthesis -impl impl1 -forceOne",detail:"RTL → technology"},
+    {id:"translate",label:"Translate",cmd:"prj_run Translate -impl impl1",detail:"NGD generation"},
+    {id:"map",label:"Map",cmd:"prj_run Map -impl impl1",detail:"Physical synthesis"},
+    {id:"par",label:"Place & Route",cmd:"prj_run PAR -impl impl1",detail:"Placement + routing"},
+    {id:"bitgen",label:"Bitstream",cmd:"prj_run Export -task Bitgen",detail:".jed/.bit generation"},
+    {id:"timing",label:"Timing",cmd:"prj_run Export -task TimingSimFileVer",detail:"STA check"},
+  ],
+  resources:[{label:"LUT4",used:4217,total:6864},{label:"Registers",used:1842,total:6864},{label:"I/O Pins",used:47,total:206},{label:"EBR",used:12,total:26,unit:" blk"},{label:"PLL",used:1,total:2}],
+  timing:{fmax:"148.3",target:"125.0",setup:"+1.87",hold:"+0.42"},
+  constraints:[{pin:"A4",net:"clk_25mhz",dir:"IN",std:"LVCMOS33",bank:"0",lock:true},{pin:"B2",net:"rst_n",dir:"IN",std:"LVCMOS33",bank:"0",lock:true},{pin:"C3",net:"i2c_sda",dir:"BIDIR",std:"LVCMOS33",bank:"1",lock:true},{pin:"C4",net:"i2c_scl",dir:"OUT",std:"LVCMOS33",bank:"1",lock:true},{pin:"D5",net:"spi_mosi",dir:"OUT",std:"LVCMOS33",bank:"1",lock:false},{pin:"D6",net:"spi_miso",dir:"IN",std:"LVCMOS33",bank:"1",lock:false},{pin:"E9",net:"uart_tx",dir:"OUT",std:"LVCMOS25",bank:"2",lock:true},{pin:"E10",net:"uart_rx",dir:"IN",std:"LVCMOS25",bank:"2",lock:true},{pin:"G1",net:"led[0]",dir:"OUT",std:"LVCMOS33",bank:"3",lock:true},{pin:"H5",net:"bmc_alert_n",dir:"OUT",std:"LVCMOS25",bank:"2",lock:true}],
+  paths:[{from:"pqc_engine/round_reg[3]",to:"sha3_core/state_in[127]",slack:"+1.87 ns",lvl:4},{from:"i2c_master/bit_cnt[2]",to:"i2c_master/state_nxt[0]",slack:"+2.34 ns",lvl:3}],
+  history:[{time:"14:24",ok:true,fmax:"148.3",util:"61.4%",w:2},{time:"13:51",ok:true,fmax:"142.7",util:"63.1%",w:3},{time:"12:08",ok:false,fmax:"—",util:"—",w:0}],
+  log:[{t:"cmd",m:"pnmainc -t build.tcl"},{t:"info",m:"FPGAForge → Diamond 3.13"},{t:"cmd",m:"prj_run Synthesis -impl impl1"},{t:"out",m:"Synplify: reading sources..."},{t:"ok",m:"Synthesis: 0E 2W"},{t:"warn",m:"W: net 'debug_bus[7]' no load"},{t:"cmd",m:"prj_run PAR -impl impl1"},{t:"out",m:"LUT4: 4,217/6,864 (61.4%)"},{t:"ok",m:"PAR complete"},{t:"ok",m:"Fmax=148.3 MHz ✓"},{t:"info",m:"═══ DONE ═══ 1m 6s"}],
+},
+quartus:{id:"quartus",name:"Intel Quartus Prime",short:"Quartus",color:"#0091ff",icon:"◇",version:"23.1",cli:"quartus_sh",
+  projExt:".qpf/.qsf",constrExt:".sdc/.qsf",bitExt:".sof/.pof",constrFmt:"SDC+QSF",
+  defaultDev:"5CSEMA5F31C6",
+  licFile:"license.dat",licEnv:"LM_LICENSE_FILE",licTool:"lmutil lmstat -c",licPort:"1800@lic-intel",
+  ipCatalog:[
+    {cat:"Memory",items:[{name:"RAM: 1-PORT",desc:"Single-port RAM (M10K/MLAB)",params:["Width: 1-256","Depth: 1-65536","Output Reg","Byte Enable"]},
+      {name:"RAM: 2-PORT",desc:"Simple Dual-Port RAM",params:["Width R/W: 1-256","Mixed Width","ECC"]},
+      {name:"FIFO",desc:"SCFIFO / DCFIFO",params:["Width: 1-256","Depth: 16-131072","Show-ahead","Async DCFIFO"]}]},
+    {cat:"DSP",items:[{name:"ALTMULT_ADD",desc:"Multiply-Accumulate",params:["Width: 9/18/27/36","Pipeline: 0-3","Signed"]},
+      {name:"ALTFP_MULT",desc:"Floating Point Multiplier",params:["Single/Double precision"]}]},
+    {cat:"Interface",items:[{name:"Avalon-MM Master",desc:"Avalon Memory-Mapped Master Bridge",params:["Data Width: 8-512","Burst: 1-128"]},
+      {name:"Avalon-ST",desc:"Avalon Streaming Interface",params:["Symbols: 1-32","Backpressure"]},
+      {name:"JTAG UART",desc:"JTAG-to-UART Bridge",params:["FIFO Depth: 8-32768"]}]},
+    {cat:"Protocol",items:[{name:"Nios II Processor",desc:"Soft-core processor",params:["Economy/Standard/Fast","JTAG Debug","Custom Instr"]},
+      {name:"PIO",desc:"Parallel I/O",params:["Width: 1-32","Direction","Edge Capture","IRQ"]}]},
+  ],
+  pipeline:[
+    {id:"analysis",label:"Analysis & Elaboration",cmd:"quartus_syn --analysis_and_elaboration",detail:"HDL parse"},
+    {id:"synth",label:"Synthesis (quartus_syn)",cmd:"quartus_syn --read_settings_files=on",detail:"Map to ALMs"},
+    {id:"fit",label:"Fitter (quartus_fit)",cmd:"quartus_fit --read_settings_files=on",detail:"Place & route"},
+    {id:"asm",label:"Assembler (quartus_asm)",cmd:"quartus_asm",detail:"Generate .sof"},
+    {id:"sta",label:"TimeQuest (quartus_sta)",cmd:"quartus_sta --sdc_file=timing.sdc",detail:"STA"},
+  ],
+  resources:[{label:"ALMs",used:3412,total:32070},{label:"Registers",used:4891,total:128280},{label:"M10K Blocks",used:28,total:397},{label:"DSP 18x18",used:2,total:87},{label:"I/O Pins",used:89,total:457},{label:"PLLs",used:1,total:6}],
+  timing:{fmax:"203.7",target:"100.0",setup:"+2.341",hold:"+0.187"},
+  constraints:[{pin:"PIN_AF14",net:"clk_100mhz",dir:"IN",std:"3.3V LVTTL",bank:"3A",lock:true},{pin:"PIN_AA14",net:"rst_n",dir:"IN",std:"3.3V LVTTL",bank:"3A",lock:true},{pin:"PIN_AJ17",net:"i2c_sda",dir:"BIDIR",std:"3.3V LVTTL",bank:"4A",lock:true},{pin:"PIN_V16",net:"spi_mosi",dir:"OUT",std:"3.3V LVTTL",bank:"5B",lock:false},{pin:"PIN_AB12",net:"uart_tx",dir:"OUT",std:"3.3V LVTTL",bank:"3B",lock:true},{pin:"PIN_V15",net:"led[0]",dir:"OUT",std:"3.3V LVTTL",bank:"6A",lock:true}],
+  paths:[{from:"pqc_engine|round_reg[3]",to:"sha3_core|state_in[127]",slack:"+2.341 ns",lvl:5},{from:"i2c_master|bit_cnt[2]",to:"i2c_master|state_nxt[0]",slack:"+3.102 ns",lvl:3}],
+  history:[{time:"16:42",ok:true,fmax:"203.7",util:"10.6%",w:3},{time:"15:18",ok:true,fmax:"198.2",util:"11.2%",w:4},{time:"13:07",ok:false,fmax:"—",util:"—",w:0}],
+  log:[{t:"cmd",m:"quartus_sh --flow compile dc_scm_controller"},{t:"info",m:"FPGAForge → Quartus 23.1"},{t:"cmd",m:"quartus_syn --read_settings_files=on"},{t:"out",m:"Implemented 6,841 resources"},{t:"ok",m:"Synthesis: 0E 3W"},{t:"cmd",m:"quartus_fit"},{t:"out",m:"ALMs: 3,412/32,070 (10.6%)"},{t:"ok",m:"Fitter complete"},{t:"cmd",m:"quartus_sta"},{t:"ok",m:"Fmax=203.7 MHz ✓"},{t:"info",m:"═══ DONE ═══ 2m 34s"}],
+},
+vivado:{id:"vivado",name:"AMD Vivado",short:"Vivado",color:"#8cc63f",icon:"▲",version:"2024.1",cli:"vivado -mode tcl",
+  projExt:".xpr",constrExt:".xdc",bitExt:".bit/.bin",constrFmt:"XDC (TCL)",
+  defaultDev:"xc7a100tcsg324-1",
+  licFile:"Xilinx.lic",licEnv:"XILINXD_LICENSE_FILE",licTool:"vlm",licPort:"2100@lic-xilinx",
+  ipCatalog:[
+    {cat:"Memory",items:[{name:"Block Memory Gen",desc:"BRAM/URAM IP Generator",params:["Type: Single/TDP/SDP","Width: 1-4096","Depth: 2-1048576","ECC","Byte Write"]},
+      {name:"FIFO Generator",desc:"Sync/Async FIFO",params:["Standard/FWFT","Width: 1-1024","Depth: 16-4M","Async Clock Domains"]}]},
+    {cat:"DSP/Math",items:[{name:"Floating Point",desc:"IEEE 754 Operators",params:["Op: Add/Sub/Mul/Div/Sqrt/FMA","Precision: Half/Single/Double/Custom"]},
+      {name:"CORDIC",desc:"Trig/Hyperbolic/Sqrt",params:["Function: Rotate/Translate/Sin/Cos","Pipeline: Optimal/Max"]}]},
+    {cat:"AXI Infrastructure",items:[{name:"AXI Interconnect",desc:"NxM AXI Crossbar",params:["Masters: 1-16","Slaves: 1-16","Data Width: 32/64/128/256/512","Protocol: AXI4/AXI4-Lite"]},
+      {name:"AXI SmartConnect",desc:"Next-gen AXI fabric",params:["Ports: 1-16","Width Conversion","Clock Conversion"]},
+      {name:"AXI GPIO",desc:"General Purpose I/O via AXI",params:["Width: 1-32","Dual Channel","Interrupt"]},
+      {name:"AXI UART Lite",desc:"Simple UART over AXI4-Lite",params:["Baud: 9600-921600","Data Bits: 5-8"]}]},
+    {cat:"Processing",items:[{name:"MicroBlaze MCS",desc:"Soft-core (compact)",params:["Memory: 4K-256K","Debug","FPU"]},
+      {name:"Clocking Wizard",desc:"MMCM/PLL Configuration",params:["Input: 10-800 MHz","Outputs: 1-7","Phase/Duty/Jitter"]}]},
+  ],
+  pipeline:[
+    {id:"synth",label:"synth_design",cmd:"synth_design -top top_level",detail:"RTL synthesis"},
+    {id:"opt",label:"opt_design",cmd:"opt_design -directive Explore",detail:"Logic opt"},
+    {id:"place",label:"place_design",cmd:"place_design -directive ExtraPostPlacementOpt",detail:"Placement"},
+    {id:"phys",label:"phys_opt_design",cmd:"phys_opt_design -directive AggressiveExplore",detail:"Post-place opt"},
+    {id:"route",label:"route_design",cmd:"route_design -directive Explore",detail:"Routing"},
+    {id:"bitgen",label:"write_bitstream",cmd:"write_bitstream -force output.bit",detail:".bit generation"},
+  ],
+  resources:[{label:"Slice LUTs",used:5841,total:63400},{label:"Slice Registers",used:3217,total:126800},{label:"BRAM 36Kb",used:17,total:270,unit:" tiles"},{label:"DSP48E1",used:4,total:240},{label:"I/O",used:89,total:210},{label:"BUFG",used:3,total:32}],
+  timing:{fmax:"178.4",target:"100.0",setup:"+1.923",hold:"+0.031"},
+  constraints:[{pin:"E3",net:"clk_100mhz",dir:"IN",std:"LVCMOS33",bank:"35",lock:true},{pin:"C12",net:"rst_n",dir:"IN",std:"LVCMOS33",bank:"35",lock:true},{pin:"C14",net:"i2c_sda",dir:"BIDIR",std:"LVCMOS33",bank:"34",lock:true},{pin:"G13",net:"spi_mosi",dir:"OUT",std:"LVCMOS33",bank:"34",lock:false},{pin:"D4",net:"uart_tx",dir:"OUT",std:"LVCMOS33",bank:"35",lock:true},{pin:"H17",net:"led[0]",dir:"OUT",std:"LVCMOS33",bank:"34",lock:true}],
+  paths:[{from:"pqc_engine/round_reg[3]",to:"sha3_core/state_in[127]",slack:"+1.923 ns",lvl:5},{from:"i2c_master/bit_cnt[2]",to:"i2c_master/state_nxt[0]",slack:"+2.876 ns",lvl:3}],
+  history:[{time:"17:03",ok:true,fmax:"178.4",util:"9.2%",w:1},{time:"15:45",ok:true,fmax:"174.1",util:"9.5%",w:2},{time:"12:30",ok:false,fmax:"—",util:"—",w:0}],
+  log:[{t:"cmd",m:"vivado -mode tcl -source build.tcl"},{t:"info",m:"FPGAForge → Vivado 2024.1"},{t:"cmd",m:"synth_design -top top_level"},{t:"out",m:"Elaboration → Synthesis..."},{t:"ok",m:"Synth: 0E 1CW"},{t:"cmd",m:"place_design"},{t:"out",m:"LUTs: 5,841/63,400 (9.2%)"},{t:"ok",m:"Placement complete"},{t:"cmd",m:"route_design"},{t:"ok",m:"Routing: 0 unrouted"},{t:"ok",m:"Fmax=178.4 MHz ✓"},{t:"info",m:"═══ DONE ═══ 3m 13s"}],
+},
+opensource:{id:"opensource",name:"OSS CAD Suite",short:"OSS CAD",color:"#fb923c",icon:"✦",version:"yosys 0.40",cli:"yosys / nextpnr",
+  projExt:"Makefile",constrExt:".pcf/.lpf",bitExt:".bin/.svf",constrFmt:"PCF/LPF/CST",
+  defaultDev:"LFE5U-85F-6BG381C",
+  licFile:"(none — open source)",licEnv:"N/A",licTool:"N/A",licPort:"N/A — no license required",
+  ipCatalog:[
+    {cat:"Memory (FOSS)",items:[{name:"picosoc_mem",desc:"Simple RAM (inferred)",params:["Width: any","Depth: any"]},
+      {name:"async_fifo",desc:"Open-source async FIFO",params:["Width","Depth","Gray-code ptrs"]}]},
+    {cat:"Processing (FOSS)",items:[{name:"VexRiscv",desc:"RISC-V soft-core (SpinalHDL)",params:["RV32IM[A][F][D]","Pipeline stages","Cache config"]},
+      {name:"PicoRV32",desc:"Compact RISC-V core",params:["RV32I/E/M","IRQ support","Dual-port"]}]},
+    {cat:"Communication (FOSS)",items:[{name:"wb_uart",desc:"Wishbone UART",params:["Baud","FIFO depth"]},
+      {name:"wb_i2c",desc:"Wishbone I2C Master",params:["Speed","Multi-master"]},
+      {name:"wb_spi",desc:"Wishbone SPI Master",params:["CPOL/CPHA","Width"]}]},
+  ],
+  pipeline:[
+    {id:"synth",label:"Yosys Synthesis",cmd:"yosys -p 'synth_ecp5 -json out.json' *.v",detail:"Open source synth"},
+    {id:"pnr",label:"nextpnr Place & Route",cmd:"nextpnr-ecp5 --85k --json out.json --lpf pins.lpf",detail:"Open PnR"},
+    {id:"pack",label:"ecppack Bitstream",cmd:"ecppack --compress out.config --bit out.bit",detail:"Pack bitstream"},
+  ],
+  resources:[{label:"LUT4",used:6123,total:83640},{label:"Flip-Flops",used:2981,total:83640},{label:"I/O",used:47,total:197},{label:"EBR 18Kb",used:18,total:208,unit:" blk"},{label:"PLL",used:1,total:4}],
+  timing:{fmax:"131.2",target:"125.0",setup:"+0.62",hold:"+0.28"},
+  constraints:[{pin:"P3",net:"clk_25mhz",dir:"IN",std:"LVCMOS33",bank:"0",lock:true},{pin:"T2",net:"rst_n",dir:"IN",std:"LVCMOS33",bank:"0",lock:true},{pin:"R1",net:"i2c_sda",dir:"BIDIR",std:"LVCMOS33",bank:"1",lock:true},{pin:"B9",net:"uart_tx",dir:"OUT",std:"LVCMOS25",bank:"6",lock:true},{pin:"T6",net:"led[0]",dir:"OUT",std:"LVCMOS33",bank:"3",lock:true}],
+  paths:[{from:"pqc_engine.round_reg[3]",to:"sha3_core.state_in[127]",slack:"+0.62 ns",lvl:6}],
+  history:[{time:"09:14",ok:true,fmax:"131.2",util:"7.3%",w:0},{time:"08:52",ok:true,fmax:"128.9",util:"7.5%",w:1}],
+  log:[{t:"cmd",m:"yosys -p 'synth_ecp5 -json out.json' src/*.v"},{t:"info",m:"FPGAForge → OSS CAD (yosys+nextpnr)"},{t:"out",m:"synth_ecp5: 6,123 LCs, 18 BRAMs"},{t:"ok",m:"Synthesis done"},{t:"cmd",m:"nextpnr-ecp5 --85k"},{t:"out",m:"Fmax clk_25mhz: 131.21 MHz"},{t:"ok",m:"PnR complete"},{t:"cmd",m:"ecppack --compress"},{t:"ok",m:"out.bit (2.1 MB)"},{t:"info",m:"═══ DONE ═══ 42s"}],
+},
+};
+
+// Interconnect blocks (shared across backends - represents a DC-SCM style system)
+const INTERCONNECT_BLOCKS=[
+  {id:"cpu",name:"BMC / Host CPU",type:"master",bus:"AXI4-Lite",x:50,y:30,w:160,h:60,color:C.purple},
+  {id:"xbar",name:"AXI Interconnect",type:"switch",bus:"AXI4-Lite",x:120,y:140,w:200,h:50,color:C.accent},
+  {id:"i2c",name:"I2C Controller",type:"slave",bus:"APB",x:20,y:250,w:130,h:50,color:C.cyan},
+  {id:"spi",name:"SPI Flash Ctrl",type:"slave",bus:"APB",x:170,y:250,w:130,h:50,color:C.cyan},
+  {id:"gpio",name:"GPIO / LED",type:"slave",bus:"APB",x:320,y:250,w:110,h:50,color:C.cyan},
+  {id:"uart",name:"UART",type:"slave",bus:"APB",x:20,y:340,w:110,h:50,color:C.cyan},
+  {id:"pqc",name:"PQC Engine",type:"slave",bus:"AXI4-Lite",x:155,y:340,w:140,h:50,color:C.pink},
+  {id:"bram",name:"Block RAM",type:"slave",bus:"AXI4",x:320,y:340,w:110,h:50,color:C.ok},
+  {id:"apb_br",name:"APB Bridge",type:"bridge",bus:"AXI→APB",x:50,y:190,w:120,h:36,color:C.warn},
+  {id:"timer",name:"Timer / WDT",type:"slave",bus:"APB",x:320,y:190,w:110,h:40,color:C.cyan},
+];
+const INTERCONNECT_WIRES=[
+  {from:"cpu",to:"xbar"},{from:"xbar",to:"apb_br"},{from:"xbar",to:"pqc"},{from:"xbar",to:"bram"},{from:"xbar",to:"timer"},
+  {from:"apb_br",to:"i2c"},{from:"apb_br",to:"spi"},{from:"apb_br",to:"gpio"},{from:"apb_br",to:"uart"},
+];
+
+// Register map for DC-SCM style design
+const REG_MAP=[
+  {offset:"0x0000",name:"CTRL",desc:"Main control register",fields:[{bits:"0",name:"EN",desc:"Global enable"},{bits:"1",name:"RST",desc:"Soft reset"},{bits:"7:2",name:"MODE",desc:"Operating mode"}]},
+  {offset:"0x0004",name:"STATUS",desc:"Status / flags (RO)",fields:[{bits:"0",name:"BUSY",desc:"Engine busy"},{bits:"1",name:"DONE",desc:"Op complete"},{bits:"2",name:"ERR",desc:"Error flag"},{bits:"15:8",name:"STATE",desc:"FSM state"}]},
+  {offset:"0x0008",name:"IRQ_EN",desc:"Interrupt enable mask",fields:[{bits:"0",name:"DONE_IE"},{bits:"1",name:"ERR_IE"},{bits:"2",name:"TIMER_IE"}]},
+  {offset:"0x000C",name:"IRQ_STATUS",desc:"Interrupt status (W1C)",fields:[{bits:"0",name:"DONE_IS"},{bits:"1",name:"ERR_IS"},{bits:"2",name:"TIMER_IS"}]},
+  {offset:"0x0010",name:"PQC_CMD",desc:"PQC command register",fields:[{bits:"3:0",name:"OP",desc:"Operation (keygen/sign/verify)"},{bits:"7:4",name:"ALG",desc:"Algorithm select"}]},
+  {offset:"0x0014",name:"PQC_STATUS",desc:"PQC engine status (RO)",fields:[{bits:"0",name:"BUSY"},{bits:"1",name:"VALID"},{bits:"15:8",name:"ROUNDS",desc:"Round counter"}]},
+  {offset:"0x0020",name:"I2C_ADDR",desc:"I2C target address",fields:[{bits:"6:0",name:"ADDR",desc:"7-bit address"},{bits:"7",name:"RW",desc:"Read/Write"}]},
+  {offset:"0x0100",name:"VERSION",desc:"IP version (RO)",fields:[{bits:"7:0",name:"PATCH"},{bits:"15:8",name:"MINOR"},{bits:"23:16",name:"MAJOR"}]},
+];
+
+// License data
+const LICENSE_DATA=[
+  {tool:"Lattice Diamond",feature:"Diamond Base",status:"active",expires:"2025-12-31",seats:"5/5 available",server:"1710@license-srv",mac:"00:1A:2B:3C:4D:5E",vendor:"lattice"},
+  {tool:"Lattice Diamond",feature:"Synplify Pro for Lattice",status:"active",expires:"2025-12-31",seats:"2/3 available",server:"1710@license-srv",mac:"00:1A:2B:3C:4D:5E",vendor:"synopsys"},
+  {tool:"Lattice Diamond",feature:"Reveal Analyzer",status:"active",expires:"2025-12-31",seats:"5/5 available",server:"1710@license-srv",mac:"—",vendor:"lattice"},
+  {tool:"Intel Quartus",feature:"Quartus Prime Pro",status:"active",expires:"2026-03-15",seats:"3/4 available",server:"1800@lic-intel",mac:"00:2C:3D:4E:5F:6A",vendor:"intel"},
+  {tool:"Intel Quartus",feature:"DSP Builder",status:"warning",expires:"2025-04-01",seats:"1/1 available",server:"1800@lic-intel",mac:"—",vendor:"intel"},
+  {tool:"Intel Quartus",feature:"Nios II Processor",status:"active",expires:"2026-03-15",seats:"4/4 available",server:"1800@lic-intel",mac:"—",vendor:"intel"},
+  {tool:"AMD Vivado",feature:"Vivado Design Suite",status:"active",expires:"2026-06-30",seats:"2/3 available",server:"2100@lic-xilinx",mac:"00:3E:4F:5A:6B:7C",vendor:"xilinx"},
+  {tool:"AMD Vivado",feature:"Vivado HLS",status:"expired",expires:"2024-12-31",seats:"0/2 available",server:"2100@lic-xilinx",mac:"—",vendor:"xilinx"},
+  {tool:"AMD Vivado",feature:"System Generator",status:"active",expires:"2026-06-30",seats:"1/1 available",server:"2100@lic-xilinx",mac:"—",vendor:"xilinx"},
+  {tool:"OSS CAD Suite",feature:"Yosys / nextpnr / ecppack",status:"open",expires:"∞",seats:"∞ (open source)",server:"N/A",mac:"—",vendor:"foss"},
+];
+
+// AI chat mock conversation
+const AI_SAMPLE_CHAT=[
+  {role:"user",text:"Analyze my latest timing report — I'm getting setup violations on the PQC engine paths."},
+  {role:"ai",text:"Looking at your PAR report for the LCMXO3LF-6900C build:\n\n**Critical Path Analysis:**\nThe path from `pqc_engine/round_reg[3]` → `sha3_core/state_in[127]` shows +1.87ns slack at 125 MHz, which is actually meeting timing. However, if you're targeting 150 MHz, this path would fail with -0.87ns violation.\n\n**Root Cause:** The Keccak round function has 4 logic levels between the round register and SHA3 state input. Each level adds ~1.6ns of combinational delay.\n\n**Recommendations:**\n1. **Pipeline the round function** — insert a register stage between round computation and state update. This halves the critical path at the cost of 1 cycle latency.\n2. **Use `prj_run PAR -impl impl1 -exp parPathBased=ON`** to enable path-based placement which can reduce routing delay by 15-20%.\n3. **Consider retiming** — Synplify's `syn_allow_retiming` attribute on the SHA3 module can automatically redistribute registers.\n\nWant me to generate the modified TCL build script with these optimizations?"},
+  {role:"user",text:"What about the I2C timing? The BMC is complaining about bus errors."},
+  {role:"ai",text:"Checking your I2C controller timing and constraints:\n\n**I2C Timing Analysis:**\nYour `i2c_scl` output is constrained to bank 1, LVCMOS33. At 400kHz Fast Mode, the SCL spec requires:\n- t_LOW ≥ 1.3µs, t_HIGH ≥ 0.6µs\n- Rise time ≤ 300ns, Fall time ≤ 300ns\n\n**Potential Issue:** Your .lpf shows no `SLEWRATE` constraint on the I2C pins. Default slew on MachXO3 is FAST, which can cause:\n- Ringing on long I2C traces → false transitions\n- EMI issues on the BMC bus\n\n**Fix — add to your .lpf:**\n```\nIOBUF PORT \"i2c_sda\" IO_TYPE=LVCMOS33 DRIVE=4 SLEWRATE=SLOW PULLMODE=UP;\nIOBUF PORT \"i2c_scl\" IO_TYPE=LVCMOS33 DRIVE=4 SLEWRATE=SLOW PULLMODE=UP;\n```\n\nAlso verify your clock divider: at 25MHz input with a divide of 62, you get ~403kHz which is borderline. Use 64 for clean 390kHz with margin.\n\nShould I update the constraint file?"},
+];
+
+// ════════════════════════════════════════════════════════════════
+// MICRO COMPONENTS
+// ════════════════════════════════════════════════════════════════
+const Badge=({children,color=C.accent})=><span style={{display:"inline-flex",alignItems:"center",padding:"2px 7px",borderRadius:4,fontSize:10,fontFamily:M,fontWeight:600,color,background:`${color}20`,letterSpacing:.3}}>{children}</span>;
+
+function Btn({children,onClick,primary,small,disabled,style,icon}){
+  const[h,setH]=useState(false);
+  return <button onClick={disabled?undefined:onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"inline-flex",alignItems:"center",gap:5,padding:small?"3px 9px":"7px 14px",borderRadius:5,
+      border:primary?"none":`1px solid ${C.b1}`,fontFamily:M,fontSize:small?10:11,fontWeight:600,
+      background:primary?(h?"#4da6ff":C.accent):(h?C.s3:"transparent"),
+      color:primary?"#fff":C.t2,cursor:disabled?"not-allowed":"pointer",
+      opacity:disabled?.4:1,transition:"all .12s",letterSpacing:.3,...style}}>
+    {icon&&<span style={{display:"flex"}}>{icon}</span>}{children}
+  </button>;
+}
+
+// SVG icons (inline)
+const I={
+  Play:()=><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1l8 5-8 5z"/></svg>,
+  Check:()=><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 6l3 3L10 3"/></svg>,
+  X:()=><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 2l8 8M10 2l-8 8"/></svg>,
+  Search:()=><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>,
+  Chip:()=><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="4" y="4" width="10" height="10" rx="1"/><path d="M7 4V2M11 4V2M7 14v2M11 14v2M4 7H2M4 11H2M14 7h2M14 11h2"/></svg>,
+  Folder:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 4.5h4.5l1.5 1.5H14v7H2z"/></svg>,
+  File:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg>,
+  Arrow:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 8h10M9 4l4 4-4 4"/></svg>,
+  Send:()=><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1l12 6-12 6V8.5L8 7 1 5.5z"/></svg>,
+  Key:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="5.5" cy="10.5" r="3"/><path d="M8 8l5-5M11 3l2 2M9.5 4.5l2 2"/></svg>,
+  Box:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 1L2 4v8l6 3 6-3V4z"/><path d="M2 4l6 3 6-3M8 7v8"/></svg>,
+  Grid:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>,
+  Brain:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 14V8"/><path d="M5 3a3 3 0 013-1 3 3 0 013 1"/><circle cx="5" cy="6" r="2.5"/><circle cx="11" cy="6" r="2.5"/><path d="M5 8.5C5 10 6 11 8 11s3-1 3-2.5"/></svg>,
+  Link:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4 8h8"/><rect x="1" y="5" width="5" height="6" rx="1"/><rect x="10" y="5" width="5" height="6" rx="1"/></svg>,
+  Map:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="1" y="3" width="14" height="10" rx="1"/><path d="M5 3v10M11 3v10M1 8h14"/></svg>,
+  Zap:()=><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M7.5 1L3 8h4l-1 5 5-7H7l.5-5z"/></svg>,
+  Gauge:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 11a6 6 0 1112 0"/><path d="M8 11V5.5"/><circle cx="8" cy="11" r="1" fill="currentColor"/></svg>,
+  Pin:()=><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="3" y="1" width="8" height="6" rx="1"/><path d="M5 7v3M9 7v3M7 10v3"/></svg>,
+  Term:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M4 6l3 2.5L4 11"/><path d="M9 11h3"/></svg>,
+  Bolt:()=><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 1v5H1.5L7 13V8h2.5z"/></svg>,
+  Settings:()=><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>,
+};
+
+// ════════════════════════════════════════════════════════════════
+// EXTRACTED HOVERABLE COMPONENTS (proper hook usage)
+// ════════════════════════════════════════════════════════════════
+function NavBtn({icon,label,active,onClick,accent}){
+  const[h,setH]=useState(false);
+  return <div onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    title={label}
+    style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+      padding:"10px 6px",cursor:"pointer",borderRadius:6,
+      background:active?C.accentDim:(h?C.s3:"transparent"),
+      color:active?(accent||C.accent):(h?C.t2:C.t3),
+      borderLeft:active?`2px solid ${accent||C.accent}`:"2px solid transparent",
+      transition:"all .12s",minWidth:56}}>
+    <span style={{display:"flex"}}>{icon}</span>
+    <span style={{fontSize:8,fontFamily:M,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>{label}</span>
+  </div>;
+}
+
+function HoverRow({children,style,onClick}){
+  const[h,setH]=useState(false);
+  return <div onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{background:h?C.s3:"transparent",cursor:onClick?"pointer":"default",transition:"background .08s",...style}}>
+    {children}
+  </div>;
+}
+
+function BackendOption({b,active,onPick}){
+  const[h,setH]=useState(false);
+  return <div onClick={onPick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",
+      background:active?`${b.color}15`:(h?C.s3:"transparent"),
+      borderLeft:`3px solid ${active?b.color:"transparent"}`,cursor:"pointer",transition:"all .1s"}}>
+    <span style={{fontSize:18,color:b.color,width:28,textAlign:"center"}}>{b.icon}</span>
+    <div style={{flex:1}}>
+      <div style={{fontSize:13,fontFamily:S,fontWeight:600,color:C.t1}}>{b.name}</div>
+      <div style={{fontSize:10,fontFamily:M,color:C.t3}}>CLI: {b.cli} • {b.constrExt} • {b.bitExt}</div>
+    </div>
+    <Badge color={b.color}>{b.version}</Badge>
+  </div>;
+}
+
+function IPItem({item,onSelect,selected}){
+  const[h,setH]=useState(false);
+  return <div onClick={onSelect} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{padding:"10px 14px",borderBottom:`1px solid ${C.b1}`,
+      background:selected?C.accentDim:(h?C.s3:"transparent"),
+      borderLeft:selected?`2px solid ${C.accent}`:"2px solid transparent",
+      cursor:"pointer",transition:"all .1s"}}>
+    <div style={{fontSize:12,fontFamily:M,fontWeight:600,color:C.t1}}>{item.name}</div>
+    <div style={{fontSize:10,fontFamily:M,color:C.t3,marginTop:2}}>{item.desc}</div>
+  </div>;
+}
+
+function LicRow({lic}){
+  const[h,setH]=useState(false);
+  const sc={active:C.ok,warning:C.warn,expired:C.err,open:C.orange};
+  return <div onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"grid",gridTemplateColumns:"140px 1fr 70px 90px 120px 140px",gap:8,alignItems:"center",
+      padding:"9px 14px",fontSize:11,fontFamily:M,borderBottom:`1px solid ${C.b1}`,
+      background:h?C.s3:"transparent",transition:"background .08s"}}>
+    <span style={{color:C.t2}}>{lic.tool}</span>
+    <span style={{color:C.t1,fontWeight:500}}>{lic.feature}</span>
+    <Badge color={sc[lic.status]||C.t3}>{lic.status}</Badge>
+    <span style={{color:lic.status==="expired"?C.err:C.t3}}>{lic.expires}</span>
+    <span style={{color:C.t3,fontSize:10}}>{lic.seats}</span>
+    <span style={{color:C.t3,fontSize:10}}>{lic.server}</span>
+  </div>;
+}
+
+function ConstrRow({c}){
+  const[h,setH]=useState(false);
+  const dc={IN:C.accent,OUT:C.ok,BIDIR:C.purple};
+  return <div onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"grid",gridTemplateColumns:"80px 1fr 55px 85px 40px 30px",gap:6,alignItems:"center",
+      padding:"6px 12px",fontSize:11,fontFamily:M,background:h?C.s3:"transparent",
+      borderBottom:`1px solid ${C.b1}`,cursor:"pointer",transition:"background .08s"}}>
+    <span style={{color:C.cyan,fontWeight:600}}>{c.pin}</span>
+    <span style={{color:C.t1}}>{c.net}</span>
+    <Badge color={dc[c.dir]||C.t3}>{c.dir}</Badge>
+    <span style={{color:C.t3,fontSize:10}}>{c.std}</span>
+    <span style={{color:C.t3}}>{c.bank}</span>
+    <span style={{opacity:c.lock?1:.2,fontSize:10}}>🔒</span>
+  </div>;
+}
+
+// ════════════════════════════════════════════════════════════════
+// MAIN APP
+// ════════════════════════════════════════════════════════════════
+function App(){
+  const[bid,setBid]=useState("diamond");
+  const[section,setSection]=useState("build");
+  const[building,setBuilding]=useState(false);
+  const[bStep,setBStep]=useState(-1);
+  const[logs,setLogs]=useState([]);
+  const[cSearch,setCSearch]=useState("");
+  const[cmdOpen,setCmdOpen]=useState(false);
+  const[cmdQ,setCmdQ]=useState("");
+  const[devOpen,setDevOpen]=useState(false);
+  const[licOpen,setLicOpen]=useState(false);
+  const[selIP,setSelIP]=useState(null);
+  const[aiInput,setAiInput]=useState("");
+  const[aiChat,setAiChat]=useState(AI_SAMPLE_CHAT);
+  const[aiLoading,setAiLoading]=useState(false);
+  const[selReg,setSelReg]=useState(0);
+  const[ixHover,setIxHover]=useState(null);
+  const logRef=useRef(null);
+  const aiRef=useRef(null);
+
+  const B=BACKENDS[bid];
+  const switchBackend=(id)=>{setBid(id);setBStep(-1);setLogs([]);setBuilding(false);setSelIP(null);};
+
+  const runBuild=()=>{
+    setBuilding(true);setBStep(0);setLogs([]);setSection("build");
+    let step=0,logIdx=0;
+    const si=setInterval(()=>{step++;setBStep(step);if(step>=B.pipeline.length){clearInterval(si);setBuilding(false);}},1000);
+    const li=setInterval(()=>{if(logIdx<B.log.length){setLogs(p=>[...p,B.log[logIdx]]);logIdx++;}else clearInterval(li);},220);
+  };
+
+  useEffect(()=>{if(logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;},[logs]);
+  useEffect(()=>{if(aiRef.current)aiRef.current.scrollTop=aiRef.current.scrollHeight;},[aiChat]);
+
+  useEffect(()=>{
+    const h=(e)=>{if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();setCmdOpen(p=>!p);}if(e.key==="Escape"){setCmdOpen(false);setDevOpen(false);setLicOpen(false);}};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+  },[]);
+
+  const sendAI=()=>{
+    if(!aiInput.trim())return;
+    setAiChat(p=>[...p,{role:"user",text:aiInput}]);
+    setAiInput("");setAiLoading(true);
+    setTimeout(()=>{
+      setAiChat(p=>[...p,{role:"ai",text:`Analyzing your ${B.short} project reports for "${aiInput.trim().substring(0,40)}...":\n\nBased on the current build (${B.defaultDev}, Fmax ${B.timing.fmax} MHz), I can see your design is using ${B.resources[0].used}/${B.resources[0].total} ${B.resources[0].label} (${Math.round(B.resources[0].used/B.resources[0].total*100)}%).\n\nThe critical path through the PQC engine has ${B.timing.setup} ns setup slack — this gives you headroom for optimization. Would you like me to suggest specific TCL directives for ${B.short} to improve this?`}]);
+      setAiLoading(false);
+    },2000);
+  };
+
+  // Pipeline step renderer
+  const PStep=({step,idx,total})=>{
+    let st="pending";
+    if(building){if(idx<bStep)st="done";else if(idx===bStep)st="run";}
+    else if(bStep>=total&&bStep>=0)st="done";
+    const col={done:C.ok,run:C.accent,pending:C.t3}[st];
+    const bg2={done:C.okDim,run:C.accentDim}[st];
+    return <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:20}}>
+        <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${col}`,background:bg2||"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {st==="done"&&<I.Check/>}{st==="run"&&<div style={{width:6,height:6,borderRadius:"50%",background:col,animation:"pulse 1s infinite"}}/>}
+        </div>
+        {idx<total-1&&<div style={{width:2,height:28,background:st==="done"?col:C.b1,transition:"all .3s"}}/>}
+      </div>
+      <div style={{paddingBottom:idx<total-1?4:0}}>
+        <div style={{fontSize:11,fontFamily:M,fontWeight:600,color:st==="pending"?C.t3:C.t1}}>{step.label}</div>
+        {st!=="pending"&&<div style={{fontSize:9,fontFamily:M,color:C.t3,marginTop:1}}>{step.cmd}</div>}
+      </div>
+    </div>;
+  };
+
+  const RBar=({label,used,total,unit=""})=>{
+    const pct=Math.round(used/total*100);
+    const col=pct>85?C.err:pct>65?C.warn:C.accent;
+    return <div style={{marginBottom:11}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,fontFamily:M,marginBottom:3}}>
+        <span style={{color:C.t2}}>{label}</span>
+        <span style={{color:col}}>{used.toLocaleString()}{unit}/{total.toLocaleString()}{unit} ({pct}%)</span>
+      </div>
+      <div style={{height:5,borderRadius:3,background:C.b1,overflow:"hidden"}}>
+        <div style={{height:"100%",borderRadius:3,width:`${pct}%`,background:`linear-gradient(90deg,${col}88,${col})`,transition:"width .5s"}}/>
+      </div>
+    </div>;
+  };
+
+  const CLine=({l})=>{
+    const col={info:C.t3,cmd:C.cyan,ok:C.ok,warn:C.warn,err:C.err,out:C.t2}[l.t]||C.t2;
+    const pre={cmd:"$ ",err:"✗ ",warn:"⚠ ",ok:"✓ ",info:"› ",out:"  "}[l.t]||"";
+    return <div style={{fontSize:11,fontFamily:M,lineHeight:1.7,color:col}}><span style={{opacity:.5}}>{pre}</span>{l.m}</div>;
+  };
+
+  const panel={background:C.s1,borderRadius:8,border:`1px solid ${C.b1}`,overflow:"hidden"};
+  const panelP={...panel,padding:16};
+  const hdr=(text,icon)=><div style={{fontSize:12,fontWeight:700,fontFamily:S,color:C.t1,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{icon}{text}</div>;
+
+  return <div style={{width:"100vw",height:"100vh",background:C.bg,color:C.t2,fontFamily:S,display:"flex",overflow:"hidden"}}>
+
+    {/* ── CMD PALETTE ── */}
+    {cmdOpen&&<div onClick={()=>{setCmdOpen(false);setCmdQ("");}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:90}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:500,background:C.s1,border:`1px solid ${C.b2}`,borderRadius:10,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.5)",animation:"slideDown .15s ease"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",borderBottom:`1px solid ${C.b1}`}}>
+          <I.Search/><input autoFocus value={cmdQ} onChange={e=>setCmdQ(e.target.value)} placeholder="Commands: build, switch, license, ip..."
+            style={{flex:1,background:"transparent",border:"none",color:C.t1,fontSize:13,fontFamily:S,outline:"none"}}/>
+          <span style={{fontSize:9,fontFamily:M,color:C.t3,padding:"1px 5px",border:`1px solid ${C.b1}`,borderRadius:3}}>ESC</span>
+        </div>
+        <div style={{maxHeight:300,overflowY:"auto"}}>
+          {[
+            {label:"Build All",cat:"Build",desc:`Full ${B.short} flow`,action:runBuild},
+            {label:"Switch: Diamond",cat:"Backend",desc:"Lattice Diamond 3.13",action:()=>switchBackend("diamond")},
+            {label:"Switch: Quartus",cat:"Backend",desc:"Intel Quartus Prime 23.1",action:()=>switchBackend("quartus")},
+            {label:"Switch: Vivado",cat:"Backend",desc:"AMD Vivado 2024.1",action:()=>switchBackend("vivado")},
+            {label:"Switch: OSS CAD",cat:"Backend",desc:"Yosys + nextpnr",action:()=>switchBackend("opensource")},
+            {label:"License Manager",cat:"System",desc:"View/manage all tool licenses",action:()=>setLicOpen(true)},
+            {label:"IP Catalog",cat:"Design",desc:"Browse and instantiate IPs",action:()=>setSection("ip")},
+            {label:"AI Analysis",cat:"AI",desc:"Analyze reports with AI",action:()=>setSection("ai")},
+            {label:"Interconnect",cat:"Design",desc:"View bus topology",action:()=>setSection("interconnect")},
+            {label:"Register Map",cat:"Design",desc:"View/edit register definitions",action:()=>setSection("regmap")},
+          ].filter(c=>c.label.toLowerCase().includes(cmdQ.toLowerCase())||c.cat.toLowerCase().includes(cmdQ.toLowerCase()))
+           .map((cmd,i)=><HoverRow key={i} onClick={()=>{setCmdOpen(false);setCmdQ("");cmd.action&&cmd.action();}}
+            style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px"}}>
+            <span style={{fontSize:9,fontFamily:M,color:C.t3,width:55,textTransform:"uppercase",letterSpacing:.5}}>{cmd.cat}</span>
+            <div style={{flex:1}}><div style={{fontSize:12,color:C.t1}}>{cmd.label}</div><div style={{fontSize:10,fontFamily:M,color:C.t3}}>{cmd.desc}</div></div>
+          </HoverRow>)}
+        </div>
+      </div>
+    </div>}
+
+    {/* ── LICENSE MANAGER MODAL ── */}
+    {licOpen&&<div onClick={()=>setLicOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:880,maxHeight:"80vh",background:C.s1,border:`1px solid ${C.b2}`,borderRadius:12,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.5)",animation:"slideDown .15s ease",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 20px",borderBottom:`1px solid ${C.b1}`}}>
+          <I.Key/><span style={{fontSize:15,fontWeight:700,color:C.t1}}>License Manager</span>
+          <div style={{flex:1}}/>
+          <Badge color={C.ok}>{LICENSE_DATA.filter(l=>l.status==="active").length} Active</Badge>
+          <Badge color={C.warn}>{LICENSE_DATA.filter(l=>l.status==="warning").length} Expiring</Badge>
+          <Badge color={C.err}>{LICENSE_DATA.filter(l=>l.status==="expired").length} Expired</Badge>
+          <Badge color={C.orange}>{LICENSE_DATA.filter(l=>l.status==="open").length} Open Source</Badge>
+          <Btn small onClick={()=>setLicOpen(false)}>✕ Close</Btn>
+        </div>
+        {/* Column headers */}
+        <div style={{display:"grid",gridTemplateColumns:"140px 1fr 70px 90px 120px 140px",gap:8,padding:"8px 14px",fontSize:9,fontFamily:M,fontWeight:700,letterSpacing:1,color:C.t3,textTransform:"uppercase",background:C.bg,borderBottom:`1px solid ${C.b1}`}}>
+          <span>Tool</span><span>Feature</span><span>Status</span><span>Expires</span><span>Seats</span><span>Server</span>
+        </div>
+        <div style={{flex:1,overflowY:"auto"}}>
+          {LICENSE_DATA.map((lic,i)=><LicRow key={i} lic={lic}/>)}
+        </div>
+        <div style={{padding:"12px 20px",borderTop:`1px solid ${C.b1}`,display:"flex",gap:10,alignItems:"center"}}>
+          <Btn small>🔄 Refresh All Servers</Btn>
+          <Btn small>📋 Export License Report</Btn>
+          <Btn small>➕ Add License File</Btn>
+          <div style={{flex:1}}/>
+          <span style={{fontSize:10,fontFamily:M,color:C.t3}}>
+            Queries: lmutil lmstat • quartus_sh --liccheck • vlm • (open source = no license)
+          </span>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── BACKEND SWITCHER DROPDOWN ── */}
+    {devOpen&&<div onClick={()=>setDevOpen(false)} style={{position:"fixed",inset:0,zIndex:800}}>
+      <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:48,left:60,width:340,background:C.s1,border:`1px solid ${C.b2}`,borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,.5)",animation:"slideDown .12s ease"}}>
+        <div style={{padding:"10px 14px",fontSize:9,fontFamily:M,fontWeight:700,letterSpacing:1.5,color:C.t3,textTransform:"uppercase",borderBottom:`1px solid ${C.b1}`}}>Select Backend Toolchain</div>
+        {Object.values(BACKENDS).map(b=><BackendOption key={b.id} b={b} active={b.id===bid} onPick={()=>{switchBackend(b.id);setDevOpen(false);}}/>)}
+      </div>
+    </div>}
+
+    {/* ══════ LEFT NAV SIDEBAR ══════ */}
+    <div style={{width:62,flexShrink:0,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:8,gap:2}}>
+      {/* Logo */}
+      <div onClick={()=>setDevOpen(p=>!p)} style={{padding:"8px 0 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderBottom:`1px solid ${C.b1}`,marginBottom:6,width:"100%"}}>
+        <span style={{color:C.accent}}><I.Chip/></span>
+        <span style={{fontSize:7,fontFamily:M,fontWeight:700,color:C.t3,letterSpacing:.5}}>{B.short.toUpperCase()}</span>
+      </div>
+
+      <NavBtn icon={<I.Zap/>} label="Build" active={section==="build"} onClick={()=>setSection("build")}/>
+      <NavBtn icon={<I.Box/>} label="IP Cat" active={section==="ip"} onClick={()=>setSection("ip")} accent={C.purple}/>
+      <NavBtn icon={<I.Link/>} label="Interc" active={section==="interconnect"} onClick={()=>setSection("interconnect")} accent={C.cyan}/>
+      <NavBtn icon={<I.Brain/>} label="AI" active={section==="ai"} onClick={()=>setSection("ai")} accent={C.pink}/>
+      <NavBtn icon={<I.Map/>} label="RegMap" active={section==="regmap"} onClick={()=>setSection("regmap")} accent={C.orange}/>
+      <NavBtn icon={<I.Pin/>} label="Constr" active={section==="constraints"} onClick={()=>setSection("constraints")}/>
+      <NavBtn icon={<I.Gauge/>} label="Rsrc" active={section==="resources"} onClick={()=>setSection("resources")}/>
+      <NavBtn icon={<I.Term/>} label="Console" active={section==="console"} onClick={()=>setSection("console")}/>
+
+      <div style={{flex:1}}/>
+      <NavBtn icon={<I.Key/>} label="License" onClick={()=>setLicOpen(true)} accent={C.warn}/>
+      <NavBtn icon={<I.Settings/>} label="Config" onClick={()=>{}}/>
+      <div style={{height:8}}/>
+    </div>
+
+    {/* ══════ MAIN CONTENT ══════ */}
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Top bar */}
+      <div style={{display:"flex",alignItems:"center",padding:"7px 16px",background:C.s1,borderBottom:`1px solid ${C.b1}`,height:42,gap:10}}>
+        <span style={{color:B.color,fontSize:13}}>{B.icon}</span>
+        <span style={{fontSize:11,fontFamily:M,fontWeight:600,color:C.t1}}>{B.name}</span>
+        <span style={{color:C.t3,fontSize:10,fontFamily:M}}>→ {B.defaultDev}</span>
+        <div style={{flex:1}}/>
+        <div onClick={()=>setCmdOpen(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",background:C.bg,border:`1px solid ${C.b1}`,borderRadius:5,fontSize:10,fontFamily:M,color:C.t3,cursor:"pointer"}}>
+          <I.Search/><span>Commands</span><span style={{fontSize:8,padding:"0 3px",border:`1px solid ${C.b1}`,borderRadius:2}}>⌘K</span>
+        </div>
+        <Btn primary small icon={<I.Play/>} onClick={runBuild} disabled={building}>{building?"Building...":"Build"}</Btn>
+      </div>
+
+      <div style={{flex:1,overflow:"auto",padding:14}}>
+
+        {/* ════ BUILD SECTION ════ */}
+        {section==="build"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <div style={panelP}>
+            {hdr("Build Pipeline",<I.Zap/>)}
+            <span style={{fontSize:9,fontFamily:M,color:B.color,fontWeight:600}}>{B.short} backend</span>
+            <div style={{marginTop:10}}>{B.pipeline.map((s,i)=><PStep key={s.id} step={s} idx={i} total={B.pipeline.length}/>)}</div>
+            {!building&&bStep>=B.pipeline.length&&bStep>=0&&<div style={{marginTop:12,padding:"7px 10px",background:C.okDim,borderRadius:5,fontSize:10,fontFamily:M,color:C.ok,display:"flex",gap:6,alignItems:"center"}}><I.Check/> Fmax {B.timing.fmax} MHz — {B.timing.setup} ns slack</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={panelP}>
+              {hdr("Quick Actions",<I.Bolt/>)}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                {B.pipeline.map((s,i)=><Btn key={i} small style={{justifyContent:"flex-start",fontSize:9}}>{s.label}</Btn>)}
+                <Btn small style={{justifyContent:"flex-start",fontSize:9,color:C.ok}}>⚡ Program</Btn>
+                <Btn small style={{justifyContent:"flex-start",fontSize:9}}>📊 Timing</Btn>
+              </div>
+            </div>
+            <div style={panelP}>
+              {hdr("Build History",null)}
+              {B.history.map((h,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 0",borderBottom:i<B.history.length-1?`1px solid ${C.b1}`:"none",fontSize:10,fontFamily:M}}>
+                <span style={{width:6,height:6,borderRadius:"50%",background:h.ok?C.ok:C.err}}/>
+                <span style={{color:C.t3,width:36}}>{h.time}</span>
+                <span style={{color:C.t1,flex:1}}>Fmax: {h.fmax}</span>
+                <span style={{color:C.t3}}>{h.util}</span>
+                {h.w>0&&<Badge color={C.warn}>{h.w}W</Badge>}
+              </div>)}
+            </div>
+          </div>
+        </div>}
+
+        {/* ════ IP CATALOG ════ */}
+        {section==="ip"&&<div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:14,height:"calc(100vh - 100px)"}}>
+          <div style={{...panel,display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:6}}>
+              <I.Box/><span style={{fontSize:12,fontWeight:700,color:C.t1}}>IP Catalog</span>
+              <Badge color={B.color}>{B.short}</Badge>
+            </div>
+            <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.b1}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:C.bg,borderRadius:4,border:`1px solid ${C.b1}`}}>
+                <I.Search/><input placeholder="Search IPs..." style={{flex:1,background:"transparent",border:"none",color:C.t1,fontSize:11,fontFamily:M,outline:"none"}}/>
+              </div>
+            </div>
+            <div style={{flex:1,overflowY:"auto"}}>
+              {B.ipCatalog.map((cat,ci)=><div key={ci}>
+                <div style={{padding:"8px 14px",fontSize:9,fontFamily:M,fontWeight:700,letterSpacing:1.5,color:C.t3,textTransform:"uppercase",background:C.bg,borderBottom:`1px solid ${C.b1}`}}>{cat.cat}</div>
+                {cat.items.map((item,ii)=><IPItem key={ii} item={item} selected={selIP===item.name} onSelect={()=>setSelIP(item.name)}/>)}
+              </div>)}
+            </div>
+          </div>
+          <div style={panelP}>
+            {selIP ? <>
+              {hdr(`Configure: ${selIP}`,<I.Box/>)}
+              {B.ipCatalog.flatMap(c=>c.items).filter(i=>i.name===selIP).map(ip=><div key={ip.name}>
+                <div style={{fontSize:11,fontFamily:M,color:C.t3,marginBottom:16}}>{ip.desc}</div>
+                <div style={{fontSize:10,fontFamily:M,fontWeight:700,color:C.t2,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Parameters</div>
+                {ip.params.map((p,pi)=><div key={pi} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",marginBottom:6,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`}}>
+                  <span style={{fontSize:11,fontFamily:M,color:C.t1,flex:1}}>{p}</span>
+                  <input style={{width:120,padding:"4px 8px",background:C.s2,border:`1px solid ${C.b1}`,borderRadius:4,color:C.accent,fontSize:11,fontFamily:M,outline:"none"}} defaultValue={p.split(":")[1]?.split(",")[0]?.trim()||"default"}/>
+                </div>)}
+                <div style={{marginTop:20,display:"flex",gap:8}}>
+                  <Btn primary>Generate Instance</Btn>
+                  <Btn>Preview HDL</Btn>
+                  <Btn>Copy TCL Command</Btn>
+                </div>
+                <div style={{marginTop:16,padding:12,background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`}}>
+                  <div style={{fontSize:9,fontFamily:M,color:C.t3,marginBottom:6,fontWeight:700}}>TCL INSTANTIATION COMMAND</div>
+                  <div style={{fontSize:11,fontFamily:M,color:C.cyan,whiteSpace:"pre-wrap",lineHeight:1.6}}>
+                    {bid==="vivado"?`create_ip -name ${selIP.toLowerCase().replace(/ /g,"_")} -vendor xilinx.com -library ip -version 1.0 -module_name ${selIP.toLowerCase().replace(/ /g,"_")}_inst`
+                    :bid==="quartus"?`package require -exact qsys 16.0\ncreate_system ${selIP.toLowerCase().replace(/ /g,"_")}_inst\nset_instance_parameter_value ${selIP.toLowerCase().replace(/ /g,"_")} {WIDTH} {8}`
+                    :bid==="diamond"?`sbp_design open -name ${selIP.toLowerCase()}_inst\nsbp_configure -component ${selIP}`
+                    :`# Open source: instantiate directly in HDL\n${selIP.toLowerCase().replace(/ /g,"_")} #(\n  .WIDTH(8)\n) u_${selIP.toLowerCase().replace(/ /g,"_")} (\n  .clk(clk),\n  .rst(rst)\n);`}
+                  </div>
+                </div>
+              </div>)}
+            </> : <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.t3,fontSize:12,fontFamily:M}}>
+              ← Select an IP from the catalog to configure and instantiate
+            </div>}
+          </div>
+        </div>}
+
+        {/* ════ INTERCONNECT VIEWER ════ */}
+        {section==="interconnect"&&<div style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:14,height:"calc(100vh - 100px)"}}>
+          <div style={panelP}>
+            {hdr("System Interconnect — AXI / APB Topology",<I.Link/>)}
+            <svg width="100%" height="380" viewBox="0 0 460 420" style={{background:C.bg,borderRadius:6,border:`1px solid ${C.b1}`}}>
+              {/* Draw wires first */}
+              {INTERCONNECT_WIRES.map((w,i)=>{
+                const f=INTERCONNECT_BLOCKS.find(b=>b.id===w.from);
+                const t=INTERCONNECT_BLOCKS.find(b=>b.id===w.to);
+                if(!f||!t)return null;
+                const fx=f.x+f.w/2,fy=f.y+f.h;
+                const tx=t.x+t.w/2,ty=t.y;
+                const mid=(fy+ty)/2;
+                return <path key={i} d={`M${fx},${fy} C${fx},${mid} ${tx},${mid} ${tx},${ty}`}
+                  stroke={ixHover===w.from||ixHover===w.to?C.accent:`${C.b2}`}
+                  strokeWidth={ixHover===w.from||ixHover===w.to?2.5:1.5}
+                  fill="none" strokeDasharray={w.from==="apb_br"?"4,3":"none"}
+                  style={{transition:"all .2s"}}/>;
+              })}
+              {/* Draw blocks */}
+              {INTERCONNECT_BLOCKS.map(b=>{
+                const hov=ixHover===b.id;
+                return <g key={b.id} onMouseEnter={()=>setIxHover(b.id)} onMouseLeave={()=>setIxHover(null)} style={{cursor:"pointer"}}>
+                  <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="6"
+                    fill={hov?`${b.color}30`:`${b.color}15`}
+                    stroke={hov?b.color:`${b.color}60`}
+                    strokeWidth={hov?2:1}
+                    style={{transition:"all .15s"}}/>
+                  <text x={b.x+b.w/2} y={b.y+b.h/2-6} textAnchor="middle" fill={C.t1}
+                    style={{fontSize:11,fontFamily:S,fontWeight:600}}>{b.name}</text>
+                  <text x={b.x+b.w/2} y={b.y+b.h/2+10} textAnchor="middle" fill={b.color}
+                    style={{fontSize:9,fontFamily:M,fontWeight:500}}>{b.bus}</text>
+                </g>;
+              })}
+            </svg>
+            <div style={{marginTop:10,display:"flex",gap:12,fontSize:10,fontFamily:M,color:C.t3}}>
+              <span><span style={{color:C.purple}}>■</span> Master</span>
+              <span><span style={{color:C.cyan}}>■</span> Slave</span>
+              <span><span style={{color:C.pink}}>■</span> Accelerator</span>
+              <span><span style={{color:C.ok}}>■</span> Memory</span>
+              <span><span style={{color:C.warn}}>■</span> Bridge</span>
+              <span style={{opacity:.5}}>—— AXI</span>
+              <span style={{opacity:.5}}>- - APB</span>
+            </div>
+          </div>
+          <div style={{...panel,display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.b1}`}}>
+              {hdr("Bus Details",null)}
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:12}}>
+              {INTERCONNECT_BLOCKS.map(b=><div key={b.id} style={{padding:"8px 10px",marginBottom:6,background:ixHover===b.id?C.accentDim:C.bg,borderRadius:5,border:`1px solid ${C.b1}`,transition:"all .15s"}}
+                onMouseEnter={()=>setIxHover(b.id)} onMouseLeave={()=>setIxHover(null)}>
+                <div style={{fontSize:11,fontFamily:M,fontWeight:600,color:b.color}}>{b.name}</div>
+                <div style={{fontSize:9,fontFamily:M,color:C.t3,marginTop:2}}>
+                  {b.type.toUpperCase()} • {b.bus}
+                </div>
+              </div>)}
+              <div style={{marginTop:12}}>
+                <Btn small style={{width:"100%",justifyContent:"center"}}>+ Add Block</Btn>
+                <Btn small style={{width:"100%",justifyContent:"center",marginTop:6}}>Export to Qsys / BD</Btn>
+              </div>
+            </div>
+          </div>
+        </div>}
+
+        {/* ════ AI ANALYSIS ════ */}
+        {section==="ai"&&<div style={{height:"calc(100vh - 100px)",display:"flex",flexDirection:"column",...panel}}>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
+            <I.Brain/><span style={{fontSize:13,fontWeight:700,color:C.t1}}>AI Report Analysis</span>
+            <Badge color={C.pink}>Powered by LLM</Badge>
+            <div style={{flex:1}}/>
+            <Badge color={B.color}>{B.short} reports loaded</Badge>
+            <Btn small>Upload Report</Btn>
+          </div>
+          <div ref={aiRef} style={{flex:1,overflowY:"auto",padding:16}}>
+            {aiChat.map((msg,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:16,animation:"fadeIn .3s ease"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,
+                background:msg.role==="user"?C.accentDim:`${C.pink}20`,
+                color:msg.role==="user"?C.accent:C.pink,
+                border:`1px solid ${msg.role==="user"?C.accent:C.pink}40`}}>
+                {msg.role==="user"?"T":"AI"}
+              </div>
+              <div style={{flex:1,fontSize:12,fontFamily:msg.role==="ai"?M:S,lineHeight:1.7,color:C.t1,
+                whiteSpace:"pre-wrap",padding:"8px 14px",borderRadius:8,
+                background:msg.role==="user"?C.s2:C.bg,
+                border:`1px solid ${C.b1}`}}>
+                {msg.text}
+              </div>
+            </div>)}
+            {aiLoading&&<div style={{display:"flex",gap:10,marginBottom:16}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:`${C.pink}20`,display:"flex",alignItems:"center",justifyContent:"center",color:C.pink,fontSize:12,fontWeight:700,border:`1px solid ${C.pink}40`}}>AI</div>
+              <div style={{padding:"12px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.b1}`,fontSize:12,fontFamily:M,color:C.t3}}>
+                <span style={{animation:"pulse 1s infinite"}}>●</span> Analyzing {B.short} reports...
+              </div>
+            </div>}
+          </div>
+          <div style={{padding:"12px 16px",borderTop:`1px solid ${C.b1}`,display:"flex",gap:8}}>
+            <input value={aiInput} onChange={e=>setAiInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&sendAI()}
+              placeholder={`Ask about your ${B.short} build: timing, utilization, constraints, optimization...`}
+              style={{flex:1,padding:"8px 12px",background:C.bg,border:`1px solid ${C.b1}`,borderRadius:6,color:C.t1,fontSize:12,fontFamily:S,outline:"none"}}/>
+            <Btn primary icon={<I.Send/>} onClick={sendAI} disabled={aiLoading}>Send</Btn>
+          </div>
+        </div>}
+
+        {/* ════ REGISTER MAP ════ */}
+        {section==="regmap"&&<div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:14,height:"calc(100vh - 100px)"}}>
+          <div style={{...panel,display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:6}}>
+              <I.Map/><span style={{fontSize:12,fontWeight:700,color:C.t1}}>Register Map</span>
+              <Badge color={C.orange}>DC-SCM Controller</Badge>
+            </div>
+            <div style={{flex:1,overflowY:"auto"}}>
+              {REG_MAP.map((reg,i)=><HoverRow key={i} onClick={()=>setSelReg(i)}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+                  borderBottom:`1px solid ${C.b1}`,
+                  borderLeft:selReg===i?`2px solid ${C.orange}`:"2px solid transparent",
+                  background:selReg===i?`${C.orange}10`:"transparent"}}>
+                <span style={{fontFamily:M,fontSize:10,color:C.orange,fontWeight:600,width:52}}>{reg.offset}</span>
+                <div>
+                  <div style={{fontSize:11,fontFamily:M,fontWeight:600,color:C.t1}}>{reg.name}</div>
+                  <div style={{fontSize:9,fontFamily:M,color:C.t3}}>{reg.desc}</div>
+                </div>
+              </HoverRow>)}
+            </div>
+            <div style={{padding:10,borderTop:`1px solid ${C.b1}`,display:"flex",gap:6}}>
+              <Btn small style={{flex:1,justifyContent:"center"}}>+ Add Register</Btn>
+              <Btn small>Export .h</Btn>
+              <Btn small>Export .svh</Btn>
+            </div>
+          </div>
+          <div style={panelP}>
+            {hdr(`${REG_MAP[selReg].name} — ${REG_MAP[selReg].offset}`,<I.Map/>)}
+            <div style={{fontSize:11,fontFamily:M,color:C.t3,marginBottom:16}}>{REG_MAP[selReg].desc}</div>
+            {/* Bit field visualization */}
+            <div style={{marginBottom:20}}>
+              <div style={{display:"flex",fontSize:8,fontFamily:M,color:C.t3,marginBottom:4}}>
+                {Array.from({length:32},(_, i)=>31-i).map(b=><div key={b} style={{flex:1,textAlign:"center",minWidth:0}}>{b%4===0?b:""}</div>)}
+              </div>
+              <div style={{display:"flex",height:32,borderRadius:4,overflow:"hidden",border:`1px solid ${C.b1}`}}>
+                {(()=>{
+                  const cells=Array(32).fill(null);
+                  REG_MAP[selReg].fields.forEach((f,fi)=>{
+                    const colors=[C.accent,C.ok,C.warn,C.pink,C.cyan,C.purple,C.orange];
+                    const col=colors[fi%colors.length];
+                    if(f.bits.includes(":")){
+                      const[hi,lo]=f.bits.split(":").map(Number);
+                      for(let b=lo;b<=hi;b++)cells[31-b]={name:f.name,col};
+                    }else{
+                      const b=Number(f.bits);cells[31-b]={name:f.name,col};
+                    }
+                  });
+                  return cells.map((c,i)=><div key={i} style={{flex:1,background:c?`${c.col}30`:C.bg,borderRight:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontFamily:M,color:c?c.col:C.t3,fontWeight:600,minWidth:0}}>
+                    {c?"":" "}
+                  </div>);
+                })()}
+              </div>
+            </div>
+            {/* Field table */}
+            <div style={{fontSize:9,fontFamily:M,fontWeight:700,letterSpacing:1,color:C.t3,textTransform:"uppercase",display:"grid",gridTemplateColumns:"60px 80px 1fr 100px",gap:8,padding:"6px 10px",background:C.bg,borderRadius:"4px 4px 0 0",border:`1px solid ${C.b1}`,borderBottom:"none"}}>
+              <span>Bits</span><span>Name</span><span>Description</span><span>Default</span>
+            </div>
+            {REG_MAP[selReg].fields.map((f,fi)=>{
+              const colors=[C.accent,C.ok,C.warn,C.pink,C.cyan,C.purple,C.orange];
+              return <div key={fi} style={{display:"grid",gridTemplateColumns:"60px 80px 1fr 100px",gap:8,padding:"8px 10px",fontSize:11,fontFamily:M,borderBottom:`1px solid ${C.b1}`,border:`1px solid ${C.b1}`,borderTop:"none"}}>
+                <span style={{color:colors[fi%colors.length],fontWeight:600}}>[{f.bits}]</span>
+                <span style={{color:C.t1,fontWeight:600}}>{f.name}</span>
+                <span style={{color:C.t3}}>{f.desc||"—"}</span>
+                <input style={{background:C.s2,border:`1px solid ${C.b1}`,borderRadius:3,padding:"2px 6px",color:C.accent,fontSize:10,fontFamily:M,outline:"none"}} defaultValue="0x0"/>
+              </div>;
+            })}
+            <div style={{marginTop:16,display:"flex",gap:8}}>
+              <Btn>Generate C Header</Btn>
+              <Btn>Generate SV Package</Btn>
+              <Btn>Generate Documentation</Btn>
+            </div>
+          </div>
+        </div>}
+
+        {/* ════ CONSTRAINTS ════ */}
+        {section==="constraints"&&<div style={panel}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:`1px solid ${C.b1}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flex:1,padding:"4px 8px",background:C.bg,borderRadius:4,border:`1px solid ${C.b1}`}}>
+              <I.Search/><input value={cSearch} onChange={e=>setCSearch(e.target.value)} placeholder="Filter pins or nets..."
+                style={{flex:1,background:"transparent",border:"none",color:C.t1,fontSize:11,fontFamily:M,outline:"none"}}/>
+            </div>
+            <Btn small>Add Pin</Btn><Btn small>Import {B.constrExt}</Btn><Btn small>Sync</Btn>
+            <Badge color={B.color}>{B.constrFmt}</Badge>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"80px 1fr 55px 85px 40px 30px",gap:6,padding:"6px 12px",fontSize:9,fontFamily:M,fontWeight:700,letterSpacing:1,color:C.t3,textTransform:"uppercase",borderBottom:`1px solid ${C.b1}`,background:C.bg}}>
+            <span>Pin</span><span>Net</span><span>Dir</span><span>I/O Std</span><span>Bank</span><span>🔒</span>
+          </div>
+          <div style={{maxHeight:"calc(100vh - 220px)",overflowY:"auto"}}>
+            {B.constraints.filter(c=>c.pin.toLowerCase().includes(cSearch.toLowerCase())||c.net.toLowerCase().includes(cSearch.toLowerCase())).map((c,i)=><ConstrRow key={i} c={c}/>)}
+          </div>
+        </div>}
+
+        {/* ════ RESOURCES ════ */}
+        {section==="resources"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <div style={panelP}>
+            {hdr(<>Utilization — <span style={{color:B.color}}>{B.defaultDev}</span></>,<I.Gauge/>)}
+            {B.resources.map((r,i)=><RBar key={i} {...r}/>)}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={panelP}>
+              {hdr("Timing",null)}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[{l:"Fmax",v:`${B.timing.fmax} MHz`,c:C.ok},{l:"Target",v:`${B.timing.target} MHz`,c:C.t2},{l:"Setup",v:`${B.timing.setup} ns`,c:C.ok},{l:"Hold",v:`${B.timing.hold} ns`,c:parseFloat(B.timing.hold)<0.1?C.warn:C.ok}]
+                  .map((t,i)=><div key={i} style={{padding:10,background:C.bg,borderRadius:5,border:`1px solid ${C.b1}`}}>
+                    <div style={{fontSize:8,fontFamily:M,fontWeight:700,color:C.t3,marginBottom:3,textTransform:"uppercase",letterSpacing:.8}}>{t.l}</div>
+                    <div style={{fontSize:16,fontFamily:M,fontWeight:700,color:t.c}}>{t.v}</div>
+                  </div>)}
+              </div>
+            </div>
+            <div style={panelP}>
+              {hdr("Power Estimation",<I.Bolt/>)}
+              {[{l:"Static (Quiescent)",v:"42 mW",pct:15},{l:"Dynamic (Clocks)",v:"118 mW",pct:42},{l:"Dynamic (Logic)",v:"67 mW",pct:24},{l:"Dynamic (I/O)",v:"31 mW",pct:11},{l:"Dynamic (BRAM)",v:"22 mW",pct:8}].map((p,i)=><div key={i} style={{marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,fontFamily:M,marginBottom:2}}>
+                  <span style={{color:C.t2}}>{p.l}</span><span style={{color:C.warn}}>{p.v} ({p.pct}%)</span>
+                </div>
+                <div style={{height:4,borderRadius:2,background:C.b1,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${p.pct}%`,background:`linear-gradient(90deg,${C.warn}88,${C.warn})`,borderRadius:2}}/>
+                </div>
+              </div>)}
+              <div style={{marginTop:8,padding:"8px 10px",background:C.bg,borderRadius:5,border:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",fontSize:11,fontFamily:M}}>
+                <span style={{color:C.t1,fontWeight:700}}>Total Estimated Power</span>
+                <span style={{color:C.warn,fontWeight:700}}>280 mW</span>
+              </div>
+            </div>
+          </div>
+        </div>}
+
+        {/* ════ CONSOLE ════ */}
+        {section==="console"&&<div style={{...panel,height:"calc(100vh - 100px)",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderBottom:`1px solid ${C.b1}`,fontSize:10,fontFamily:M,color:C.t3}}>
+            <span style={{color:B.color}}>{B.icon}</span>
+            <span>{B.short} Output</span><span style={{flex:1}}/><span>CLI: {B.cli}</span><span>│</span><span>{logs.length} lines</span>
+            <Btn small onClick={()=>setLogs([])}>Clear</Btn>
+          </div>
+          <div ref={logRef} style={{flex:1,overflowY:"auto",padding:"8px 14px",background:"#040609"}}>
+            {logs.length===0&&<div style={{color:C.t3,fontSize:11,fontFamily:M,padding:16,textAlign:"center"}}>Hit <span style={{color:C.accent}}>Build</span> or <span style={{color:C.accent}}>⌘K</span></div>}
+            {logs.map((l,i)=><CLine key={i} l={l}/>)}
+            {building&&<div style={{fontSize:11,color:C.accent,fontFamily:M}}><span style={{animation:"pulse 1s infinite"}}>●</span> Building...</div>}
+          </div>
+        </div>}
+
+      </div>
+    </div>
+  </div>;
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
