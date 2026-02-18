@@ -34,6 +34,8 @@ import {
   deleteFile,
   checkLicenses,
   cleanBuild,
+  checkSourcesStale,
+  saveProject,
 } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -94,6 +96,11 @@ export default function App() {
   const [activeStage, setActiveStage] = useState<number | null>(null);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
+  const [buildStages, setBuildStages] = useState<string[]>([]);
+  const [buildOptions, setBuildOptions] = useState<Record<string, string>>({});
+  const [sourcesStale, setSourcesStale] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(false);
+  const [deviceDraft, setDeviceDraft] = useState("");
 
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
@@ -173,6 +180,8 @@ export default function App() {
           getUtilizationReport(backendId, dir)
             .then((r) => setRealUtilReport(mapUtilizationReport(r)))
             .catch(() => {});
+          // Check if sources are newer than build outputs
+          checkSourcesStale(dir).then(setSourcesStale).catch(() => {});
         }
       }).catch((err) => {
         console.error("File tree scan failed:", err);
@@ -373,6 +382,7 @@ export default function App() {
     setSec("build");
     setBuildDone(false);
     setActiveStage(null);
+    setSourcesStale(false);
 
     if (!isTauri || !projectDir) {
       // Simulate build in browser dev mode
@@ -432,7 +442,7 @@ export default function App() {
 
     // NOW start the build — listeners are already active
     try {
-      const buildId = await tauriStartBuild(bid, projectDir);
+      const buildId = await tauriStartBuild(bid, projectDir, buildStages, buildOptions);
       console.log("Build started:", buildId);
     } catch (err) {
       // Clean up listeners on error
@@ -441,29 +451,25 @@ export default function App() {
       setBuilding(false);
       setLogs((p) => [...p, { t: "err" as const, m: `Build error: ${err}` }]);
     }
-  }, [B, bid, projectDir, startLogFlush, stopLogFlush, runMockBuild]);
+  }, [B, bid, projectDir, buildStages, buildOptions, startLogFlush, stopLogFlush, runMockBuild]);
 
-  const runCleanBuild = useCallback(async () => {
-    if (!isTauri || !projectDir) {
-      runBuild();
-      return;
-    }
+  const runClean = useCallback(async () => {
+    if (!isTauri || !projectDir) return;
     setLogs([{ t: "info", m: "Cleaning build artifacts..." }]);
     setSec("build");
     setBuildDone(false);
+    setBStep(-1);
     setRealTimingReport(null);
     setRealUtilReport(null);
+    setSourcesStale(false);
     try {
       const removed = await cleanBuild(projectDir);
       setLogs((p) => [...p, { t: "ok", m: `Cleaned ${removed} artifact(s)` }]);
-      // Refresh file tree after clean
       getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
     } catch (err) {
       setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}` }]);
     }
-    // Now run the build
-    runBuild();
-  }, [projectDir, runBuild]);
+  }, [projectDir]);
 
   const handleFileClick = useCallback((name: string, path?: string) => {
     setAFile(name);
@@ -534,7 +540,7 @@ export default function App() {
 
   const commands = [
     { label: "Build All", category: "Build", desc: `${B.short} flow`, action: runBuild },
-    { label: "Clean Build", category: "Build", desc: "Delete artifacts, then rebuild", action: runCleanBuild },
+    { label: "Clean", category: "Build", desc: "Delete build artifacts", action: runClean },
     { label: "Reports", category: "View", desc: "Timing, Utilization, Power, DRC, I/O", action: () => navClick("reports") },
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
     ...backends.filter((b) => b.available).map((b) => ({
@@ -737,9 +743,69 @@ export default function App() {
             <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1 }}>
               {project ? project.name : B.name}
             </span>
-            <span style={{ color: C.t3, fontSize: 9, fontFamily: MONO }}>
-              {"\u2192"} {project ? project.device : B.defaultDev}
-            </span>
+            {editingDevice ? (
+              <input
+                autoFocus
+                value={deviceDraft}
+                onChange={(e) => setDeviceDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && deviceDraft.trim() && project && projectDir) {
+                    const updated = { ...project, device: deviceDraft.trim() };
+                    setProject(updated);
+                    setEditingDevice(false);
+                    saveProject(projectDir, updated).catch(() => {});
+                  }
+                  if (e.key === "Escape") setEditingDevice(false);
+                }}
+                onBlur={() => setEditingDevice(false)}
+                style={{
+                  fontSize: 9,
+                  fontFamily: MONO,
+                  background: C.bg,
+                  color: C.t1,
+                  border: `1px solid ${C.accent}`,
+                  borderRadius: 3,
+                  padding: "1px 6px",
+                  width: 160,
+                  outline: "none",
+                }}
+              />
+            ) : (
+              <span
+                onClick={() => {
+                  if (project) {
+                    setDeviceDraft(project.device);
+                    setEditingDevice(true);
+                  }
+                }}
+                style={{
+                  color: C.t3,
+                  fontSize: 9,
+                  fontFamily: MONO,
+                  cursor: project ? "pointer" : "default",
+                  borderBottom: project ? `1px dashed ${C.t3}40` : "none",
+                }}
+                title={project ? "Click to change device/part" : undefined}
+              >
+                {"\u2192"} {project ? project.device : B.defaultDev}
+              </span>
+            )}
+            {sourcesStale && (
+              <span
+                style={{
+                  fontSize: 7,
+                  fontFamily: MONO,
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  borderRadius: 3,
+                  background: `${C.warn}20`,
+                  color: C.warn,
+                }}
+                title="Source files changed since last build"
+              >
+                STALE
+              </span>
+            )}
             {projectDir && (
               <span
                 style={{
@@ -787,7 +853,7 @@ export default function App() {
                 {"\u2318K"}
               </span>
             </div>
-            <Btn small onClick={runCleanBuild} disabled={building}>
+            <Btn small onClick={runClean} disabled={building}>
               Clean
             </Btn>
             <Btn primary small icon={<Play />} onClick={runBuild} disabled={building}>
@@ -814,6 +880,10 @@ export default function App() {
                   logs={logs}
                   activeStage={activeStage}
                   onStageClick={setActiveStage}
+                  selectedStages={buildStages}
+                  onStagesChange={setBuildStages}
+                  buildOptions={buildOptions}
+                  onOptionsChange={setBuildOptions}
                 />
                 {buildDone && realFiles && (
                   <BuildArtifacts

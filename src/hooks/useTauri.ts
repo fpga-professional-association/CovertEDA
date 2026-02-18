@@ -44,8 +44,13 @@ export async function getGitStatus(projectDir: string) {
   return invoke<unknown>("get_git_status", { projectDir });
 }
 
-export async function startBuild(backendId: string, projectDir: string) {
-  return invoke<string>("start_build", { backendId, projectDir });
+export async function startBuild(
+  backendId: string,
+  projectDir: string,
+  stages: string[] = [],
+  options: Record<string, string> = {},
+) {
+  return invoke<string>("start_build", { backendId, projectDir, stages, options });
 }
 
 export async function cancelBuild(buildId: string) {
@@ -54,6 +59,11 @@ export async function cancelBuild(buildId: string) {
 
 export async function cleanBuild(projectDir: string) {
   return invoke<number>("clean_build", { projectDir });
+}
+
+export async function checkSourcesStale(projectDir: string): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("check_sources_stale", { projectDir });
 }
 
 export async function switchBackend(backendId: string) {
