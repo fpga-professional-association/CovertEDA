@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn } from "./shared";
@@ -22,6 +22,35 @@ const linePrefixes: Record<string, string> = {
   out: "  ",
 };
 
+function HighlightedText({ text, search, highlightColor }: { text: string; search: string; highlightColor: string }) {
+  if (!search) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const needle = search.toLowerCase();
+  const parts: { text: string; match: boolean }[] = [];
+  let idx = 0;
+  while (idx < text.length) {
+    const found = lower.indexOf(needle, idx);
+    if (found === -1) {
+      parts.push({ text: text.slice(idx), match: false });
+      break;
+    }
+    if (found > idx) parts.push({ text: text.slice(idx, found), match: false });
+    parts.push({ text: text.slice(found, found + needle.length), match: true });
+    idx = found + needle.length;
+  }
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.match ? (
+          <span key={i} style={{ background: `${highlightColor}30`, borderRadius: 1 }}>{p.text}</span>
+        ) : (
+          <span key={i}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
 export default memo(function Console({
   logs,
   building,
@@ -32,6 +61,7 @@ export default memo(function Console({
   onClear,
 }: ConsoleProps) {
   const { C, MONO } = useTheme();
+  const [search, setSearch] = useState("");
 
   const lineColors: Record<string, string> = {
     info: C.t3,
@@ -45,13 +75,21 @@ export default memo(function Console({
   const logRef = useRef<HTMLDivElement>(null);
   const wasAtBottom = useRef(true);
 
+  const filteredLogs = useMemo(() => {
+    if (!search) return logs;
+    const lower = search.toLowerCase();
+    return logs.filter((l) => l.m.toLowerCase().includes(lower));
+  }, [logs, search]);
+
+  const matchCount = search ? filteredLogs.length : 0;
+
   // Auto-scroll only if user was already at bottom
   useEffect(() => {
     const el = logRef.current;
     if (el && wasAtBottom.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [logs.length]);
+  }, [filteredLogs.length]);
 
   const handleScroll = useCallback(() => {
     const el = logRef.current;
@@ -72,6 +110,7 @@ export default memo(function Console({
         flexDirection: "column",
       }}
     >
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -106,6 +145,60 @@ export default memo(function Console({
           Clear
         </Btn>
       </div>
+
+      {/* Search bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 12px",
+          borderBottom: `1px solid ${C.b1}`,
+          background: C.bg,
+        }}
+      >
+        <span style={{ fontSize: 10, color: C.t3 }}>{"\uD83D\uDD0D"}</span>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search logs..."
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            fontSize: 9,
+            fontFamily: MONO,
+            color: C.t1,
+          }}
+        />
+        {search && (
+          <>
+            <span
+              style={{
+                fontSize: 7,
+                fontFamily: MONO,
+                fontWeight: 600,
+                padding: "1px 5px",
+                borderRadius: 3,
+                background: matchCount > 0 ? `${C.accent}20` : `${C.warn}20`,
+                color: matchCount > 0 ? C.accent : C.warn,
+              }}
+            >
+              {matchCount} match{matchCount !== 1 ? "es" : ""}
+            </span>
+            <span
+              onClick={() => setSearch("")}
+              style={{ fontSize: 10, color: C.t3, cursor: "pointer" }}
+            >
+              {"\u2715"}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Log content */}
       <div
         ref={logRef}
         onScroll={handleScroll}
@@ -116,7 +209,7 @@ export default memo(function Console({
           background: "#030508",
         }}
       >
-        {logs.length === 0 && !building && (
+        {filteredLogs.length === 0 && !building && (
           <div
             style={{
               color: C.t3,
@@ -126,10 +219,10 @@ export default memo(function Console({
               textAlign: "center",
             }}
           >
-            No build output yet. Hit Build to start.
+            {search ? "No matching log lines." : "No build output yet. Hit Build to start."}
           </div>
         )}
-        {logs.map((l, i) => (
+        {filteredLogs.map((l, i) => (
           <div
             key={i}
             style={{
@@ -140,10 +233,10 @@ export default memo(function Console({
             }}
           >
             <span style={{ opacity: 0.5 }}>{linePrefixes[l.t] || ""}</span>
-            {l.m}
+            <HighlightedText text={l.m} search={search} highlightColor={C.accent} />
           </div>
         ))}
-        {building && (
+        {building && !search && (
           <div style={{ fontSize: 10, color: C.accent, fontFamily: MONO }}>
             <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span>{" "}
             Building...

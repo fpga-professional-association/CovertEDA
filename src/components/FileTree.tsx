@@ -8,12 +8,16 @@ import { Badge } from "./shared";
 const FileTreeRow = memo(function FileTreeRow({
   f,
   active,
+  folderOpen,
   onPick,
+  onToggleFolder,
   onContextMenu,
 }: {
   f: ProjectFile;
   active: boolean;
+  folderOpen?: boolean;
   onPick: () => void;
+  onToggleFolder?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const { C, MONO } = useTheme();
@@ -48,6 +52,7 @@ const FileTreeRow = memo(function FileTreeRow({
   if (f.ty === "folder") {
     return (
       <div
+        onClick={onToggleFolder}
         onContextMenu={handleCtx}
         style={{
           display: "flex",
@@ -62,10 +67,11 @@ const FileTreeRow = memo(function FileTreeRow({
           letterSpacing: 0.3,
           borderBottom: `1px solid ${C.b1}08`,
           marginTop: f.d === 0 ? 4 : 0,
+          cursor: "pointer",
         }}
       >
         <span style={{ color: C.warn, fontSize: 8 }}>
-          {f.open ? "\u25BC" : "\u25B6"}
+          {folderOpen ? "\u25BC" : "\u25B6"}
         </span>
         {f.n.toUpperCase()}
         <span style={{ fontSize: 8, color: C.t3, fontWeight: 400 }}>
@@ -222,6 +228,69 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
     folder: C.warn,
   };
 
+  // Collapsible folder state — build unique keys from path or name+depth
+  const [openFolders, setOpenFolders] = useState<Set<string>>(() => {
+    const keys = new Set<string>();
+    files.forEach((f) => {
+      if (f.ty === "folder") keys.add(folderKey(f));
+    });
+    return keys;
+  });
+
+  // Update openFolders when files change (e.g. new folders appear)
+  useEffect(() => {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      files.forEach((f) => {
+        if (f.ty === "folder") {
+          const key = folderKey(f);
+          if (!next.has(key)) next.add(key); // new folders default open
+        }
+      });
+      return next;
+    });
+  }, [files]);
+
+  const toggleFolder = useCallback((key: string) => {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  // Compute visible files (hide children of collapsed folders)
+  const visibleFiles = useMemo(() => {
+    const result: ProjectFile[] = [];
+    // Track folder open state at each depth using a stack
+    const folderStack: { depth: number; open: boolean }[] = [];
+
+    for (const f of files) {
+      // Pop stack entries with depth >= current
+      while (folderStack.length > 0 && folderStack[folderStack.length - 1].depth >= f.d) {
+        folderStack.pop();
+      }
+
+      // Check if any ancestor is closed
+      const parentClosed = folderStack.some((entry) => !entry.open);
+      if (parentClosed) {
+        if (f.ty === "folder") {
+          folderStack.push({ depth: f.d, open: openFolders.has(folderKey(f)) });
+        }
+        continue;
+      }
+
+      result.push(f);
+
+      if (f.ty === "folder") {
+        folderStack.push({ depth: f.d, open: openFolders.has(folderKey(f)) });
+      }
+    }
+
+    return result;
+  }, [files, openFolders]);
+
   const unsavedFiles = useMemo(
     () => files.filter((f) => f.ty !== "folder" && !f.saved),
     [files],
@@ -348,12 +417,14 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
 
       {/* File list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {files.map((f, i) => (
+        {visibleFiles.map((f, i) => (
           <FileTreeRow
-            key={i}
+            key={`${f.n}-${f.d}-${i}`}
             f={f}
             active={f.n === activeFile}
+            folderOpen={f.ty === "folder" ? openFolders.has(folderKey(f)) : undefined}
             onPick={() => f.ty !== "folder" && setActiveFile(f.n, f.path)}
+            onToggleFolder={f.ty === "folder" ? () => toggleFolder(folderKey(f)) : undefined}
             onContextMenu={onFileContextMenu ? (e) => onFileContextMenu(f, e.clientX, e.clientY) : undefined}
           />
         ))}
@@ -449,6 +520,11 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
     />
     </div>
   );
+}
+
+/** Generate a unique key for a folder based on name + depth */
+function folderKey(f: ProjectFile): string {
+  return f.path ?? `${f.d}:${f.n}`;
 }
 
 export default FileTree;
