@@ -5,6 +5,7 @@ pub mod radiant;
 pub mod vivado;
 
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -54,12 +55,16 @@ pub trait FpgaBackend: Send + Sync {
     /// Ordered list of build pipeline stages
     fn pipeline_stages(&self) -> Vec<PipelineStage>;
 
-    /// Generate the build script content (TCL or shell) for all stages
+    /// Generate the build script content (TCL or shell).
+    /// `stages` selects which pipeline stages to run (empty = all).
+    /// `options` passes backend-specific build options (e.g. frequency, optimization).
     fn generate_build_script(
         &self,
         project_dir: &Path,
         device: &str,
         top_module: &str,
+        stages: &[String],
+        options: &HashMap<String, String>,
     ) -> BackendResult<String>;
 
     /// Check if the vendor tool is installed and available on this system

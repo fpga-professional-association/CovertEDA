@@ -106,6 +106,8 @@ pub fn start_build(
     app_handle: tauri::AppHandle,
     backend_id: String,
     project_dir: String,
+    stages: Vec<String>,
+    options: HashMap<String, String>,
 ) -> Result<String, String> {
     let build_id = uuid_v4();
     let project_path = PathBuf::from(&project_dir);
@@ -125,7 +127,7 @@ pub fn start_build(
         .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
 
     let script = backend
-        .generate_build_script(&project_path, &config.device, &config.top_module)
+        .generate_build_script(&project_path, &config.device, &config.top_module, &stages, &options)
         .map_err(|e| e.to_string())?;
     let cli_tool = backend.cli_tool().to_string();
     drop(registry);
@@ -462,6 +464,78 @@ pub fn clean_build(project_dir: String) -> Result<u32, String> {
     }
 
     Ok(removed)
+}
+
+#[tauri::command]
+pub fn check_sources_stale(project_dir: String) -> Result<bool, String> {
+    let project_path = PathBuf::from(&project_dir);
+
+    // Find newest build output timestamp in impl1/
+    let impl_dir = project_path.join("impl1");
+    if !impl_dir.exists() {
+        return Ok(false); // No build outputs — not stale, just not built
+    }
+
+    let build_exts = ["twr", "bit", "mrp", "par", "jed", "sof"];
+    let mut newest_output: Option<std::time::SystemTime> = None;
+    if let Ok(entries) = std::fs::read_dir(&impl_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if build_exts.contains(&ext) {
+                    if let Ok(meta) = path.metadata() {
+                        if let Ok(mtime) = meta.modified() {
+                            if newest_output.map_or(true, |t| mtime > t) {
+                                newest_output = Some(mtime);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let newest_output = match newest_output {
+        Some(t) => t,
+        None => return Ok(false), // No recognized build outputs
+    };
+
+    // Find newest source file timestamp
+    let source_exts = ["v", "sv", "vhd", "vhdl"];
+    let mut newest_source: Option<std::time::SystemTime> = None;
+    fn scan_sources(
+        dir: &std::path::Path,
+        exts: &[&str],
+        newest: &mut Option<std::time::SystemTime>,
+    ) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if !name.starts_with("impl") && !name.starts_with(".") {
+                        scan_sources(&path, exts, newest);
+                    }
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if exts.contains(&ext) {
+                        if let Ok(meta) = path.metadata() {
+                            if let Ok(mtime) = meta.modified() {
+                                if newest.map_or(true, |t| mtime > t) {
+                                    *newest = Some(mtime);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    scan_sources(&project_path, &source_exts, &mut newest_source);
+
+    match newest_source {
+        Some(src_time) => Ok(src_time > newest_output),
+        None => Ok(false),
+    }
 }
 
 #[tauri::command]

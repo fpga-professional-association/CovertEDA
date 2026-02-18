@@ -1,5 +1,6 @@
 use crate::backend::{BackendError, BackendResult, FpgaBackend};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Lattice Radiant backend — drives radiantc / pnmainc (TCL shell)
@@ -231,28 +232,66 @@ impl FpgaBackend for RadiantBackend {
         project_dir: &Path,
         device: &str,
         top_module: &str,
+        stages: &[String],
+        options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         let rdf = Self::find_rdf_file(project_dir, top_module)
             .ok_or_else(|| BackendError::ConfigError(format!(
                 "No .rdf project file found in {}",
                 project_dir.display()
             )))?;
-        // Convert WSL path to Windows path for radiantc.exe (TCL uses forward slashes)
         let rdf_display = to_tcl_path(&rdf);
-        Ok(format!(
-            r#"# CovertEDA — Radiant Build Script
-# Device: {device}
-# Top: {top_module}
 
-prj_open "{rdf}"
-prj_run_synthesis
-prj_run_map
-prj_run_par
-prj_run_bitstream
-prj_close
-"#,
+        // Determine which stages to run (empty = all)
+        let all_ids = ["synth", "map", "par", "bitgen"];
+        let run_stage = |id: &str| -> bool {
+            stages.is_empty() || stages.iter().any(|s| s == id)
+        };
+
+        let mut script = format!(
+            "# CovertEDA \u{2014} Radiant Build Script\n# Device: {device}\n# Top: {top_module}\n\nprj_open \"{rdf}\"\n",
             rdf = rdf_display,
-        ))
+        );
+
+        // Strategy value options (applied before running stages)
+        if let Some(freq) = options.get("syn_frequency") {
+            if !freq.is_empty() {
+                script.push_str(&format!(
+                    "prj_set_strategy_value -strategy Strategy1 {{SYN_Frequency={}}}\n", freq
+                ));
+            }
+        }
+        if let Some(opt) = options.get("syn_optimization") {
+            if !opt.is_empty() {
+                script.push_str(&format!(
+                    "prj_set_strategy_value -strategy Strategy1 {{SYN_Optimization_goal={}}}\n", opt
+                ));
+            }
+        }
+        if let Some(pb) = options.get("par_path_based") {
+            let val = if pb == "true" || pb == "ON" { "ON" } else { "OFF" };
+            script.push_str(&format!(
+                "prj_set_strategy_value -strategy Strategy1 {{parPathBased={}}}\n", val
+            ));
+        }
+
+        // Emit only requested stage commands
+        for id in &all_ids {
+            if run_stage(id) {
+                let cmd = match *id {
+                    "synth" => "prj_run_synthesis",
+                    "map" => "prj_run_map",
+                    "par" => "prj_run_par",
+                    "bitgen" => "prj_run_bitstream",
+                    _ => continue,
+                };
+                script.push_str(cmd);
+                script.push('\n');
+            }
+        }
+
+        script.push_str("prj_close\n");
+        Ok(script)
     }
 
     fn detect_tool(&self) -> bool {

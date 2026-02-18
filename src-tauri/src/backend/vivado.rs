@@ -1,5 +1,6 @@
 use crate::backend::{BackendError, BackendResult, FpgaBackend};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::Path;
 
 /// AMD Vivado backend — drives vivado in batch/TCL mode.
@@ -84,6 +85,8 @@ impl FpgaBackend for VivadoBackend {
         project_dir: &Path,
         device: &str,
         top_module: &str,
+        _stages: &[String],
+        _options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         Ok(format!(
             r#"# CovertEDA — Vivado Build Script

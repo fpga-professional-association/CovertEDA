@@ -49,6 +49,7 @@ pub fn run() {
             commands::delete_file,
             commands::get_app_config,
             commands::save_app_config,
+            commands::check_sources_stale,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

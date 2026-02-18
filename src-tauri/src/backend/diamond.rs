@@ -1,5 +1,6 @@
 use crate::backend::{BackendResult, FpgaBackend, BackendError};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Lattice Diamond backend — drives pnmainc (TCL shell) for MachXO3/ECP5 families.
@@ -101,6 +102,8 @@ impl FpgaBackend for DiamondBackend {
         project_dir: &Path,
         device: &str,
         top_module: &str,
+        _stages: &[String],
+        _options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         let ldf = project_dir.join(format!("{}.ldf", top_module));
         Ok(format!(

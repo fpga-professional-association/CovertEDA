@@ -1,5 +1,6 @@
 use crate::backend::{BackendError, BackendResult, FpgaBackend};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Open-source CAD suite backend — Yosys + nextpnr + ecppack.
@@ -66,6 +67,8 @@ impl FpgaBackend for OssBackend {
         project_dir: &Path,
         device: &str,
         top_module: &str,
+        _stages: &[String],
+        _options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         let family = if device.starts_with("LFE5U") {
             "ecp5"
