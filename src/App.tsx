@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult } from "./types";
+import { RADIANT_IP_CATALOG, IP_CATEGORIES } from "./data/ipCatalog";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar } from "./components/shared";
 import {
@@ -59,6 +60,92 @@ const FALLBACK_BACKEND: RuntimeBackend = {
   ],
   available: false,
 };
+
+function IpCatalogSection() {
+  const { C, MONO } = useTheme();
+  const [ipSearch, setIpSearch] = useState("");
+  const filtered = useMemo(() => {
+    if (!ipSearch) return RADIANT_IP_CATALOG;
+    const q = ipSearch.toLowerCase();
+    return RADIANT_IP_CATALOG.filter(
+      (ip) => ip.name.toLowerCase().includes(q) || ip.description.toLowerCase().includes(q) || ip.category.toLowerCase().includes(q)
+    );
+  }, [ipSearch]);
+
+  const grouped = useMemo(() => {
+    const map: Record<string, typeof filtered> = {};
+    for (const cat of IP_CATEGORIES) map[cat] = [];
+    for (const ip of filtered) (map[ip.category] ??= []).push(ip);
+    return Object.entries(map).filter(([, items]) => items.length > 0);
+  }, [filtered]);
+
+  const panelP: React.CSSProperties = {
+    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={panelP}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+          <Box />
+          IP Catalog
+          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
+            {filtered.length} cores
+          </span>
+        </div>
+        <input
+          type="text"
+          value={ipSearch}
+          onChange={(e) => setIpSearch(e.target.value)}
+          placeholder="Search IP cores..."
+          style={{
+            width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
+            background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
+            outline: "none", marginBottom: 10, boxSizing: "border-box",
+          }}
+        />
+        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
+          Use Radiant IP Configurator to generate and add IP to your project.
+        </div>
+      </div>
+      {grouped.map(([cat, items]) => (
+        <div key={cat} style={panelP}>
+          <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
+            {cat.toUpperCase()}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+            {items.map((ip) => (
+              <div
+                key={ip.name}
+                style={{
+                  padding: "8px 10px", background: C.bg, borderRadius: 5,
+                  border: `1px solid ${C.b1}`,
+                }}
+              >
+                <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, marginBottom: 3 }}>
+                  {ip.name}
+                </div>
+                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4, lineHeight: 1.4 }}>
+                  {ip.description}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  {ip.families.map((f) => (
+                    <span key={f} style={{
+                      fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
+                      background: `${C.accent}15`, color: C.accent, fontWeight: 600,
+                    }}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function App() {
   const { C, MONO, SANS, setThemeId, scaleFactor, setScaleFactor } = useTheme();
@@ -1082,17 +1169,7 @@ export default function App() {
             )}
 
             {/* IP Catalog */}
-            {sec === "ip" && !viewingFile && (
-              <div style={panelP}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-                  <Box />
-                  IP Catalog
-                </div>
-                <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
-                  No IP cores in this project. Use your vendor tool to generate IP, then refresh the file tree.
-                </div>
-              </div>
-            )}
+            {sec === "ip" && !viewingFile && <IpCatalogSection />}
 
             {/* Interconnect */}
             {sec === "interconnect" && !viewingFile && (
