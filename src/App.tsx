@@ -155,8 +155,12 @@ export default function App() {
       getFileTreeMapped(dir).then((files) => {
         console.log("File tree loaded:", files.length, "entries");
         setRealFiles(files);
-        // If impl files exist, a previous build was done — load reports
-        const hasImpl = files.some((f) => f.path?.includes(config.implDir || "impl1"));
+        // If report files exist, a previous build was done — load reports
+        const implDir = config.implDir || "impl1";
+        const hasImpl = files.some((f) =>
+          f.path?.includes(implDir) &&
+          (f.n.endsWith(".twr") || f.n.endsWith(".mrp") || f.n.endsWith(".bit") || f.n.endsWith(".jed"))
+        );
         if (hasImpl) {
           setBuildDone(true);
           setBStep(4); // Mark all stages done
@@ -227,6 +231,7 @@ export default function App() {
     const stageLines: LogEntry[][] = [
       // Synthesis
       [
+        { t: "warn", m: `\u2550\u2550\u2550 SIMULATION MODE \u2550\u2550\u2550 No Tauri backend detected` },
         { t: "cmd", m: `radiantc .coverteda_build.tcl` },
         { t: "info", m: `CovertEDA \u2192 ${backend.name} ${backend.version || "2025.2"}` },
         { t: "cmd", m: "prj_run_synthesis" },
@@ -854,6 +859,8 @@ export default function App() {
                 building={building}
                 backendShort={B.short}
                 backendColor={B.color}
+                backendVersion={B.version}
+                live={isTauri && B.available}
                 onClear={() => setLogs([])}
               />
             )}

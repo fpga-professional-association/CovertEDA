@@ -8,6 +8,8 @@ interface ConsoleProps {
   building: boolean;
   backendShort: string;
   backendColor: string;
+  backendVersion?: string;
+  live?: boolean;
   onClear: () => void;
 }
 
@@ -25,6 +27,8 @@ export default function Console({
   building,
   backendShort,
   backendColor,
+  backendVersion,
+  live,
   onClear,
 }: ConsoleProps) {
   const { C, MONO } = useTheme();
@@ -82,6 +86,20 @@ export default function Console({
       >
         <span style={{ color: backendColor }}>{"\u25CF"}</span>
         {backendShort} Output
+        {live !== undefined && (
+          <span
+            style={{
+              fontSize: 7,
+              padding: "1px 5px",
+              borderRadius: 3,
+              background: live ? `${C.ok}20` : `${C.warn}20`,
+              color: live ? C.ok : C.warn,
+              fontWeight: 600,
+            }}
+          >
+            {live ? `LIVE${backendVersion ? `: ${backendVersion}` : ""}` : "SIMULATION"}
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         {logs.length} lines
         <Btn small onClick={onClear}>
