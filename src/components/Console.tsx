@@ -206,7 +206,7 @@ export default memo(function Console({
           flex: 1,
           overflowY: "auto",
           padding: "6px 12px",
-          background: "#030508",
+          background: C.bg,
         }}
       >
         {filteredLogs.length === 0 && !building && (

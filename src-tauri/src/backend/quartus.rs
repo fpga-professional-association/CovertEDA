@@ -329,6 +329,96 @@ foreach f [glob -nocomplain {project_path_tcl}/*.sdc] {{
         std::fs::write(output_file, content)?;
         Ok(())
     }
+
+    fn generate_ip_script(
+        &self,
+        project_dir: &Path,
+        device: &str,
+        ip_name: &str,
+        instance_name: &str,
+        params: &HashMap<String, String>,
+    ) -> BackendResult<(String, String)> {
+        let ip_dir = project_dir.join("ip").join(instance_name);
+        let ip_dir_tcl = to_quartus_tcl_path(&ip_dir);
+        let _project_tcl = to_quartus_tcl_path(project_dir);
+
+        // Determine the device family
+        let family = if device.starts_with("5C") {
+            "Cyclone V"
+        } else if device.starts_with("10C") {
+            "Cyclone 10 GX"
+        } else if device.starts_with("10A") {
+            "Arria 10"
+        } else if device.starts_with("1S") {
+            "Stratix 10"
+        } else if device.starts_with("AG") {
+            "Agilex"
+        } else {
+            "Cyclone V"
+        };
+
+        // Map common CovertEDA IP names to Quartus megafunction/IP names
+        let quartus_ip_name = match ip_name {
+            "RAM: 1-PORT" => "altsyncram",
+            "RAM: 2-PORT" => "altsyncram",
+            "FIFO" => "scfifo",
+            "DCFIFO" => "dcfifo",
+            "ROM: 1-PORT" => "altsyncram",
+            "LPM_MULT" => "lpm_mult",
+            "LPM_DIVIDE" => "lpm_divide",
+            "ALTPLL" => "altpll",
+            "ALTDDIO_IN" => "altddio_in",
+            "ALTDDIO_OUT" => "altddio_out",
+            _ => ip_name,
+        };
+
+        let mut script = format!(
+            r#"# CovertEDA — Quartus Prime IP Generation Script
+# IP: {ip_name} ({quartus_ip_name})
+# Instance: {instance_name}
+# Device: {device} (Family: {family})
+
+package require -exact qsys 1.0
+
+# Ensure output directory exists
+file mkdir "{ip_dir_tcl}"
+
+# Create a new Qsys system for this IP
+create_system "{instance_name}"
+
+set_project_property DEVICE_FAMILY "{family}"
+set_project_property DEVICE "{device}"
+
+# Add the IP instance
+add_instance {instance_name} {quartus_ip_name}
+
+"#,
+        );
+
+        // Set parameters
+        for (key, value) in params {
+            if !value.is_empty() {
+                script.push_str(&format!(
+                    "set_instance_parameter_value {instance_name} {key} \"{value}\"\n",
+                ));
+            }
+        }
+
+        script.push_str(&format!(
+            r#"
+# Save the system
+save_system "{ip_dir_tcl}/{instance_name}.qsys"
+
+# Generate the IP (HDL + synthesis files)
+generate_system -hdl_language VERILOG -synthesis VERILOG
+
+puts "CovertEDA: IP generation complete for {instance_name}"
+puts "CovertEDA: Output directory: {ip_dir_tcl}"
+"#,
+        ));
+
+        Ok((script, ip_dir_tcl))
+    }
 }
 
 /// Convert a WSL path to a Windows-style path for use inside Quartus TCL.

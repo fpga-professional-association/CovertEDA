@@ -4,6 +4,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
 import { Chip, Zap, Key, Settings } from "./Icons";
 import { BACKEND_META, EXAMPLE_PROJECTS } from "../data/mockData";
+import { PROJECT_TEMPLATES, TEMPLATE_CATEGORIES } from "../data/projectTemplates";
 import {
   getRecentProjects,
   openProject,
@@ -46,6 +47,8 @@ export default function StartScreen({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDir, setWizardDir] = useState<string | undefined>();
   const [hover, setHover] = useState<string | null>(null);
+  const [templateFilter, setTemplateFilter] = useState<string>("All");
+  const [showTemplates, setShowTemplates] = useState(false);
 
   useEffect(() => {
     getRecentProjects().then(setRecents);
@@ -336,8 +339,94 @@ export default function StartScreen({
           )}
         </div>
 
-        {/* Right: Examples + Recent Projects */}
+        {/* Right: Templates + Examples + Recent Projects */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          {/* Project Templates */}
+          <div style={{ marginBottom: 20 }}>
+            <div
+              onClick={() => setShowTemplates((p) => !p)}
+              style={{
+                fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO,
+                marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 8, transition: "transform .15s", transform: showTemplates ? "rotate(90deg)" : "rotate(0deg)" }}>
+                {"\u25B6"}
+              </span>
+              PROJECT TEMPLATES
+              <span style={{ fontSize: 8, color: C.t3, fontWeight: 400 }}>
+                ({PROJECT_TEMPLATES.length} designs)
+              </span>
+            </div>
+            {showTemplates && (
+              <>
+                <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
+                  {["All", ...TEMPLATE_CATEGORIES].map((cat) => (
+                    <span
+                      key={cat}
+                      onClick={() => setTemplateFilter(cat)}
+                      style={{
+                        padding: "2px 8px", borderRadius: 3, cursor: "pointer",
+                        fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                        border: `1px solid ${templateFilter === cat ? C.accent : C.b1}`,
+                        color: templateFilter === cat ? C.accent : C.t3,
+                        background: templateFilter === cat ? `${C.accent}15` : "transparent",
+                      }}
+                    >
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
+                  {PROJECT_TEMPLATES
+                    .filter((t) => templateFilter === "All" || t.category === templateFilter)
+                    .map((t) => {
+                      const bm = backendMeta(t.backendId);
+                      return (
+                        <div
+                          key={t.name}
+                          onMouseEnter={() => setHover(`tpl:${t.name}`)}
+                          onMouseLeave={() => setHover(null)}
+                          onClick={() => {
+                            setWizardDir(undefined);
+                            setWizardOpen(true);
+                          }}
+                          style={{
+                            padding: "10px 12px", borderRadius: 6, cursor: "pointer",
+                            background: hover === `tpl:${t.name}` ? C.s2 : C.s1,
+                            border: `1px solid ${hover === `tpl:${t.name}` ? bm.color : C.b1}`,
+                            transition: "all .15s",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.t1 }}>{t.name}</span>
+                            <Badge color={bm.color}>{bm.short}</Badge>
+                            <span style={{
+                              fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
+                              background: `${C.cyan}15`, color: C.cyan, fontWeight: 600,
+                            }}>
+                              {t.category}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 8, color: C.t3, lineHeight: 1.4 }}>
+                            {t.description}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
+                              {t.device}
+                            </span>
+                            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
+                              {t.files.length} file{t.files.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Example Projects */}
           {EXAMPLE_PROJECTS.length > 0 && (
             <div style={{ marginBottom: 20 }}>

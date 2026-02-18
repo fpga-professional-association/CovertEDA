@@ -243,4 +243,159 @@ export const RADIANT_IP_CATALOG: IpCore[] = [
   { name: "JTAG", category: "Misc", description: "JTAG TAP controller for debug and programming", families: ["LIFCL", "CrossLink-NX", "CertusPro-NX", "Avant"] },
 ];
 
+/** Static lookup table of Intel Quartus IP cores. */
+export const QUARTUS_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "RAM: 1-PORT",
+    category: "Memory",
+    description: "Single-port on-chip RAM (M20K/MLAB)",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 256, unit: "bits" },
+      { key: "ADDR_WIDTH", label: "Address Width", type: "number", default: "10", min: 2, max: 20, unit: "bits" },
+      { key: "RAM_TYPE", label: "RAM Block Type", type: "select", default: "Auto", choices: ["Auto", "M20K", "MLAB"] },
+      { key: "INIT_FILE", label: "Init File (.mif)", type: "text", default: "" },
+    ],
+    template: `altsyncram #(
+  .width_a({DATA_WIDTH}),
+  .widthad_a({ADDR_WIDTH}),
+  .ram_block_type("{RAM_TYPE}"),
+  .operation_mode("SINGLE_PORT")
+) {INSTANCE_NAME} (
+  .clock0(clk),
+  .address_a(addr),
+  .data_a(din),
+  .wren_a(we),
+  .q_a(dout)
+);`,
+  },
+  {
+    name: "RAM: 2-PORT",
+    category: "Memory",
+    description: "Simple dual-port RAM with separate read/write ports",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 256, unit: "bits" },
+      { key: "ADDR_WIDTH", label: "Address Width", type: "number", default: "10", min: 2, max: 20, unit: "bits" },
+    ],
+  },
+  {
+    name: "FIFO",
+    category: "Memory",
+    description: "Single-clock FIFO buffer using on-chip memory",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 256, unit: "bits" },
+      { key: "DEPTH", label: "Depth (words)", type: "select", default: "256", choices: ["16", "32", "64", "128", "256", "512", "1024", "2048", "4096"] },
+      { key: "SHOW_AHEAD", label: "Show-Ahead Mode", type: "boolean", default: "false" },
+    ],
+    template: `scfifo #(
+  .lpm_width({DATA_WIDTH}),
+  .lpm_numwords({DEPTH}),
+  .lpm_showahead("{SHOW_AHEAD}")
+) {INSTANCE_NAME} (
+  .clock(clk),
+  .sclr(rst),
+  .wrreq(wr_en),
+  .data(wr_data),
+  .rdreq(rd_en),
+  .q(rd_data),
+  .full(full),
+  .empty(empty),
+  .usedw(usedw)
+);`,
+  },
+  {
+    name: "DCFIFO",
+    category: "Memory",
+    description: "Dual-clock FIFO for clock domain crossing",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 256, unit: "bits" },
+      { key: "DEPTH", label: "Depth (words)", type: "select", default: "256", choices: ["16", "32", "64", "128", "256", "512", "1024", "2048", "4096"] },
+    ],
+  },
+  { name: "ROM: 1-PORT", category: "Memory", description: "Single-port ROM with .mif initialization", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+
+  // DSP
+  {
+    name: "LPM_MULT",
+    category: "DSP",
+    description: "Parameterized multiplier using DSP blocks",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "A_WIDTH", label: "A Width", type: "number", default: "18", min: 1, max: 64, unit: "bits" },
+      { key: "B_WIDTH", label: "B Width", type: "number", default: "18", min: 1, max: 64, unit: "bits" },
+      { key: "PIPELINE", label: "Pipeline Stages", type: "select", default: "1", choices: ["0", "1", "2", "3"] },
+      { key: "REPRESENTATION", label: "Representation", type: "select", default: "SIGNED", choices: ["SIGNED", "UNSIGNED"] },
+    ],
+    template: `lpm_mult #(
+  .lpm_widtha({A_WIDTH}),
+  .lpm_widthb({B_WIDTH}),
+  .lpm_pipeline({PIPELINE}),
+  .lpm_representation("{REPRESENTATION}")
+) {INSTANCE_NAME} (
+  .clock(clk),
+  .dataa(a),
+  .datab(b),
+  .result(product)
+);`,
+  },
+  { name: "LPM_DIVIDE", category: "DSP", description: "Parameterized divider", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "ALTMULT_ADD", category: "DSP", description: "Multiply-add/accumulate megafunction", families: ["Cyclone V", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "FP_MULT", category: "DSP", description: "IEEE 754 floating-point multiplier", families: ["Arria 10", "Stratix 10", "Agilex"] },
+
+  // Interface
+  { name: "JTAG UART", category: "Interface", description: "JTAG-to-UART bridge for debug communication", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "SPI Slave/Master", category: "Interface", description: "SPI controller for serial peripherals", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "I2C Master", category: "Interface", description: "I2C master controller (standard/fast mode)", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "Avalon-ST UART", category: "Interface", description: "UART with Avalon Streaming interface", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"],
+    params: [
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"] },
+      { key: "DATA_BITS", label: "Data Bits", type: "select", default: "8", choices: ["7", "8"] },
+      { key: "PARITY", label: "Parity", type: "select", default: "NONE", choices: ["NONE", "EVEN", "ODD"] },
+    ],
+  },
+  { name: "PCIe", category: "Interface", description: "PCI Express hard IP endpoint (Gen1/2/3)", families: ["Cyclone V", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "DDR3 SDRAM Controller", category: "Interface", description: "DDR3 external memory interface", families: ["Cyclone V", "Arria 10"] },
+  { name: "DDR4 SDRAM Controller", category: "Interface", description: "DDR4 external memory interface with EMIF", families: ["Stratix 10", "Agilex"] },
+
+  // Clock
+  {
+    name: "ALTPLL",
+    category: "Clock",
+    description: "Phase-locked loop for clock synthesis (Cyclone/Arria)",
+    families: ["Cyclone V", "Cyclone 10", "Arria 10"],
+    params: [
+      { key: "CLKI_FREQ", label: "Input Frequency", type: "number", default: "50", min: 1, max: 800, unit: "MHz" },
+      { key: "CLK0_FREQ", label: "Output 0 Frequency", type: "number", default: "100", min: 1, max: 800, unit: "MHz" },
+      { key: "CLK1_FREQ", label: "Output 1 Frequency", type: "number", default: "0", min: 0, max: 800, unit: "MHz" },
+      { key: "CLK2_FREQ", label: "Output 2 Frequency", type: "number", default: "0", min: 0, max: 800, unit: "MHz" },
+    ],
+    template: `altpll #(
+  .inclk0_input_frequency({CLKI_FREQ}),
+  .clk0_multiply_by(2),
+  .clk0_divide_by(1)
+) {INSTANCE_NAME} (
+  .inclk({clk_in, 1'b0}),
+  .clk(clk_out),
+  .locked(locked)
+);`,
+  },
+  { name: "IOPLL", category: "Clock", description: "I/O PLL for Stratix 10/Agilex devices", families: ["Stratix 10", "Agilex"] },
+  { name: "Clock Bridge", category: "Clock", description: "Avalon clock bridge for clock domain interface", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+
+  // I/O
+  { name: "ALTDDIO_IN", category: "I/O", description: "DDR input register for double-data-rate I/O", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "ALTDDIO_OUT", category: "I/O", description: "DDR output register for double-data-rate I/O", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "LVDS", category: "I/O", description: "LVDS transmitter/receiver I/O", families: ["Cyclone V", "Arria 10", "Stratix 10", "Agilex"] },
+
+  // Misc
+  { name: "Nios V/m", category: "Misc", description: "RISC-V soft processor (microcontroller class)", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "Signal Tap", category: "Misc", description: "In-system logic analyzer for debug", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "In-System Sources and Probes", category: "Misc", description: "Runtime signal injection/monitoring via JTAG", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+  { name: "Virtual JTAG", category: "Misc", description: "Custom JTAG interface for on-chip debug", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
+];
+
 export const IP_CATEGORIES = ["Memory", "DSP", "Interface", "Clock", "I/O", "Misc"] as const;

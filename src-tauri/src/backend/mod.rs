@@ -92,6 +92,26 @@ pub trait FpgaBackend: Send + Sync {
         output_file: &Path,
     ) -> BackendResult<()>;
 
+    /// Generate a TCL/shell script to create and configure an IP core.
+    /// Returns the script content and the expected output directory.
+    /// `ip_name` is the vendor IP component name (e.g., "FIFO_DC", "altsyncram").
+    /// `instance_name` is the user-chosen instance name.
+    /// `params` maps parameter keys to values.
+    fn generate_ip_script(
+        &self,
+        project_dir: &Path,
+        device: &str,
+        ip_name: &str,
+        instance_name: &str,
+        params: &HashMap<String, String>,
+    ) -> BackendResult<(String, String)> {
+        let _ = (project_dir, device, ip_name, instance_name, params);
+        Err(BackendError::ConfigError(format!(
+            "IP generation not supported for {} backend",
+            self.name()
+        )))
+    }
+
     /// Get backend info for the frontend
     fn info(&self) -> BackendInfo {
         BackendInfo {

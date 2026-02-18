@@ -272,7 +272,8 @@ export type Section =
   | "constraints"
   | "resources"
   | "console"
-  | "license";
+  | "license"
+  | "history";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream";
 
@@ -333,6 +334,17 @@ export interface ExampleProject {
   device: string;
   topModule: string;
   path: string;
+}
+
+// ── Project Templates ──
+export interface ProjectTemplate {
+  name: string;
+  description: string;
+  category: "Basic" | "Interface" | "DSP" | "Memory" | "SoC";
+  backendId: string;
+  device: string;
+  topModule: string;
+  files: { name: string; content: string }[];
 }
 
 // ── Tool Detection ──

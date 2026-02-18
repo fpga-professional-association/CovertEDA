@@ -40,8 +40,80 @@ export async function getFileTree(projectDir: string) {
   return invoke<unknown[]>("get_file_tree", { projectDir });
 }
 
-export async function getGitStatus(projectDir: string) {
-  return invoke<unknown>("get_git_status", { projectDir });
+export interface RustGitStatus {
+  branch: string;
+  commitHash: string;
+  commitMessage: string;
+  author: string;
+  timeAgo: string;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  dirty: boolean;
+}
+
+export async function getGitStatus(projectDir: string): Promise<RustGitStatus> {
+  return invoke<RustGitStatus>("get_git_status", { projectDir });
+}
+
+export async function gitIsDirty(projectDir: string): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("git_is_dirty", { projectDir });
+}
+
+export async function gitCommit(projectDir: string, message: string): Promise<string> {
+  if (!isTauri) return "mock123";
+  return invoke<string>("git_commit", { projectDir, message });
+}
+
+export async function gitHeadHash(projectDir: string): Promise<string> {
+  if (!isTauri) return "abc1234";
+  return invoke<string>("git_head_hash", { projectDir });
+}
+
+// ── IP Generation ──
+
+export interface IpGenerateResult {
+  script: string;
+  outputDir: string;
+  cliTool: string;
+}
+
+export async function generateIpScript(
+  backendId: string,
+  projectDir: string,
+  device: string,
+  ipName: string,
+  instanceName: string,
+  params: Record<string, string>,
+): Promise<IpGenerateResult> {
+  if (!isTauri) {
+    // Return mock TCL for browser dev mode
+    const paramLines = Object.entries(params)
+      .filter(([, v]) => v)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `  -param "${k}:${v}"`)
+      .join(" \\\n");
+    return {
+      script: `# Mock IP generation TCL for ${ipName}\nsbp_design new -name "${instanceName}" -family "LIFCL" -device "${device}"\nsbp_configure -component "${ipName}" \\\n${paramLines}\nsbp_generate -lang "verilog"\nsbp_save\nsbp_close_design`,
+      outputDir: `${projectDir}/ip_cores/${instanceName}`,
+      cliTool: "radiantc",
+    };
+  }
+  return invoke<IpGenerateResult>("generate_ip_script", {
+    backendId, projectDir, device, ipName, instanceName, params,
+  });
+}
+
+export async function executeIpGenerate(
+  backendId: string,
+  projectDir: string,
+  script: string,
+): Promise<string> {
+  if (!isTauri) return "mock-gen-id";
+  return invoke<string>("execute_ip_generate", { backendId, projectDir, script });
 }
 
 export async function startBuild(
@@ -328,6 +400,11 @@ export async function pickFile(filters?: { name: string; extensions: string[] }[
 export async function deleteFile(path: string): Promise<void> {
   if (!isTauri) return;
   return invoke<void>("delete_file", { path });
+}
+
+export async function deleteDirectory(path: string): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("delete_directory", { path });
 }
 
 export async function pickDirectory(): Promise<string | null> {

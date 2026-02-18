@@ -464,6 +464,73 @@ impl FpgaBackend for RadiantBackend {
         std::fs::write(output_file, content)?;
         Ok(())
     }
+
+    fn generate_ip_script(
+        &self,
+        project_dir: &Path,
+        device: &str,
+        ip_name: &str,
+        instance_name: &str,
+        params: &HashMap<String, String>,
+    ) -> BackendResult<(String, String)> {
+        let ip_dir = project_dir.join("ip_cores").join(instance_name);
+        let ip_dir_tcl = to_tcl_path(&ip_dir);
+        let _project_tcl = to_tcl_path(project_dir);
+
+        // Determine the device family from the device string
+        let family = if device.starts_with("LIFCL") {
+            "LIFCL"
+        } else if device.starts_with("LFD2NX") || device.starts_with("LCMXO5") {
+            "CrossLink-NX"
+        } else if device.starts_with("LFCPNX") {
+            "CertusPro-NX"
+        } else {
+            "LIFCL"
+        };
+
+        let mut script = format!(
+            r#"# CovertEDA — Radiant IP Generation Script
+# IP: {ip_name}
+# Instance: {instance_name}
+# Device: {device} (Family: {family})
+
+# Ensure output directory exists
+file mkdir "{ip_dir_tcl}"
+
+# Open the IP design in Clarity Designer
+sbp_design new -name "{instance_name}" -path "{ip_dir_tcl}" -family "{family}" -device "{device}" -part "{device}"
+
+# Select the IP component
+sbp_configure -component "{ip_name}"
+
+"#,
+        );
+
+        // Set parameters
+        for (key, value) in params {
+            if !value.is_empty() {
+                script.push_str(&format!(
+                    "sbp_configure -component \"{ip_name}\" -param \"{key}:{value}\"\n",
+                ));
+            }
+        }
+
+        script.push_str(&format!(
+            r#"
+# Generate the IP output products (Verilog)
+sbp_generate -lang "verilog"
+
+# Save and close
+sbp_save
+sbp_close_design
+
+puts "CovertEDA: IP generation complete for {instance_name}"
+puts "CovertEDA: Output directory: {ip_dir_tcl}"
+"#,
+        ));
+
+        Ok((script, ip_dir_tcl))
+    }
 }
 
 /// Convert a WSL path to a Windows-style path for use inside TCL scripts

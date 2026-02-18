@@ -1,13 +1,15 @@
 import { GitState } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, HoverRow } from "./shared";
-import { Branch, Git } from "./Icons";
+import { Branch, Git, Refresh } from "./Icons";
 
 interface GitStatusBarProps {
   git: GitState | null;
   projectName?: string;
   gitExpanded: boolean;
   setGitExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
+  onRefresh?: () => void;
+  onCommit?: () => void;
 }
 
 export default function GitStatusBar({
@@ -15,6 +17,8 @@ export default function GitStatusBar({
   projectName,
   gitExpanded,
   setGitExpanded,
+  onRefresh,
+  onCommit,
 }: GitStatusBarProps) {
   const { C, MONO } = useTheme();
   // Minimal bar when no git data
@@ -26,7 +30,7 @@ export default function GitStatusBar({
           alignItems: "center",
           height: 28,
           padding: "0 12px",
-          background: "#080a10",
+          background: C.bg,
           borderBottom: `1px solid ${C.b1}`,
           gap: 8,
           fontSize: 9,
@@ -41,6 +45,17 @@ export default function GitStatusBar({
           {projectName || "No project"}
         </span>
         <div style={{ flex: 1 }} />
+        {onRefresh && (
+          <span
+            onClick={onRefresh}
+            title="Refresh git status"
+            style={{ cursor: "pointer", color: C.t3, display: "flex", alignItems: "center" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+          >
+            <Refresh size={10} />
+          </span>
+        )}
         <span style={{ color: C.t3, opacity: 0.5 }}>
           No git repository detected
         </span>
@@ -57,7 +72,7 @@ export default function GitStatusBar({
           alignItems: "center",
           height: 28,
           padding: "0 12px",
-          background: "#080a10",
+          background: C.bg,
           borderBottom: `1px solid ${C.b1}`,
           gap: 8,
           fontSize: 9,
@@ -79,7 +94,7 @@ export default function GitStatusBar({
             {git.tags[0]}
           </Badge>
         )}
-        <span style={{ color: C.t3, opacity: 0.4 }}>│</span>
+        <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
         <span style={{ color: C.t3 }}>{git.commit}</span>
         <span
           style={{
@@ -90,18 +105,18 @@ export default function GitStatusBar({
             whiteSpace: "nowrap",
           }}
         >
-          "{git.commitMsg}"
+          &quot;{git.commitMsg}&quot;
         </span>
-        <span style={{ color: C.t3 }}>— {git.time}</span>
-        <span style={{ color: C.t3, opacity: 0.4 }}>│</span>
-        {git.ahead > 0 && <span style={{ color: C.ok }}>↑{git.ahead}</span>}
+        <span style={{ color: C.t3 }}>{"\u2014"} {git.time}</span>
+        <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
+        {git.ahead > 0 && <span style={{ color: C.ok }}>{"\u2191"}{git.ahead}</span>}
         {git.behind > 0 && (
-          <span style={{ color: C.warn }}>↓{git.behind}</span>
+          <span style={{ color: C.warn }}>{"\u2193"}{git.behind}</span>
         )}
         {git.ahead === 0 && git.behind === 0 && (
           <span style={{ color: C.t3 }}>in sync</span>
         )}
-        <span style={{ color: C.t3, opacity: 0.4 }}>│</span>
+        <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
         {git.dirty ? (
           <>
             {git.staged > 0 && (
@@ -117,20 +132,36 @@ export default function GitStatusBar({
             )}
           </>
         ) : (
-          <span style={{ color: C.ok }}>✓ clean</span>
+          <span style={{ color: C.ok }}>{"\u2713"} clean</span>
         )}
         {git.stashes > 0 && (
           <>
-            <span style={{ color: C.t3, opacity: 0.4 }}>│</span>
+            <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
             <span style={{ color: C.purple }}>{git.stashes} stash</span>
           </>
         )}
         <div style={{ flex: 1 }} />
+        {onRefresh && (
+          <span
+            onClick={onRefresh}
+            title="Refresh git status"
+            style={{ cursor: "pointer", color: C.t3, display: "flex", alignItems: "center", padding: "0 2px" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+          >
+            <Refresh size={10} />
+          </span>
+        )}
+        {onCommit && git.dirty && (
+          <Btn small onClick={onCommit} style={{ padding: "1px 6px", fontSize: 8, color: C.ok, borderColor: `${C.ok}44` }}>
+            Commit
+          </Btn>
+        )}
         <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
           Pull
         </Btn>
         <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
-          Push ↑{git.ahead}
+          Push {"\u2191"}{git.ahead}
         </Btn>
         <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
           Stash
@@ -173,9 +204,9 @@ export default function GitStatusBar({
               }}
             >
               <Git />
-              RECENT COMMITS — {git.branch}
+              RECENT COMMITS {"\u2014"} {git.branch}
               <div style={{ flex: 1 }} />
-              <Badge color={C.ok}>↑{git.ahead} ahead</Badge>
+              <Badge color={C.ok}>{"\u2191"}{git.ahead} ahead</Badge>
             </div>
             {git.recentCommits.map((c, i) => (
               <HoverRow

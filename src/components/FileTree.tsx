@@ -2,6 +2,104 @@ import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { ProjectFile } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
+import { Refresh } from "./Icons";
+
+// Git status tooltip text
+function gitTooltip(git?: string): string {
+  switch (git) {
+    case "M": return "Modified — changed since last commit";
+    case "A": return "Staged — added to index, ready to commit";
+    case "U": return "Untracked — not tracked by git";
+    case "D": return "Deleted — removed, pending commit";
+    case "clean": return "Committed — matches HEAD";
+    default: return "";
+  }
+}
+
+// File type descriptions by extension
+const FILE_EXT_TOOLTIPS: Record<string, string> = {
+  // HDL sources
+  ".v": "Verilog source — RTL or module definition",
+  ".sv": "SystemVerilog source — RTL with advanced features",
+  ".vhd": "VHDL source — RTL or entity/architecture",
+  ".vhdl": "VHDL source — RTL or entity/architecture",
+  // Constraints
+  ".pdc": "Physical Design Constraints (Lattice) — pin assignments, I/O standards",
+  ".lpf": "Logic Preference File (Lattice Diamond) — pin & timing constraints",
+  ".sdc": "Synopsys Design Constraints — clock, timing, I/O delay definitions",
+  ".xdc": "Xilinx Design Constraints — pin, timing, and placement rules",
+  ".qsf": "Quartus Settings File — pin assignments, device settings",
+  ".pcf": "Physical Constraints File (OSS) — pin mappings for nextpnr",
+  // Build reports
+  ".twr": "Timing Report — clock frequencies, setup/hold slack, critical paths",
+  ".mrp": "Map Report — resource utilization after technology mapping",
+  ".par": "Place & Route Report — placement stats, routing congestion",
+  ".srp": "Synthesis Report — inference, optimization, warnings from synthesis",
+  ".bgn": "Bitstream Generation Report — bitstream generation log",
+  ".sta.rpt": "Static Timing Analysis Report — multi-corner timing results",
+  ".fit.rpt": "Fitter Report — placement, routing, resource usage",
+  ".map.rpt": "Map Report — technology mapping results",
+  ".asm.rpt": "Assembler Report — bitstream generation results",
+  // Build outputs
+  ".bit": "Bitstream — FPGA configuration binary (Lattice/Xilinx)",
+  ".bin": "Binary bitstream — raw configuration data",
+  ".jed": "JEDEC file — CPLD/FPGA programming format (Lattice)",
+  ".sof": "SRAM Object File — Quartus FPGA configuration",
+  ".pof": "Programmer Object File — Quartus flash programming",
+  ".svf": "Serial Vector Format — JTAG programming sequence",
+  ".rbf": "Raw Binary File — Quartus raw bitstream",
+  ".jic": "JTAG Indirect Configuration — Quartus flash config",
+  ".mcs": "Memory Configuration Stream — Xilinx flash programming",
+  // Build intermediates
+  ".ncd": "Native Circuit Description — placed & routed design database",
+  ".ngd": "Native Generic Database — mapped design netlist",
+  ".edif": "EDIF netlist — technology-independent design exchange format",
+  ".edf": "EDIF netlist — synthesis output netlist",
+  ".json": "JSON — configuration, IP parameters, or synthesis output (Yosys)",
+  ".blif": "Berkeley Logic Interchange — synthesis netlist for ABC",
+  // Project files
+  ".rdf": "Radiant Design File — Lattice Radiant project definition",
+  ".ldf": "Lattice Diamond File — Diamond project definition",
+  ".qpf": "Quartus Project File — Intel/Altera project container",
+  ".xpr": "Vivado Project File — AMD/Xilinx project",
+  ".coverteda": "CovertEDA Project — unified project configuration",
+  ".sty": "Strategy File — Lattice implementation strategy settings",
+  ".tcl": "TCL Script — tool automation, build flow, IP generation",
+  // Config
+  ".toml": "TOML config — settings, tool paths, preferences",
+  ".cfg": "Configuration file — tool or project settings",
+  ".ini": "INI settings — tool configuration",
+  ".gitignore": "Git Ignore — patterns for files excluded from version control",
+  // Docs
+  ".md": "Markdown — documentation or README",
+  ".txt": "Text file — notes or documentation",
+  ".log": "Log file — build or tool execution output",
+  ".csv": "CSV data — tabular report data export",
+};
+
+function fileTypeTooltip(filename: string, ty?: string): string {
+  const lower = filename.toLowerCase();
+  // Try multi-part extensions first
+  for (const ext of [".sta.rpt", ".fit.rpt", ".map.rpt", ".asm.rpt"]) {
+    if (lower.endsWith(ext) && FILE_EXT_TOOLTIPS[ext]) return FILE_EXT_TOOLTIPS[ext];
+  }
+  const dot = lower.lastIndexOf(".");
+  if (dot >= 0) {
+    const ext = lower.slice(dot);
+    if (FILE_EXT_TOOLTIPS[ext]) return FILE_EXT_TOOLTIPS[ext];
+  }
+  // Fallback by type
+  const typeDesc: Record<string, string> = {
+    rtl: "HDL source file",
+    tb: "Testbench file",
+    constr: "Constraint file",
+    ip: "IP core file",
+    output: "Build output",
+    config: "Configuration file",
+    doc: "Documentation",
+  };
+  return typeDesc[ty ?? ""] ?? filename;
+}
 
 // ── FileTreeRow ──
 
@@ -12,6 +110,7 @@ const FileTreeRow = memo(function FileTreeRow({
   onPick,
   onToggleFolder,
   onContextMenu,
+  onToggleSynth,
 }: {
   f: ProjectFile;
   active: boolean;
@@ -19,6 +118,7 @@ const FileTreeRow = memo(function FileTreeRow({
   onPick: () => void;
   onToggleFolder?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  onToggleSynth?: () => void;
 }) {
   const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
@@ -81,6 +181,8 @@ const FileTreeRow = memo(function FileTreeRow({
     );
   }
 
+  const canToggleSynth = f.ty === "rtl" || f.ty === "tb" || f.ty === "constr";
+
   return (
     <div
       onClick={onPick}
@@ -89,7 +191,7 @@ const FileTreeRow = memo(function FileTreeRow({
       onMouseLeave={() => setH(false)}
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr 14px 14px 14px",
+        gridTemplateColumns: "1fr 14px 14px",
         gap: 2,
         alignItems: "center",
         padding: `3px 6px 3px ${8 + f.d * 12}px`,
@@ -115,6 +217,7 @@ const FileTreeRow = memo(function FileTreeRow({
         {/* Git status letter */}
         {f.git && f.git !== "clean" ? (
           <span
+            title={gitTooltip(f.git)}
             style={{
               color: GTC[f.git] ?? undefined,
               fontSize: 9,
@@ -122,16 +225,31 @@ const FileTreeRow = memo(function FileTreeRow({
               width: 10,
               textAlign: "center",
               flexShrink: 0,
+              cursor: "help",
             }}
           >
             {f.git}
+          </span>
+        ) : f.git === "clean" ? (
+          <span
+            title={gitTooltip(f.git)}
+            style={{
+              color: `${C.ok}60`,
+              fontSize: 9,
+              width: 10,
+              textAlign: "center",
+              flexShrink: 0,
+              cursor: "help",
+            }}
+          >
+            {"\u2713"}
           </span>
         ) : (
           <span style={{ width: 10, flexShrink: 0 }} />
         )}
         {/* File name */}
         <span
-          title={f.path ?? f.n}
+          title={fileTypeTooltip(f.n, f.ty)}
           style={{
             color: active ? C.t1 : C.t2,
             overflow: "hidden",
@@ -155,29 +273,19 @@ const FileTreeRow = memo(function FileTreeRow({
           />
         )}
       </div>
-      {/* Synth indicator */}
+      {/* Synth indicator — clickable for RTL/TB/constraint files */}
       <span
-        title={f.synth ? "In synthesis" : "Not in synthesis"}
+        title={f.synth ? "In synthesis (click to remove)" : canToggleSynth ? "Not in synthesis (click to add)" : "Not applicable"}
+        onClick={canToggleSynth ? (e) => { e.stopPropagation(); onToggleSynth?.(); } : undefined}
         style={{
           fontSize: 8,
           textAlign: "center",
           color: f.synth ? C.ok : C.t3,
           opacity: f.synth ? 1 : 0.25,
+          cursor: canToggleSynth ? "pointer" : "default",
         }}
       >
         S
-      </span>
-      {/* Sim indicator */}
-      <span
-        title={f.sim ? "In simulation" : "Not in simulation"}
-        style={{
-          fontSize: 8,
-          textAlign: "center",
-          color: f.sim ? C.purple : C.t3,
-          opacity: f.sim ? 1 : 0.25,
-        }}
-      >
-        T
       </span>
       {/* Type badge */}
       <span
@@ -209,11 +317,13 @@ interface FileTreeProps {
   activeFile: string;
   setActiveFile: (name: string, path?: string) => void;
   onFileContextMenu?: (file: ProjectFile, x: number, y: number) => void;
+  onRefresh?: () => void;
+  onToggleSynth?: (file: ProjectFile) => void;
   width: number;
   onWidthChange: (w: number) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, onWidthChange }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -383,6 +493,24 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
           PROJECT FILES
         </span>
         <div style={{ flex: 1 }} />
+        {onRefresh && (
+          <span
+            onClick={onRefresh}
+            title="Refresh file tree & git status"
+            style={{
+              cursor: "pointer",
+              color: C.t3,
+              display: "flex",
+              alignItems: "center",
+              padding: 2,
+              borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+          >
+            <Refresh size={11} />
+          </span>
+        )}
         {unsavedFiles.length > 0 && (
           <Badge color={C.err}>{unsavedFiles.length} unsaved</Badge>
         )}
@@ -392,7 +520,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 14px 14px 14px",
+          gridTemplateColumns: "1fr 14px 14px",
           gap: 2,
           padding: "4px 6px 4px 20px",
           fontSize: 7,
@@ -403,14 +531,8 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
         }}
       >
         <span>NAME</span>
-        <span title="In Synthesis" style={{ textAlign: "center", color: C.ok }}>
+        <span title="In Synthesis — click to toggle" style={{ textAlign: "center", color: C.ok }}>
           S
-        </span>
-        <span
-          title="In Simulation"
-          style={{ textAlign: "center", color: C.purple }}
-        >
-          T
         </span>
         <span style={{ textAlign: "center" }}>{"\u2302"}</span>
       </div>
@@ -426,6 +548,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
             onPick={() => f.ty !== "folder" && setActiveFile(f.n, f.path)}
             onToggleFolder={f.ty === "folder" ? () => toggleFolder(folderKey(f)) : undefined}
             onContextMenu={onFileContextMenu ? (e) => onFileContextMenu(f, e.clientX, e.clientY) : undefined}
+            onToggleSynth={onToggleSynth ? () => onToggleSynth(f) : undefined}
           />
         ))}
       </div>
@@ -497,7 +620,6 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, 
               <Badge color={C.orange}>untracked</Badge>
             )}
             {selectedFile.synth && <Badge color={C.ok}>synthesis</Badge>}
-            {selectedFile.sim && <Badge color={C.purple}>simulation</Badge>}
             {!selectedFile.synth && selectedFile.ty !== "folder" && (
               <Badge color={C.t3}>excluded</Badge>
             )}

@@ -4,6 +4,12 @@ const s = (size: number = 14) => ({ width: size, height: size });
 export const Play = ({ size }: IconProps) => (
   <svg {...s(size || 11)} viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1l8 5-8 5z" /></svg>
 );
+export const Stop = ({ size }: IconProps) => (
+  <svg {...s(size || 11)} viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1" /></svg>
+);
+export const Refresh = ({ size }: IconProps) => (
+  <svg {...s(size || 11)} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1.5 6a4.5 4.5 0 018.2-2.5M10.5 6a4.5 4.5 0 01-8.2 2.5" /><path d="M10 1v3H7M2 11V8h3" /></svg>
+);
 export const Check = ({ size }: IconProps) => (
   <svg {...s(size || 11)} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 6l3 3L10 3" /></svg>
 );
@@ -66,4 +72,10 @@ export const MapIcon = () => (
 );
 export const Send = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1l12 6-12 6V8.5L8 7 1 5.5z" /></svg>
+);
+export const Wave = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M1 12V4h3v8h2V4h2v8h2V4h2v8h2" /></svg>
+);
+export const Download = () => (
+  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M7 1v8M4 6l3 3 3-3M2 11h10" /></svg>
 );

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult } from "./types";
-import { RADIANT_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
+import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
+import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
+import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
-import { Btn, NavBtn, ResourceBar } from "./components/shared";
+import { Btn, NavBtn, ResourceBar, Select } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Gauge, Term, Key, Settings,
-  Play, Search,
+  Play, Stop, Search, Clock,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
@@ -20,6 +21,9 @@ import BuildArtifacts from "./components/BuildArtifacts";
 import SettingsPanel from "./components/SettingsPanel";
 import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
 import AiAssistant from "./components/AiAssistant";
+import ConstraintEditor from "./components/ConstraintEditor";
+import BuildHistory from "./components/BuildHistory";
+import KeyboardShortcuts from "./components/KeyboardShortcuts";
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -34,13 +38,39 @@ import {
   getRuntimeBackends,
   getAppConfig,
   deleteFile,
+  deleteDirectory,
   checkLicenses,
+  cancelBuild,
   cleanBuild,
   checkSourcesStale,
   saveProject,
+  gitIsDirty,
+  gitCommit,
+  getGitStatus,
+  executeIpGenerate,
 } from "./hooks/useTauri";
+import type { RustGitStatus } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+function mapGitStatus(r: RustGitStatus): GitState {
+  return {
+    branch: r.branch,
+    commit: r.commitHash,
+    commitMsg: r.commitMessage,
+    author: r.author,
+    time: r.timeAgo,
+    ahead: r.ahead,
+    behind: r.behind,
+    dirty: r.dirty,
+    staged: r.staged,
+    unstaged: r.unstaged,
+    untracked: r.untracked,
+    stashes: 0,
+    tags: [],
+    recentCommits: [],
+  };
+}
 
 // Fallback backend when none loaded yet
 const FALLBACK_BACKEND: RuntimeBackend = {
@@ -62,21 +92,26 @@ const FALLBACK_BACKEND: RuntimeBackend = {
   available: false,
 };
 
-function IpCatalogSection() {
+function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAddToSynth }: { backendId: string; projectDir: string; device: string; onRefreshFiles?: () => void; onAddToSynth?: (instanceName: string) => void }) {
   const { C, MONO } = useTheme();
   const [ipSearch, setIpSearch] = useState("");
   const [configuring, setConfiguring] = useState<IpCore | null>(null);
   const [ipParams, setIpParams] = useState<Record<string, string>>({});
   const [instanceName, setInstanceName] = useState("u_inst");
   const [copiedTemplate, setCopiedTemplate] = useState(false);
+  const [tclVisible, setTclVisible] = useState(false);
+  const [genState, setGenState] = useState<"idle" | "preview" | "running" | "done" | "error">("idle");
+  const [genOutput, setGenOutput] = useState<string[]>([]);
+
+  const catalog = backendId === "quartus" ? QUARTUS_IP_CATALOG : RADIANT_IP_CATALOG;
 
   const filtered = useMemo(() => {
-    if (!ipSearch) return RADIANT_IP_CATALOG;
+    if (!ipSearch) return catalog;
     const q = ipSearch.toLowerCase();
-    return RADIANT_IP_CATALOG.filter(
+    return catalog.filter(
       (ip) => ip.name.toLowerCase().includes(q) || ip.description.toLowerCase().includes(q) || ip.category.toLowerCase().includes(q)
     );
-  }, [ipSearch]);
+  }, [ipSearch, catalog]);
 
   const grouped = useMemo(() => {
     const map: Record<string, typeof filtered> = {};
@@ -92,6 +127,9 @@ function IpCatalogSection() {
     setIpParams(defaults);
     setInstanceName(`u_${ip.name.toLowerCase().replace(/\s+/g, "_")}`);
     setCopiedTemplate(false);
+    setTclVisible(false);
+    setGenState("idle");
+    setGenOutput([]);
   }, []);
 
   const generateTemplate = useMemo(() => {
@@ -112,212 +150,431 @@ function IpCatalogSection() {
     }
   }, [generateTemplate]);
 
+  // Deterministic TCL preview — computed synchronously, no async races
+  const genTcl = useMemo(() => {
+    if (!tclVisible || !configuring) return null;
+    const sortedParams = Object.entries(ipParams)
+      .filter(([, v]) => v)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const isQuartus = backendId === "quartus";
+    const isVivado = backendId === "vivado";
+    if (isQuartus) {
+      const paramLines = sortedParams.map(([k, v]) => `set_parameter -name ${k} ${v}`).join("\n");
+      return `# IP generation TCL for ${configuring.name}\npackage require ::quartus::project\nset_global_assignment -name IP_COMPONENT "${configuring.name}"\nset_global_assignment -name IP_INSTANCE "${instanceName}"\n${paramLines}\ngenerate_ip "${instanceName}"`;
+    }
+    if (isVivado) {
+      const paramLines = sortedParams.map(([k, v]) => `CONFIG.${k} {${v}}`).join(" \\\n  ");
+      return `# IP generation TCL for ${configuring.name}\ncreate_ip -name ${configuring.name} -vendor xilinx.com -library ip -module_name ${instanceName}\nset_property -dict [list \\\n  ${paramLines} \\\n] [get_ips ${instanceName}]\ngenerate_target all [get_ips ${instanceName}]`;
+    }
+    // Lattice (Radiant/Diamond) and OSS
+    const paramLines = sortedParams
+      .map(([k, v]) => `  -param "${k}:${v}"`)
+      .join(" \\\n");
+    return `# IP generation TCL for ${configuring.name}\nsbp_design new -name "${instanceName}" -family "LIFCL" -device "${device}"\nsbp_configure -component "${configuring.name}" \\\n${paramLines}\nsbp_generate -lang "verilog"\nsbp_save\nsbp_close_design`;
+  }, [tclVisible, configuring, ipParams, instanceName, backendId, device]);
+
+  const handleRunGenerate = useCallback(async () => {
+    if (!genTcl) return;
+    setGenState("running");
+    setGenOutput([]);
+    try {
+      const unlistenStdout = await listen<{ genId: string; line: string }>(
+        "ip:stdout",
+        (data) => setGenOutput((p) => [...p, data.line]),
+      );
+      const unlistenFinished = await listen<{ genId: string; status: string; message: string }>(
+        "ip:finished",
+        (data) => {
+          setGenOutput((p) => [...p, data.message]);
+          setGenState(data.status === "success" ? "done" : "error");
+          unlistenStdout();
+          unlistenFinished();
+        },
+      );
+      await executeIpGenerate(backendId, projectDir, genTcl);
+    } catch (err) {
+      setGenState("error");
+      setGenOutput((p) => [...p, `Error: ${err}`]);
+    }
+  }, [genTcl, backendId, projectDir]);
+
   const panelP: React.CSSProperties = {
     background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
   };
 
-  return (
-    <div style={{ display: "flex", gap: 12 }}>
-      {/* Left: Catalog */}
-      <div style={{ flex: configuring ? "0 0 300px" : 1, display: "flex", flexDirection: "column", gap: 12, overflow: "auto" }}>
-        <div style={panelP}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-            <Box />
+  // Full-screen configurator when an IP is selected
+  if (configuring) {
+    return (
+      <div style={{ ...panelP, display: "flex", flexDirection: "column", overflow: "auto" }}>
+        {/* Back button + header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Btn small onClick={() => { setConfiguring(null); setGenState("idle"); setTclVisible(false); setGenOutput([]); }}
+            icon={<span style={{ fontSize: 10 }}>{"\u2190"}</span>}>
             IP Catalog
-            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
-              {filtered.length} cores
-            </span>
+          </Btn>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, flex: 1 }}>
+            {configuring.name}
           </div>
-          <input
-            type="text"
-            value={ipSearch}
-            onChange={(e) => setIpSearch(e.target.value)}
-            placeholder="Search IP cores..."
-            style={{
-              width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
-              background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
-              outline: "none", marginBottom: 10, boxSizing: "border-box",
-            }}
-          />
-          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
-            Click "Configure" on any IP to set parameters and generate instantiation code.
-          </div>
+          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+            {configuring.category}
+          </span>
         </div>
-        {grouped.map(([cat, items]) => (
-          <div key={cat} style={panelP}>
-            <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
-              {cat.toUpperCase()}
+
+        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>
+          {configuring.description}
+        </div>
+
+        {/* Two-column layout: params on left, template + generation on right */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, flex: 1 }}>
+          {/* Left: Instance Name + Parameters */}
+          <div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
+                INSTANCE NAME
+              </div>
+              <input
+                value={instanceName}
+                onChange={(e) => setInstanceName(e.target.value)}
+                style={{
+                  width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
+                  background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
+                  outline: "none", boxSizing: "border-box",
+                }}
+              />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: configuring ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
-              {items.map((ip) => (
-                <div
-                  key={ip.name}
-                  style={{
-                    padding: "8px 10px", background: configuring?.name === ip.name ? `${C.accent}10` : C.bg, borderRadius: 5,
-                    border: `1px solid ${configuring?.name === ip.name ? C.accent : C.b1}`,
-                    cursor: ip.params ? "pointer" : "default",
-                  }}
-                  onClick={() => { if (ip.params) openConfigurator(ip); }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, flex: 1 }}>
-                      {ip.name}
-                    </div>
-                    {ip.params && (
+
+            {configuring.params?.map((p) => (
+              <div key={p.key} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
+                  {p.label} {p.unit && <span style={{ fontWeight: 400 }}>({p.unit})</span>}
+                </div>
+                {p.type === "select" ? (
+                  <Select
+                    value={ipParams[p.key] ?? p.default}
+                    onChange={(v) => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
+                    options={(p.choices ?? []).map((c) => ({ value: c, label: c }))}
+                    style={{ width: "100%" }}
+                  />
+                ) : p.type === "boolean" ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["true", "false"].map((v) => (
                       <span
-                        onClick={(e) => { e.stopPropagation(); openConfigurator(ip); }}
+                        key={v}
+                        onClick={() => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
                         style={{
-                          fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
-                          background: `${C.accent}15`, color: C.accent, fontWeight: 600, cursor: "pointer",
+                          padding: "3px 8px", borderRadius: 3, cursor: "pointer",
+                          fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                          border: `1px solid ${(ipParams[p.key] ?? p.default) === v ? C.accent : C.b1}`,
+                          color: (ipParams[p.key] ?? p.default) === v ? C.accent : C.t2,
+                          background: (ipParams[p.key] ?? p.default) === v ? `${C.accent}15` : C.bg,
                         }}
                       >
-                        Configure
+                        {v === "true" ? "Yes" : "No"}
                       </span>
-                    )}
+                    ))}
                   </div>
-                  <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
-                    {ip.description}
+                ) : (
+                  <input
+                    type={p.type === "number" ? "number" : "text"}
+                    value={ipParams[p.key] ?? p.default}
+                    onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                    min={p.min}
+                    max={p.max}
+                    style={{
+                      width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
+                      background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
+                      outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Right: Template + Generation */}
+          <div>
+            {generateTemplate && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
+                    INSTANTIATION
                   </div>
-                  {!configuring && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
-                      {ip.families.map((f) => (
-                        <span key={f} style={{
-                          fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
-                          background: `${C.accent}15`, color: C.accent, fontWeight: 600,
-                        }}>
-                          {f}
-                        </span>
-                      ))}
-                    </div>
+                  <span
+                    onClick={copyTemplate}
+                    style={{
+                      fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
+                      background: copiedTemplate ? `${C.ok}15` : `${C.accent}15`,
+                      color: copiedTemplate ? C.ok : C.accent,
+                      fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {copiedTemplate ? "Copied!" : "Copy"}
+                  </span>
+                </div>
+                <pre style={{
+                  fontSize: 8, fontFamily: MONO, color: C.t1, background: C.bg,
+                  border: `1px solid ${C.b1}`, borderRadius: 4, padding: "8px 10px",
+                  overflow: "auto", maxHeight: 200, lineHeight: 1.5, whiteSpace: "pre-wrap",
+                  margin: 0,
+                }}>
+                  {generateTemplate}
+                </pre>
+              </div>
+            )}
+
+            {configuring.params && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
+                    IP GENERATION
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                  <Btn small onClick={() => { setTclVisible((v) => !v); setGenState((p) => p === "done" ? "done" : tclVisible ? "idle" : "preview"); }} disabled={genState === "running"}>
+                    {tclVisible ? "Hide TCL" : "Preview TCL"}
+                  </Btn>
+                  {genTcl && genState !== "running" && (
+                    <Btn small primary onClick={handleRunGenerate}>
+                      {genState === "done" ? "Re-Generate" : "Generate IP"}
+                    </Btn>
+                  )}
+                  {genState === "done" && (
+                    <>
+                      <span style={{ fontSize: 8, fontFamily: MONO, color: C.ok, fontWeight: 600, alignSelf: "center" }}>
+                        {"\u2713"} Complete
+                      </span>
+                      <Btn small onClick={() => {
+                        onRefreshFiles?.();
+                        onAddToSynth?.(instanceName);
+                        setGenOutput([`IP "${instanceName}" added to project and synthesis flow.`]);
+                      }} style={{ color: C.ok, borderColor: `${C.ok}44` }}>
+                        Add to Synthesis
+                      </Btn>
+                      <Btn small onClick={() => {
+                        onRefreshFiles?.();
+                        setGenOutput([`IP files added to project (not in synthesis).`]);
+                      }}>
+                        Add to Project Only
+                      </Btn>
+                      <Btn small onClick={() => {
+                        setConfiguring(null);
+                        setGenState("idle");
+                        setTclVisible(false);
+                        setGenOutput([]);
+                      }} style={{ color: C.err, borderColor: `${C.err}44` }}>
+                        Discard
+                      </Btn>
+                    </>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Right: Configurator */}
-      {configuring && (
-        <div style={{ flex: 1, ...panelP, display: "flex", flexDirection: "column", overflow: "auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, flex: 1 }}>
-              {configuring.name}
-            </div>
-            <span
-              onClick={() => setConfiguring(null)}
-              style={{ fontSize: 9, color: C.t3, cursor: "pointer", fontFamily: MONO }}
-            >
-              Close
-            </span>
-          </div>
-          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>
-            {configuring.description}
-          </div>
-
-          {/* Instance Name */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
-              INSTANCE NAME
-            </div>
-            <input
-              value={instanceName}
-              onChange={(e) => setInstanceName(e.target.value)}
-              style={{
-                width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
-                background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
-                outline: "none", boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Parameters */}
-          {configuring.params?.map((p) => (
-            <div key={p.key} style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
-                {p.label} {p.unit && <span style={{ fontWeight: 400 }}>({p.unit})</span>}
+                {genTcl && (
+                  <pre style={{
+                    fontSize: 7, fontFamily: MONO, color: C.t2, background: C.bg,
+                    border: `1px solid ${C.b1}`, borderRadius: 4, padding: "6px 8px",
+                    overflow: "auto", maxHeight: 120, lineHeight: 1.4, whiteSpace: "pre-wrap",
+                    margin: "0 0 6px",
+                  }}>
+                    {genTcl}
+                  </pre>
+                )}
+                {genOutput.length > 0 && (
+                  <div style={{
+                    background: C.bg, borderRadius: 4, padding: "6px 8px",
+                    maxHeight: 120, overflowY: "auto", fontSize: 7, fontFamily: MONO, lineHeight: 1.5,
+                  }}>
+                    {genOutput.map((line, i) => (
+                      <div key={i} style={{ color: line.includes("error") || line.includes("Error") ? C.err : line.includes("complete") ? C.ok : C.t2 }}>
+                        {line}
+                      </div>
+                    ))}
+                    {genState === "running" && (
+                      <div style={{ color: C.accent }}>
+                        <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span> Running...
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              {p.type === "select" ? (
-                <select
-                  value={ipParams[p.key] ?? p.default}
-                  onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                  style={{
-                    width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
-                    background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
-                  }}
-                >
-                  {p.choices?.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              ) : p.type === "boolean" ? (
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["true", "false"].map((v) => (
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Catalog browsing view
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={panelP}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+          <Box />
+          IP Catalog
+          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
+            {filtered.length} cores
+          </span>
+        </div>
+        <input
+          type="text"
+          value={ipSearch}
+          onChange={(e) => setIpSearch(e.target.value)}
+          placeholder="Search IP cores..."
+          style={{
+            width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
+            background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
+            outline: "none", marginBottom: 10, boxSizing: "border-box",
+          }}
+        />
+        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
+          Click "Configure" on any IP to set parameters and generate instantiation code.
+        </div>
+      </div>
+      {grouped.map(([cat, items]) => (
+        <div key={cat} style={panelP}>
+          <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
+            {cat.toUpperCase()}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+            {items.map((ip) => (
+              <div
+                key={ip.name}
+                style={{
+                  padding: "8px 10px", background: C.bg, borderRadius: 5,
+                  border: `1px solid ${C.b1}`,
+                  cursor: ip.params ? "pointer" : "default",
+                }}
+                onClick={() => { if (ip.params) openConfigurator(ip); }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, flex: 1 }}>
+                    {ip.name}
+                  </div>
+                  {ip.params && (
                     <span
-                      key={v}
-                      onClick={() => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
+                      onClick={(e) => { e.stopPropagation(); openConfigurator(ip); }}
                       style={{
-                        padding: "3px 8px", borderRadius: 3, cursor: "pointer",
-                        fontSize: 8, fontFamily: MONO, fontWeight: 600,
-                        border: `1px solid ${(ipParams[p.key] ?? p.default) === v ? C.accent : C.b1}`,
-                        color: (ipParams[p.key] ?? p.default) === v ? C.accent : C.t2,
-                        background: (ipParams[p.key] ?? p.default) === v ? `${C.accent}15` : C.bg,
+                        fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
+                        background: `${C.accent}15`, color: C.accent, fontWeight: 600, cursor: "pointer",
                       }}
                     >
-                      {v === "true" ? "Yes" : "No"}
+                      Configure
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
+                  {ip.description}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
+                  {ip.families.map((f) => (
+                    <span key={f} style={{
+                      fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
+                      background: `${C.accent}15`, color: C.accent, fontWeight: 600,
+                    }}>
+                      {f}
                     </span>
                   ))}
                 </div>
-              ) : (
-                <input
-                  type={p.type === "number" ? "number" : "text"}
-                  value={ipParams[p.key] ?? p.default}
-                  onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                  min={p.min}
-                  max={p.max}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DevicePicker({ backendId, value, onChange, onSelect, onCancel }: {
+  backendId: string; value: string;
+  onChange: (v: string) => void; onSelect: (part: string) => void; onCancel: () => void;
+}) {
+  const { C, MONO } = useTheme();
+  const [open, setOpen] = useState(true);
+  const ref = useRef<HTMLDivElement>(null);
+  const families = DEVICE_MAP[backendId] ?? [];
+  const lower = value.toLowerCase();
+
+  // Filter families/parts by search text
+  const filteredFamilies = useMemo(() => {
+    if (!lower) return families;
+    return families
+      .map((f) => ({
+        ...f,
+        parts: f.parts.filter((p) => p.toLowerCase().includes(lower) || f.family.toLowerCase().includes(lower)),
+      }))
+      .filter((f) => f.parts.length > 0);
+  }, [families, lower]);
+
+  const validation = useMemo(() => validatePart(backendId, value), [backendId, value]);
+
+  // Close on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onCancel();
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [onCancel]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) onSelect(validation.match ?? value.trim());
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="Search parts..."
+          style={{
+            fontSize: 9, fontFamily: MONO, background: C.bg, color: C.t1,
+            border: `1px solid ${validation.valid ? C.ok : value.length > 3 ? C.warn : C.accent}`,
+            borderRadius: 3, padding: "1px 6px", width: 200, outline: "none",
+          }}
+        />
+        {validation.valid && (
+          <span style={{ fontSize: 7, color: C.ok, fontFamily: MONO, fontWeight: 600 }}>
+            {"\u2713"} {validation.family}
+          </span>
+        )}
+        {!validation.valid && value.length > 3 && (
+          <span style={{ fontSize: 7, color: C.warn, fontFamily: MONO }}>
+            Unknown part
+          </span>
+        )}
+      </div>
+      {open && filteredFamilies.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, marginTop: 2,
+          width: 320, maxHeight: 300, overflowY: "auto", background: C.s1,
+          border: `1px solid ${C.b1}`, borderRadius: 6, zIndex: 999,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        }}>
+          {filteredFamilies.map((f) => (
+            <div key={f.family}>
+              <div style={{
+                fontSize: 7, fontFamily: MONO, fontWeight: 700, color: C.t3,
+                padding: "4px 8px", letterSpacing: 0.5, background: C.bg,
+                borderBottom: `1px solid ${C.b1}`,
+              }}>
+                {f.family.toUpperCase()}
+              </div>
+              {f.parts.map((p) => (
+                <div
+                  key={p}
+                  onClick={() => { onSelect(p); setOpen(false); }}
                   style={{
-                    width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
-                    background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
-                    outline: "none", boxSizing: "border-box",
+                    padding: "3px 10px", fontSize: 8, fontFamily: MONO, color: C.t1,
+                    cursor: "pointer", borderBottom: `1px solid ${C.b1}10`,
                   }}
-                />
-              )}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = C.s3; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                >
+                  {p}
+                </div>
+              ))}
             </div>
           ))}
-
-          {/* Generated Template */}
-          {generateTemplate && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
-                  INSTANTIATION
-                </div>
-                <span
-                  onClick={copyTemplate}
-                  style={{
-                    fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
-                    background: copiedTemplate ? `${C.ok}15` : `${C.accent}15`,
-                    color: copiedTemplate ? C.ok : C.accent,
-                    fontWeight: 600, cursor: "pointer",
-                  }}
-                >
-                  {copiedTemplate ? "Copied!" : "Copy"}
-                </span>
-              </div>
-              <pre style={{
-                fontSize: 8, fontFamily: MONO, color: C.t1, background: C.bg,
-                border: `1px solid ${C.b1}`, borderRadius: 4, padding: "8px 10px",
-                overflow: "auto", lineHeight: 1.5, whiteSpace: "pre-wrap",
-                margin: 0,
-              }}>
-                {generateTemplate}
-              </pre>
-            </div>
-          )}
-
-          {!configuring.template && configuring.params && (
-            <div style={{ marginTop: 12, fontSize: 8, fontFamily: MONO, color: C.t3, fontStyle: "italic" }}>
-              Template generation not available for this IP. Use Radiant IP Configurator to generate the HDL wrapper.
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -339,6 +596,7 @@ export default function App() {
   // ── IDE state ──
   const [sec, setSec] = useState<Section>("build");
   const [building, setBuilding] = useState(false);
+  const [buildId, setBuildId] = useState<string | null>(null);
   const [bStep, setBStep] = useState(-1);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsRef = useRef<LogEntry[]>([]);
@@ -346,12 +604,14 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
   const [fileTreeWidth, setFileTreeWidth] = useState(250);
   const [rptTab, setRptTab] = useState<ReportTab>("timing");
   const [gitExpanded, setGitExpanded] = useState(false);
+  const [gitState, setGitState] = useState<GitState | null>(null);
   const [realFiles, setRealFiles] = useState<ProjectFile[] | null>(null);
   const [viewingFile, setViewingFile] = useState<FileContent | null>(null);
   const [realTimingReport, setRealTimingReport] = useState<TimingReportData | null>(null);
@@ -365,6 +625,7 @@ export default function App() {
   const [sourcesStale, setSourcesStale] = useState(false);
   const [editingDevice, setEditingDevice] = useState(false);
   const [deviceDraft, setDeviceDraft] = useState("");
+  const [commitModal, setCommitModal] = useState<"checking" | "prompt" | null>(null);
 
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
@@ -417,12 +678,18 @@ export default function App() {
     setRealTimingReport(null);
     setRealUtilReport(null);
     setActiveStage(null);
+    setGitState(null);
     setView("ide");
 
     if (isTauri) {
       // Ensure the Rust backend registers this as the active project
       // (required for start_build to find the project config)
       openProject(dir).catch(() => {});
+
+      // Load git status
+      getGitStatus(dir)
+        .then((r) => setGitState(mapGitStatus(r)))
+        .catch(() => setGitState(null));
 
       // Load real file tree
       getFileTreeMapped(dir).then((files) => {
@@ -638,7 +905,7 @@ export default function App() {
     setTimeout(advanceStage, 300);
   }, []);
 
-  const runBuild = useCallback(async () => {
+  const doRunBuild = useCallback(async () => {
     setBuilding(true);
     setBStep(0);
     setLogs([]);
@@ -694,6 +961,12 @@ export default function App() {
             .then((r) => setRealUtilReport(mapUtilizationReport(r)))
             .catch(() => {});
         }
+        // Refresh git status (build may have created new files)
+        if (projectDir) {
+          getGitStatus(projectDir)
+            .then((r) => setGitState(mapGitStatus(r)))
+            .catch(() => {});
+        }
       }
     );
 
@@ -706,8 +979,9 @@ export default function App() {
 
     // NOW start the build — listeners are already active
     try {
-      const buildId = await tauriStartBuild(bid, projectDir, buildStages, buildOptions);
-      console.log("Build started:", buildId);
+      const newBuildId = await tauriStartBuild(bid, projectDir, buildStages, buildOptions);
+      setBuildId(newBuildId);
+      console.log("Build started:", newBuildId);
     } catch (err) {
       // Clean up listeners on error
       buildCleanup.current();
@@ -716,6 +990,49 @@ export default function App() {
       setLogs((p) => [...p, { t: "err" as const, m: `Build error: ${err}` }]);
     }
   }, [B, bid, projectDir, buildStages, buildOptions, startLogFlush, stopLogFlush, runMockBuild]);
+
+  const handleCommitAndBuild = useCallback(async () => {
+    setCommitModal(null);
+    if (projectDir && project) {
+      const msg = `Pre-build: ${project.name} ${new Date().toISOString().split("T")[0]}`;
+      try {
+        const hash = await gitCommit(projectDir, msg);
+        setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
+        // Refresh git status after commit
+        getGitStatus(projectDir)
+          .then((r) => setGitState(mapGitStatus(r)))
+          .catch(() => {});
+      } catch (err) {
+        setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}` }]);
+      }
+    }
+    doRunBuild();
+  }, [projectDir, project, doRunBuild]);
+
+  const handleBuildWithoutCommit = useCallback(() => {
+    setCommitModal(null);
+    doRunBuild();
+  }, [doRunBuild]);
+
+  const runBuild = useCallback(async () => {
+    if (!projectDir) {
+      doRunBuild();
+      return;
+    }
+    // Check if working directory is dirty
+    setCommitModal("checking");
+    try {
+      const dirty = await gitIsDirty(projectDir);
+      if (dirty) {
+        setCommitModal("prompt");
+        return;
+      }
+    } catch {
+      // Not a git repo or error — just proceed
+    }
+    setCommitModal(null);
+    doRunBuild();
+  }, [projectDir, doRunBuild]);
 
   const runClean = useCallback(async () => {
     if (!isTauri || !projectDir) return;
@@ -734,6 +1051,51 @@ export default function App() {
       setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}` }]);
     }
   }, [projectDir]);
+
+  const runCancel = useCallback(async () => {
+    if (!building) return;
+    try {
+      await cancelBuild(buildId ?? "");
+      setLogs((p) => [...p, { t: "warn" as const, m: "Build cancelled by user" }]);
+    } catch (err) {
+      setLogs((p) => [...p, { t: "err" as const, m: `Cancel error: ${err}` }]);
+    }
+  }, [building, buildId]);
+
+  const refreshAll = useCallback(() => {
+    if (!projectDir) return;
+    getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+    getGitStatus(projectDir)
+      .then((r) => setGitState(mapGitStatus(r)))
+      .catch(() => setGitState(null));
+  }, [projectDir]);
+
+  const handleGitCommit = useCallback(async () => {
+    if (!projectDir || !project) return;
+    const msg = window.prompt("Commit message:", `${project.name}: ${new Date().toISOString().split("T")[0]}`);
+    if (!msg) return;
+    try {
+      const hash = await gitCommit(projectDir, msg);
+      setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}` }]);
+      // Refresh git status
+      getGitStatus(projectDir)
+        .then((r) => setGitState(mapGitStatus(r)))
+        .catch(() => {});
+    } catch (err) {
+      setLogs((p) => [...p, { t: "err" as const, m: `Commit failed: ${err}` }]);
+    }
+  }, [projectDir, project]);
+
+  const handleToggleSynth = useCallback((file: ProjectFile) => {
+    setRealFiles((prev) => {
+      if (!prev) return prev;
+      return prev.map((f) =>
+        f.n === file.n && f.d === file.d && f.path === file.path
+          ? { ...f, synth: !f.synth }
+          : f
+      );
+    });
+  }, []);
 
   const handleFileClick = useCallback((name: string, path?: string) => {
     setAFile(name);
@@ -772,9 +1134,14 @@ export default function App() {
         e.preventDefault();
         if (view === "ide" && !building) runBuild();
       }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "?" || (e.shiftKey && e.key === "/"))) {
+        e.preventDefault();
+        setShortcutsOpen((p) => !p);
+      }
       if (e.key === "Escape") {
         setCmdOpen(false);
         setDevOpen(false);
+        setShortcutsOpen(false);
       }
     };
     window.addEventListener("keydown", h);
@@ -834,6 +1201,7 @@ export default function App() {
     { label: "IP Catalog", category: "View", desc: "Browse and configure IP cores", action: () => navClick("ip") },
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
     { label: "Constraints", category: "View", desc: "Pin assignments", action: () => navClick("constraints") },
+    { label: "Build History", category: "View", desc: "Previous builds, trends, Fmax tracking", action: () => navClick("history") },
     { label: "Resources", category: "View", desc: "Utilization overview", action: () => navClick("resources") },
     { label: "License Status", category: "View", desc: "FlexLM license info", action: () => navClick("license") },
     { label: "AI Assistant", category: "View", desc: "FPGA design help", action: () => navClick("ai") },
@@ -857,6 +1225,7 @@ export default function App() {
     // Project
     { label: "Settings", category: "Project", desc: "Tool paths, theme, zoom", action: () => setSettingsOpen(true) },
     { label: "Toggle File Tree", category: "Project", desc: showFiles ? "Hide files" : "Show files", action: () => setShowFiles((p) => !p) },
+    { label: "Keyboard Shortcuts", category: "Project", desc: "Show all shortcuts (Ctrl+?)", action: () => setShortcutsOpen(true) },
     { label: "Close Project", category: "Project", desc: "Return to start screen", action: handleCloseProject },
   ];
 
@@ -878,10 +1247,12 @@ export default function App() {
     >
       {/* Git Status Bar */}
       <GitStatusBar
-        git={null}
+        git={gitState}
         projectName={project?.name}
         gitExpanded={gitExpanded}
         setGitExpanded={setGitExpanded}
+        onRefresh={refreshAll}
+        onCommit={handleGitCommit}
       />
 
       {/* Command Palette */}
@@ -902,6 +1273,50 @@ export default function App() {
 
       {/* Settings Panel */}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+
+      {/* Keyboard Shortcuts */}
+      {shortcutsOpen && <KeyboardShortcuts onClose={() => setShortcutsOpen(false)} />}
+
+      {/* Pre-Build Commit Modal */}
+      {commitModal === "prompt" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1001,
+            fontFamily: SANS,
+          }}
+          onClick={() => setCommitModal(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.s1,
+              border: `1px solid ${C.b1}`,
+              borderRadius: 10,
+              width: 400,
+              padding: "20px 24px",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
+              Uncommitted Changes
+            </div>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, marginBottom: 16, lineHeight: 1.5 }}>
+              You have uncommitted changes. Committing before building lets you link
+              each build to a specific source state and easily return to it later.
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn small onClick={() => setCommitModal(null)}>Cancel</Btn>
+              <Btn small onClick={handleBuildWithoutCommit}>Build Without Committing</Btn>
+              <Btn small primary onClick={handleCommitAndBuild}>Commit & Build</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (
@@ -958,6 +1373,7 @@ export default function App() {
             </span>
           </div>
           <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} />
+          <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} />
           <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} />
           <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} />
           <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} />
@@ -1001,15 +1417,41 @@ export default function App() {
             setActiveFile={handleFileClick}
             width={fileTreeWidth}
             onWidthChange={setFileTreeWidth}
+            onRefresh={refreshAll}
+            onToggleSynth={handleToggleSynth}
             onFileContextMenu={(file, x, y) => {
+              const isSynthable = file.ty === "rtl" || file.ty === "tb" || file.ty === "constr";
               const items: ContextMenuItem[] = file.ty === "folder"
                 ? [
                     { label: "Copy Path", icon: "\u2398", onClick: () => { if (file.path) navigator.clipboard.writeText(file.path); } },
+                    { label: "", separator: true, onClick: () => {} },
+                    {
+                      label: "Delete Folder",
+                      icon: "\u2715",
+                      danger: true,
+                      onClick: () => {
+                        if (file.path && window.confirm(`Delete folder "${file.n}" and all its contents?`)) {
+                          deleteDirectory(file.path).then(() => {
+                            if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+                          }).catch((err) => {
+                            setLogs((p) => [...p, { t: "err" as const, m: `Delete failed: ${err}` }]);
+                          });
+                        }
+                      },
+                    },
                   ]
                 : [
                     { label: "Open in Viewer", icon: "\u25A3", onClick: () => handleFileClick(file.n, file.path) },
                     { label: "Copy Path", icon: "\u2398", onClick: () => { if (file.path) navigator.clipboard.writeText(file.path); } },
                     { label: "Copy Name", icon: "\u2399", onClick: () => navigator.clipboard.writeText(file.n) },
+                    ...(isSynthable ? [
+                      { label: "", separator: true, onClick: () => {} },
+                      {
+                        label: file.synth ? "Remove from Synthesis" : "Add to Synthesis",
+                        icon: file.synth ? "\u2212" : "+",
+                        onClick: () => handleToggleSynth(file),
+                      },
+                    ] : []),
                     { label: "", separator: true, onClick: () => {} },
                     {
                       label: "Delete File",
@@ -1055,31 +1497,19 @@ export default function App() {
               {project ? project.name : B.name}
             </span>
             {editingDevice ? (
-              <input
-                autoFocus
+              <DevicePicker
+                backendId={bid}
                 value={deviceDraft}
-                onChange={(e) => setDeviceDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && deviceDraft.trim() && project && projectDir) {
-                    const updated = { ...project, device: deviceDraft.trim() };
+                onChange={setDeviceDraft}
+                onSelect={(part) => {
+                  if (part && project && projectDir) {
+                    const updated = { ...project, device: part };
                     setProject(updated);
                     setEditingDevice(false);
                     saveProject(projectDir, updated).catch(() => {});
                   }
-                  if (e.key === "Escape") setEditingDevice(false);
                 }}
-                onBlur={() => setEditingDevice(false)}
-                style={{
-                  fontSize: 9,
-                  fontFamily: MONO,
-                  background: C.bg,
-                  color: C.t1,
-                  border: `1px solid ${C.accent}`,
-                  borderRadius: 3,
-                  padding: "1px 6px",
-                  width: 160,
-                  outline: "none",
-                }}
+                onCancel={() => setEditingDevice(false)}
               />
             ) : (
               <span
@@ -1167,9 +1597,15 @@ export default function App() {
             <Btn small onClick={runClean} disabled={building}>
               Clean
             </Btn>
-            <Btn primary small icon={<Play />} onClick={runBuild} disabled={building}>
-              {building ? "Building..." : "Build"}
-            </Btn>
+            {building ? (
+              <Btn small icon={<Stop />} onClick={runCancel} style={{ background: "#e5534b22", color: "#e5534b", border: "1px solid #e5534b44" }}>
+                Cancel
+              </Btn>
+            ) : (
+              <Btn primary small icon={<Play />} onClick={runBuild}>
+                Build
+              </Btn>
+            )}
           </div>
 
           <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
@@ -1282,33 +1718,13 @@ export default function App() {
               />
             )}
 
-            {/* Constraints Quick View */}
+            {/* Constraint Editor */}
             {sec === "constraints" && !viewingFile && (
-              <div style={panelP}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: C.t1,
-                    marginBottom: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                  }}
-                >
-                  <Pin />
-                  Pin Constraints
-                </div>
-                <Btn
-                  small
-                  onClick={() => {
-                    setSec("reports");
-                    setRptTab("io");
-                  }}
-                >
-                  Open Full I/O Report {"\u2192"}
-                </Btn>
-              </div>
+              <ConstraintEditor
+                backendId={bid}
+                device={project?.device ?? B.defaultDev}
+                projectDir={projectDir}
+              />
             )}
 
             {/* License Section */}
@@ -1393,7 +1809,24 @@ export default function App() {
             )}
 
             {/* IP Catalog */}
-            {sec === "ip" && !viewingFile && <IpCatalogSection />}
+            {sec === "ip" && !viewingFile && <IpCatalogSection backendId={bid} projectDir={projectDir} device={project?.device ?? B.defaultDev}
+                  onRefreshFiles={() => { if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}); }}
+                  onAddToSynth={(ipInstanceName) => {
+                    if (!projectDir) return;
+                    // Refresh file tree, then mark IP files matching instance name as synth-included
+                    getFileTreeMapped(projectDir).then((files) => {
+                      const lower = ipInstanceName.toLowerCase();
+                      setRealFiles(files.map((f) => {
+                        if (f.ty === "folder" || f.ty === "config" || f.ty === "output") return f;
+                        const nameL = f.n.toLowerCase();
+                        // Match files whose name contains the instance name, or are inside an ip_cores dir
+                        const isIpFile = nameL.includes(lower) ||
+                          (f.path?.toLowerCase().includes("ip_cores") && (nameL.endsWith(".v") || nameL.endsWith(".sv") || nameL.endsWith(".vhd") || nameL.endsWith(".vhdl")));
+                        return isIpFile ? { ...f, synth: true, ty: "ip" as const } : f;
+                      }));
+                    }).catch(() => {});
+                  }}
+                />}
 
             {/* Interconnect */}
             {sec === "interconnect" && !viewingFile && (
@@ -1416,6 +1849,10 @@ export default function App() {
                 />
               </div>
             )}
+
+            {/* Build History */}
+            {sec === "history" && !viewingFile && <BuildHistory />}
+
 
             {/* Register Map */}
             {sec === "regmap" && !viewingFile && (

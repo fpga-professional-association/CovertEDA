@@ -3,8 +3,9 @@ use crate::project::{ProjectConfig, RecentProject, RecentProjectsList};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use tauri::{Emitter, State};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Manager, State};
 
 pub struct AppState {
     pub registry: Mutex<BackendRegistry>,
@@ -16,6 +17,7 @@ pub struct AppState {
 pub struct BuildHandle {
     pub build_id: String,
     pub child_pid: Option<u32>,
+    pub cancel_flag: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -101,6 +103,188 @@ pub fn get_git_status(project_dir: String) -> Result<GitStatus, String> {
 }
 
 #[tauri::command]
+pub fn git_is_dirty(project_dir: String) -> Result<bool, String> {
+    crate::git::is_dirty(&PathBuf::from(project_dir))
+}
+
+#[tauri::command]
+pub fn git_commit(project_dir: String, message: String) -> Result<String, String> {
+    crate::git::commit_all(&PathBuf::from(project_dir), &message)
+}
+
+#[tauri::command]
+pub fn git_head_hash(project_dir: String) -> Result<String, String> {
+    crate::git::head_hash(&PathBuf::from(project_dir))
+}
+
+/// Generate an IP core using the vendor backend's TCL/script generation.
+/// Returns the generated TCL script content and the output directory path.
+#[tauri::command]
+pub fn generate_ip_script(
+    state: State<'_, AppState>,
+    backend_id: String,
+    project_dir: String,
+    device: String,
+    ip_name: String,
+    instance_name: String,
+    params: HashMap<String, String>,
+) -> Result<IpGenerateResult, String> {
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+
+    let (script, output_dir) = backend
+        .generate_ip_script(
+            &PathBuf::from(&project_dir),
+            &device,
+            &ip_name,
+            &instance_name,
+            &params,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(IpGenerateResult {
+        script,
+        output_dir,
+        cli_tool: backend.cli_tool().to_string(),
+    })
+}
+
+/// Execute a previously generated IP script using the vendor tool.
+/// Writes the script to a temp file, spawns the tool, and streams output.
+#[tauri::command]
+pub fn execute_ip_generate(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    backend_id: String,
+    project_dir: String,
+    script: String,
+) -> Result<String, String> {
+    let project_path = PathBuf::from(&project_dir);
+
+    // Write the IP generation script
+    let script_path = project_path.join(".coverteda_ipgen.tcl");
+    std::fs::write(&script_path, &script)
+        .map_err(|e| format!("Failed to write IP generation script: {}", e))?;
+
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    let cli_tool = backend.cli_tool().to_string();
+    drop(registry);
+
+    let executable = resolve_cli_executable(&cli_tool, &backend_id);
+    let script_arg = wsl_to_windows_path(&script_path);
+
+    // Determine license environment variables for Radiant
+    let mut env_vars: HashMap<String, String> = HashMap::new();
+    if backend_id == "radiant" {
+        let radiant = crate::backend::radiant::RadiantBackend::new();
+        if let Some(lic_path) = radiant.find_license() {
+            env_vars.insert("LM_LICENSE_FILE".into(), wsl_to_windows_path(&lic_path));
+        }
+    }
+
+    let gen_id = uuid_v4();
+    let gen_id_clone = gen_id.clone();
+
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+
+        let _ = app_handle.emit("ip:stdout", serde_json::json!({
+            "genId": &gen_id_clone,
+            "line": format!("Spawning: {} {}", &executable, &script_arg),
+        }));
+
+        let mut cmd = Command::new(&executable);
+        cmd.arg(&script_arg)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        for (key, val) in &env_vars {
+            cmd.env(key, val);
+        }
+
+        match cmd.spawn() {
+            Ok(mut child) => {
+                // Stream stderr
+                let stderr_handle = child.stderr.take().map(|stderr| {
+                    let app_h = app_handle.clone();
+                    let gid = gen_id_clone.clone();
+                    std::thread::spawn(move || {
+                        let reader = std::io::BufReader::new(stderr);
+                        for line in reader.lines().flatten() {
+                            let _ = app_h.emit("ip:stdout", serde_json::json!({
+                                "genId": &gid,
+                                "line": &line,
+                            }));
+                        }
+                    })
+                });
+
+                // Stream stdout
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = std::io::BufReader::new(stdout);
+                    for line in reader.lines().flatten() {
+                        let _ = app_handle.emit("ip:stdout", serde_json::json!({
+                            "genId": &gen_id_clone,
+                            "line": &line,
+                        }));
+                    }
+                }
+
+                if let Some(h) = stderr_handle {
+                    let _ = h.join();
+                }
+
+                match child.wait() {
+                    Ok(status) => {
+                        let msg = if status.success() {
+                            "IP generation complete".to_string()
+                        } else {
+                            format!("IP generation failed: {}", status)
+                        };
+                        let _ = app_handle.emit("ip:finished", serde_json::json!({
+                            "genId": &gen_id_clone,
+                            "status": if status.success() { "success" } else { "failed" },
+                            "message": &msg,
+                        }));
+                    }
+                    Err(e) => {
+                        let _ = app_handle.emit("ip:finished", serde_json::json!({
+                            "genId": &gen_id_clone,
+                            "status": "failed",
+                            "message": format!("Wait error: {}", e),
+                        }));
+                    }
+                }
+                let _ = std::fs::remove_file(&script_path);
+            }
+            Err(e) => {
+                let _ = app_handle.emit("ip:finished", serde_json::json!({
+                    "genId": &gen_id_clone,
+                    "status": "failed",
+                    "message": format!("Failed to spawn {}: {}", executable, e),
+                }));
+            }
+        }
+    });
+
+    Ok(gen_id)
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IpGenerateResult {
+    pub script: String,
+    pub output_dir: String,
+    pub cli_tool: String,
+}
+
+#[tauri::command]
 pub fn start_build(
     state: State<'_, AppState>,
     app_handle: tauri::AppHandle,
@@ -157,13 +341,16 @@ pub fn start_build(
         }
     }
 
-    // Record the build
+    // Record the build with a cancel flag
     let bid = build_id.clone();
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let cancel_flag_clone = cancel_flag.clone();
     {
         let mut active = state.active_build.lock().map_err(|e| e.to_string())?;
         *active = Some(BuildHandle {
             build_id: bid.clone(),
             child_pid: None,
+            cancel_flag,
         });
     }
 
@@ -222,6 +409,16 @@ pub fn start_build(
 
         match cmd.spawn() {
             Ok(mut child) => {
+                // Store PID so cancel_build can kill the process
+                let child_pid = child.id();
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    if let Ok(mut active) = state.active_build.lock() {
+                        if let Some(ref mut handle) = *active {
+                            handle.child_pid = Some(child_pid);
+                        }
+                    }
+                }
+
                 // Capture stderr in a separate thread
                 let stderr_handle = child.stderr.take().map(|stderr| {
                     let app_h = app_handle.clone();
@@ -252,6 +449,11 @@ pub fn start_build(
                     let mut current_stage: i32 = -1;
 
                     for line in reader.lines() {
+                        // Check cancellation flag between lines
+                        if cancel_flag_clone.load(Ordering::Relaxed) {
+                            let _ = child.kill();
+                            break;
+                        }
                         if let Ok(line) = line {
                             write_log(&mut log_file, &line);
 
@@ -444,31 +646,47 @@ pub fn start_build(
                 }
 
                 // Wait for process to finish
+                let cancelled = cancel_flag_clone.load(Ordering::Relaxed);
                 match child.wait() {
                     Ok(status) => {
                         let total_secs = start_time.elapsed().as_secs();
                         let mins = total_secs / 60;
                         let secs = total_secs % 60;
-                        let final_status = if status.success() {
-                            BuildStatus::Success
+                        if cancelled {
+                            let msg = format!("═══ BUILD CANCELLED ═══  {}m {}s", mins, secs);
+                            write_log(&mut log_file, &msg);
+                            let _ = app_handle.emit("build:finished", BuildEvent {
+                                build_id: build_id_clone.clone(),
+                                stage_idx: 0,
+                                status: BuildStatus::Failed,
+                                message: msg,
+                            });
                         } else {
-                            BuildStatus::Failed
-                        };
-                        let msg = if status.success() {
-                            format!("═══ BUILD COMPLETE ═══  {}m {}s", mins, secs)
-                        } else {
-                            format!("═══ BUILD FAILED ═══  {} ({}m {}s)", status, mins, secs)
-                        };
-                        write_log(&mut log_file, &msg);
-                        let _ = app_handle.emit("build:finished", BuildEvent {
-                            build_id: build_id_clone.clone(),
-                            stage_idx: 0,
-                            status: final_status,
-                            message: msg,
-                        });
+                            let final_status = if status.success() {
+                                BuildStatus::Success
+                            } else {
+                                BuildStatus::Failed
+                            };
+                            let msg = if status.success() {
+                                format!("═══ BUILD COMPLETE ═══  {}m {}s", mins, secs)
+                            } else {
+                                format!("═══ BUILD FAILED ═══  {} ({}m {}s)", status, mins, secs)
+                            };
+                            write_log(&mut log_file, &msg);
+                            let _ = app_handle.emit("build:finished", BuildEvent {
+                                build_id: build_id_clone.clone(),
+                                stage_idx: 0,
+                                status: final_status,
+                                message: msg,
+                            });
+                        }
                     }
                     Err(e) => {
-                        let msg = format!("Build wait error: {}", e);
+                        let msg = if cancelled {
+                            format!("═══ BUILD CANCELLED ═══")
+                        } else {
+                            format!("Build wait error: {}", e)
+                        };
                         write_log(&mut log_file, &msg);
                         let _ = app_handle.emit("build:finished", BuildEvent {
                             build_id: build_id_clone.clone(),
@@ -610,11 +828,18 @@ pub fn cancel_build(
 ) -> Result<(), String> {
     let mut active = state.active_build.lock().map_err(|e| e.to_string())?;
     if let Some(handle) = active.as_ref() {
+        // Signal the build thread to stop reading output
+        handle.cancel_flag.store(true, Ordering::Relaxed);
+
         if let Some(pid) = handle.child_pid {
-            // Send SIGTERM on Unix
             #[cfg(unix)]
-            unsafe {
-                libc::kill(pid as i32, libc::SIGTERM);
+            {
+                // SIGTERM first, then SIGKILL after a short delay
+                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+                });
             }
             #[cfg(windows)]
             {
@@ -1089,6 +1314,33 @@ pub fn delete_file(path: String, state: State<'_, AppState>) -> Result<(), Strin
     drop(project_guard);
 
     std::fs::remove_file(&file_path)
+        .map_err(|e| format!("Failed to delete {}: {}", path, e))
+}
+
+#[tauri::command]
+pub fn delete_directory(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let dir_path = PathBuf::from(&path);
+
+    // Security check: directory must be within the current project
+    let project_guard = state.current_project.lock().map_err(|e| e.to_string())?;
+    if let Some((project_dir, _)) = &*project_guard {
+        let canonical_dir = dir_path.canonicalize()
+            .map_err(|e| format!("Cannot resolve path {}: {}", path, e))?;
+        let canonical_project = project_dir.canonicalize()
+            .map_err(|e| format!("Cannot resolve project dir: {}", e))?;
+        if !canonical_dir.starts_with(&canonical_project) {
+            return Err("Directory is outside the project".to_string());
+        }
+        // Don't allow deleting the project root itself
+        if canonical_dir == canonical_project {
+            return Err("Cannot delete the project root directory".to_string());
+        }
+    } else {
+        return Err("No project is currently open".to_string());
+    }
+    drop(project_guard);
+
+    std::fs::remove_dir_all(&dir_path)
         .map_err(|e| format!("Failed to delete {}: {}", path, e))
 }
 

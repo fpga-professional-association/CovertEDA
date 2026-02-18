@@ -26,6 +26,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_file_tree,
             commands::get_git_status,
+            commands::git_is_dirty,
+            commands::git_commit,
+            commands::git_head_hash,
             commands::start_build,
             commands::cancel_build,
             commands::clean_build,
@@ -47,10 +50,13 @@ pub fn run() {
             commands::read_file,
             commands::read_build_log,
             commands::delete_file,
+            commands::delete_directory,
             commands::get_app_config,
             commands::save_app_config,
             commands::check_sources_stale,
             commands::get_raw_report,
+            commands::generate_ip_script,
+            commands::execute_ip_generate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

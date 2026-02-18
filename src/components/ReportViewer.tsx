@@ -1,4 +1,4 @@
-import { useState, useCallback, ReactNode } from "react";
+import { useState, useCallback, useEffect, ReactNode } from "react";
 import {
   ReportTab,
   TimingReportData,
@@ -8,8 +8,8 @@ import {
   IoBankData,
 } from "../types";
 import { useTheme } from "../context/ThemeContext";
-import { Badge } from "./shared";
-import { Clock, Warn, Arrow, Gauge, Bolt, Pin } from "./Icons";
+import { Badge, Btn } from "./shared";
+import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download } from "./Icons";
 import { getRawReport } from "../hooks/useTauri";
 
 // ── Props ──
@@ -29,15 +29,8 @@ interface ReportViewerProps {
 
 function NoData({ label }: { label: string }) {
   const { C, MONO } = useTheme();
-  const panelP: React.CSSProperties = {
-    background: C.s1,
-    borderRadius: 7,
-    border: `1px solid ${C.b1}`,
-    overflow: "hidden",
-    padding: 14,
-  };
   return (
-    <div style={panelP}>
+    <div style={{ background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, padding: 14 }}>
       <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO, padding: 20, textAlign: "center" }}>
         No {label} data available. Run a build to generate reports.
       </div>
@@ -52,9 +45,7 @@ function Collapsible({ title, icon, defaultOpen = false, children }: {
   const { C } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{
-      background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden",
-    }}>
+    <div style={{ background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden" }}>
       <div
         onClick={() => setOpen((p) => !p)}
         style={{
@@ -71,7 +62,45 @@ function Collapsible({ title, icon, defaultOpen = false, children }: {
   );
 }
 
-/** Raw log drawer — lazy-loads content on expand */
+/** Raw log viewer — loads content on mount, full-height scrollable */
+function RawLogViewer({ projectDir, reportType }: { projectDir: string; reportType: string }) {
+  const { C, MONO } = useTheme();
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setContent(null);
+    getRawReport(projectDir, reportType)
+      .then(setContent)
+      .catch((e) => setContent(`Error loading report: ${e}`))
+      .finally(() => setLoading(false));
+  }, [projectDir, reportType]);
+
+  if (loading) {
+    return <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>Loading report...</div>;
+  }
+
+  if (!content || content.startsWith("Error")) {
+    return (
+      <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>
+        {content || "No report file found."}
+      </div>
+    );
+  }
+
+  return (
+    <pre style={{
+      fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.6,
+      margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
+      padding: "12px 14px",
+    }}>
+      {content}
+    </pre>
+  );
+}
+
+/** Raw log drawer — collapsible, lazy-loads content on expand */
 function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportType: string }) {
   const { C, MONO } = useTheme();
   const [open, setOpen] = useState(false);
@@ -91,7 +120,7 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
 
   return (
     <div style={{
-      marginTop: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`,
+      marginTop: 12, background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, overflow: "hidden",
     }}>
       <div
         onClick={handleOpen}
@@ -106,12 +135,18 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
         </span>
       </div>
       {open && (
-        <div style={{ maxHeight: 400, overflowY: "auto", padding: "0 12px 12px" }}>
+        <div style={{
+          overflowY: "auto", overflowX: "hidden",
+          maxHeight: "60vh",
+          padding: "0 12px 12px",
+          scrollbarWidth: "thin",
+          scrollbarColor: `${C.b2} ${C.bg}`,
+        }}>
           {loading ? (
             <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO }}>Loading...</div>
           ) : (
             <pre style={{
-              fontSize: 8, fontFamily: MONO, color: C.t2, lineHeight: 1.5,
+              fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.6,
               margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
             }}>
               {content ?? "No content."}
@@ -131,6 +166,88 @@ export default function ReportViewer({
 }: ReportViewerProps) {
   const { C, MONO } = useTheme();
   const REPORTS = reports;
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  const exportReport = useCallback((format: "csv" | "json") => {
+    let content = "";
+    let filename = "";
+
+    if (rptTab === "timing" && REPORTS.timing) {
+      const t = REPORTS.timing;
+      if (format === "json") {
+        content = JSON.stringify(t, null, 2);
+        filename = "timing_report.json";
+      } else {
+        const rows = [
+          ["Metric", "Value"],
+          ["Fmax", t.summary.fmax],
+          ["Target", t.summary.target],
+          ["WNS", t.summary.wns],
+          ["TNS", t.summary.tns],
+          ["WHS", t.summary.whs],
+          ["THS", t.summary.ths],
+          ["Failing Paths", String(t.summary.failingPaths)],
+          ["Total Paths", String(t.summary.totalPaths)],
+          ["Clocks", String(t.summary.clocks)],
+          ...t.clocks.map((c) => [`Clock: ${c.name}`, `${c.freq} (${c.wns})`]),
+          ...t.criticalPaths.map((p) => [`Path: ${p.from} → ${p.to}`, `${p.slack} (${p.levels} levels)`]),
+        ];
+        content = rows.map((r) => r.join(",")).join("\n");
+        filename = "timing_report.csv";
+      }
+    } else if (rptTab === "util" && REPORTS.utilization) {
+      const u = REPORTS.utilization;
+      if (format === "json") {
+        content = JSON.stringify(u, null, 2);
+        filename = "utilization_report.json";
+      } else {
+        const rows = [
+          ["Category", "Resource", "Used", "Total", "Percentage"],
+          ...u.summary.flatMap((cat) =>
+            cat.items.map((i) => [cat.cat, i.r, String(i.used), String(i.total), i.detail])
+          ),
+        ];
+        content = rows.map((r) => r.join(",")).join("\n");
+        filename = "utilization_report.csv";
+      }
+    } else if (rptTab === "power" && REPORTS.power) {
+      if (format === "json") {
+        content = JSON.stringify(REPORTS.power, null, 2);
+        filename = "power_report.json";
+      } else {
+        const rows = [
+          ["Category", "mW", "%"],
+          ...REPORTS.power.breakdown.map((b) => [b.cat, String(b.mw), String(b.pct)]),
+        ];
+        content = rows.map((r) => r.join(",")).join("\n");
+        filename = "power_report.csv";
+      }
+    } else if (rptTab === "drc" && REPORTS.drc) {
+      if (format === "json") {
+        content = JSON.stringify(REPORTS.drc, null, 2);
+        filename = "drc_report.json";
+      } else {
+        const rows = [
+          ["Severity", "Code", "Message", "Location", "Action"],
+          ...REPORTS.drc.items.map((d) => [d.sev, d.code, d.msg, d.loc, d.action]),
+        ];
+        content = rows.map((r) => r.join(",")).join("\n");
+        filename = "drc_report.csv";
+      }
+    } else {
+      return;
+    }
+
+    const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportMsg(`Exported ${filename}`);
+    setTimeout(() => setExportMsg(null), 2000);
+  }, [rptTab, REPORTS]);
 
   const panel: React.CSSProperties = {
     background: C.s1,
@@ -153,6 +270,10 @@ export default function ReportViewer({
       </div>
     );
   }
+
+  // Check for constraint issues
+  const hasUnconstrainedClocks = REPORTS.timing && REPORTS.timing.clocks.length === 0 && REPORTS.timing.summary.totalPaths > 0;
+  const hasTimingFailures = REPORTS.timing && REPORTS.timing.summary.failingPaths > 0;
 
   // ── Tab definitions: analysis + stage logs ──
   const analysisTabs: { id: ReportTab; l: string; c?: string }[] = [
@@ -180,18 +301,24 @@ export default function ReportViewer({
     { id: "bitstream", l: "Bitstream" },
   ];
 
+  // Determine if export is available for current tab
+  const canExport = (rptTab === "timing" && !!REPORTS.timing) ||
+    (rptTab === "util" && !!REPORTS.utilization) ||
+    (rptTab === "power" && !!REPORTS.power) ||
+    (rptTab === "drc" && !!REPORTS.drc);
+
   return (
     <div
       style={{
         display: "flex", flexDirection: "column", gap: 12,
-        height: "calc(100vh - 120px)",
+        height: "100%", overflow: "hidden",
       }}
     >
       {/* ── Tab bar ── */}
       <div
         style={{
           display: "flex", gap: 1, background: C.s1, borderRadius: 7,
-          border: `1px solid ${C.b1}`, padding: 3, flexWrap: "wrap",
+          border: `1px solid ${C.b1}`, padding: 3, flexWrap: "wrap", flexShrink: 0,
         }}
       >
         {analysisTabs.map((t) => (
@@ -229,341 +356,425 @@ export default function ReportViewer({
             {t.l}
           </button>
         ))}
+        {/* Export buttons — available on all data tabs */}
+        {canExport && (
+          <>
+            <div style={{ flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              {exportMsg && (
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
+              )}
+              <Btn small onClick={() => exportReport("csv")}><Download /> CSV</Btn>
+              <Btn small onClick={() => exportReport("json")}><Download /> JSON</Btn>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ════════════════ TIMING REPORT ════════════════ */}
-      {rptTab === "timing" && !REPORTS.timing && <NoData label="timing" />}
-      {rptTab === "timing" && REPORTS.timing && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          {/* Hero card */}
-          <div style={{
-            background: `linear-gradient(135deg, ${C.s1}, ${REPORTS.timing.summary.failingPaths === 0 ? C.okDim : C.errDim})`,
-            borderRadius: 8, border: `1px solid ${REPORTS.timing.summary.failingPaths === 0 ? `${C.ok}30` : `${C.err}30`}`,
-            padding: 18,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <Clock />
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Timing Analysis</span>
-              <Badge color={REPORTS.timing.summary.failingPaths === 0 ? C.ok : C.err} style={{ fontSize: 10, padding: "3px 10px" }}>
-                {REPORTS.timing.summary.status}
-              </Badge>
-              <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-                {REPORTS.timing.generated} &mdash; {REPORTS.timing.tool}
-              </span>
-            </div>
-
-            {/* 4 metric cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-              {[
-                { l: "Fmax Achieved", v: REPORTS.timing.summary.fmax, c: C.ok },
-                { l: "Target", v: REPORTS.timing.summary.target, c: C.t2 },
-                { l: "Margin", v: REPORTS.timing.summary.margin, c: C.ok },
-                { l: "Failing Paths", v: `${REPORTS.timing.summary.failingPaths} / ${REPORTS.timing.summary.totalPaths}`, c: REPORTS.timing.summary.failingPaths > 0 ? C.err : C.ok },
-              ].map((m, i) => (
-                <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
-                  <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 4, letterSpacing: 0.8 }}>{m.l}</div>
-                  <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* 4 slack cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 10 }}>
-              {[
-                { l: "WNS (Setup)", v: REPORTS.timing.summary.wns },
-                { l: "TNS", v: REPORTS.timing.summary.tns },
-                { l: "WHS (Hold)", v: REPORTS.timing.summary.whs },
-                { l: "THS", v: REPORTS.timing.summary.ths },
-              ].map((m, i) => (
-                <div key={i} style={{ padding: 8, background: C.bg, borderRadius: 5, border: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                  <span style={{ color: C.t3 }}>{m.l}: </span>
-                  <span style={{ color: parseFloat(m.v) >= 0 ? C.ok : C.err, fontWeight: 700 }}>{m.v}</span>
-                </div>
-              ))}
-            </div>
+      {/* ── Constraint warnings banner ── */}
+      {(rptTab === "timing" || rptTab === "par") && (hasUnconstrainedClocks || hasTimingFailures) && (
+        <div style={{
+          background: hasTimingFailures ? C.errDim : C.warnDim,
+          borderRadius: 6,
+          border: `1px solid ${hasTimingFailures ? `${C.err}40` : `${C.warn}40`}`,
+          padding: "8px 14px",
+          display: "flex", alignItems: "center", gap: 8,
+          flexShrink: 0,
+        }}>
+          <Warn />
+          <div style={{ fontSize: 10, fontFamily: MONO, flex: 1 }}>
+            {hasUnconstrainedClocks && (
+              <div style={{ color: C.warn, fontWeight: 700 }}>
+                {"\u26A0"} No clock constraints detected. All clocks may be unconstrained. Add an SDC/PDC file with create_clock commands.
+              </div>
+            )}
+            {hasTimingFailures && (
+              <div style={{ color: C.err, fontWeight: 700 }}>
+                {"\u2717"} Timing FAILED: {REPORTS.timing!.summary.failingPaths} path(s) with negative slack (WNS: {REPORTS.timing!.summary.wns})
+              </div>
+            )}
           </div>
-
-          {/* Clock Domains */}
-          <Collapsible title="Clock Domains" icon={<Clock />} defaultOpen={false}>
-            <div style={{ display: "grid", gridTemplateColumns: "140px 90px 80px 120px 60px 60px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 0.8, borderBottom: `1px solid ${C.b1}` }}>
-              <span>CLOCK</span><span>PERIOD</span><span>FREQUENCY</span><span>SOURCE</span><span>WNS</span><span>PATHS</span>
-            </div>
-            {REPORTS.timing.clocks.map((ck, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "140px 90px 80px 120px 60px 60px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}` }}>
-                <span style={{ color: C.cyan, fontWeight: 600 }}>{ck.name}</span>
-                <span style={{ color: C.t2 }}>{ck.period}</span>
-                <span style={{ color: C.t1, fontWeight: 600 }}>{ck.freq}</span>
-                <span style={{ color: C.t3 }}>{ck.source}</span>
-                <span style={{ color: C.ok, fontWeight: 600 }}>{ck.wns}</span>
-                <span style={{ color: C.t3 }}>{ck.paths}</span>
-              </div>
-            ))}
-          </Collapsible>
-
-          {/* Critical Paths */}
-          <Collapsible title={<>Critical Paths &mdash; Setup <Badge color={C.t3}>{REPORTS.timing.criticalPaths.length} shown</Badge></>} icon={<Warn />} defaultOpen={false}>
-            {REPORTS.timing.criticalPaths.map((p, i) => (
-              <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${parseFloat(p.slack) < 1 ? C.warn : C.ok}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color: C.t3, width: 20 }}>#{p.rank}</span>
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: C.cyan, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.from}</span>
-                  <Arrow />
-                  <span style={{ fontSize: 10, fontFamily: MONO, color: C.cyan, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.to}</span>
-                </div>
-                <div style={{ display: "flex", gap: 10, fontSize: 9, fontFamily: MONO }}>
-                  <span><span style={{ color: C.t3 }}>Slack: </span><span style={{ color: parseFloat(p.slack) < 1 ? C.warn : C.ok, fontWeight: 700 }}>{p.slack}</span></span>
-                  <span><span style={{ color: C.t3 }}>Req: </span><span style={{ color: C.t2 }}>{p.req}</span></span>
-                  <span><span style={{ color: C.t3 }}>Delay: </span><span style={{ color: C.t2 }}>{p.delay}</span></span>
-                  <span><span style={{ color: C.t3 }}>Levels: </span><span style={{ color: C.t2 }}>{p.levels}</span></span>
-                  <span><span style={{ color: C.t3 }}>Clock: </span><span style={{ color: C.cyan }}>{p.clk}</span></span>
-                </div>
-                <div style={{ marginTop: 6, height: 3, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 2, width: `${(parseFloat(p.delay) / parseFloat(p.req)) * 100}%`, background: `linear-gradient(90deg, ${C.accent}, ${parseFloat(p.slack) < 1 ? C.warn : C.ok})` }} />
-                </div>
-              </div>
-            ))}
-          </Collapsible>
-
-          {/* Hold Analysis */}
-          {REPORTS.timing.holdPaths.length > 0 && (
-            <Collapsible title="Hold Analysis (worst paths)" defaultOpen={false}>
-              {REPORTS.timing.holdPaths.map((p, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}` }}>
-                  <span style={{ color: C.t3 }}>#{p.rank}</span>
-                  <span style={{ color: C.cyan, flex: 1 }}>{p.from} &rarr; {p.to}</span>
-                  <Badge color={parseFloat(p.slack) < 0.1 ? C.warn : C.ok}>{p.slack}</Badge>
-                </div>
-              ))}
-            </Collapsible>
-          )}
-
-          {/* Unconstrained Paths */}
-          {REPORTS.timing.unconstrained.length > 0 && (
-            <div style={{ ...panelP, borderLeft: `3px solid ${C.warn}` }}>
-              {hdr("Unconstrained Paths", <Warn />)}
-              {REPORTS.timing.unconstrained.map((u, i) => (
-                <div key={i} style={{ fontSize: 10, fontFamily: MONO, color: C.warn, padding: "4px 0" }}>{u}</div>
-              ))}
-            </div>
-          )}
-
-          <RawLogDrawer projectDir={projectDir} reportType="timing" />
         </div>
       )}
 
-      {/* ════════════════ UTILIZATION REPORT ════════════════ */}
-      {rptTab === "util" && !REPORTS.utilization && <NoData label="utilization" />}
-      {rptTab === "util" && REPORTS.utilization && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Gauge />
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Resource Utilization</span>
-              <Badge color={C.accent}>{REPORTS.utilization.device}</Badge>
-            </div>
-            {REPORTS.utilization.summary.map((cat, ci) => (
-              <div key={ci} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 6 }}>
-                  {cat.cat.toUpperCase()}
+      {/* ── Scrollable content area ── */}
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        display: "flex", flexDirection: "column", gap: 12,
+        scrollbarWidth: "thin", scrollbarColor: `${C.b2} ${C.bg}`,
+      }}>
+
+        {/* ════════════════ TIMING REPORT ════════════════ */}
+        {rptTab === "timing" && !REPORTS.timing && <NoData label="timing" />}
+        {rptTab === "timing" && REPORTS.timing && (() => {
+          const t = REPORTS.timing!;
+          return (
+            <>
+              {/* Hero card */}
+              <div style={{
+                background: `linear-gradient(135deg, ${C.s1}, ${t.summary.failingPaths === 0 ? C.okDim : C.errDim})`,
+                borderRadius: 8, border: `1px solid ${t.summary.failingPaths === 0 ? `${C.ok}30` : `${C.err}30`}`,
+                padding: 18,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <Clock />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Timing Analysis</span>
+                  <Badge color={t.summary.failingPaths === 0 ? C.ok : C.err} style={{ fontSize: 10, padding: "3px 10px" }}>
+                    {t.summary.status}
+                  </Badge>
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+                    {t.generated} {"\u2014"} {t.tool}
+                  </span>
                 </div>
-                {cat.items.map((r, ri) => {
-                  const pct = Math.round((r.used / r.total) * 100);
-                  const col = pct > 85 ? C.err : pct > 65 ? C.warn : C.accent;
-                  return (
-                    <div key={ri} style={{ marginBottom: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, fontFamily: MONO, marginBottom: 3 }}>
-                        <span style={{ color: C.t1, fontWeight: 600 }}>{r.r}</span>
-                        <span style={{ color: col, fontWeight: 600 }}>{r.used.toLocaleString()} / {r.total.toLocaleString()} ({pct}%)</span>
+
+                {/* 4 metric cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                  {[
+                    { l: "Fmax Achieved", v: t.summary.fmax, c: C.ok },
+                    { l: "Target", v: t.summary.target, c: C.t2 },
+                    { l: "Margin", v: t.summary.margin, c: C.ok },
+                    { l: "Failing Paths", v: `${t.summary.failingPaths} / ${t.summary.totalPaths}`, c: t.summary.failingPaths > 0 ? C.err : C.ok },
+                  ].map((m, i) => (
+                    <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
+                      <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 4, letterSpacing: 0.8 }}>{m.l}</div>
+                      <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 4 slack cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 10 }}>
+                  {[
+                    { l: "WNS (Setup)", v: t.summary.wns },
+                    { l: "TNS", v: t.summary.tns },
+                    { l: "WHS (Hold)", v: t.summary.whs },
+                    { l: "THS", v: t.summary.ths },
+                  ].map((m, i) => (
+                    <div key={i} style={{ padding: 8, background: C.bg, borderRadius: 5, border: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                      <span style={{ color: C.t3 }}>{m.l}: </span>
+                      <span style={{ color: parseFloat(m.v) >= 0 ? C.ok : C.err, fontWeight: 700 }}>{m.v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Clock Domains */}
+              <Collapsible title={<>Clock Domains <Badge color={t.clocks.length === 0 ? C.warn : C.t3}>{t.clocks.length === 0 ? "NONE — may be unconstrained" : `${t.clocks.length} clock(s)`}</Badge></>} icon={<Clock />} defaultOpen={t.clocks.length === 0}>
+                {t.clocks.length === 0 ? (
+                  <div style={{ padding: "10px 0", fontSize: 10, fontFamily: MONO, color: C.warn }}>
+                    {"\u26A0"} No constrained clocks found. Add SDC constraints (create_clock) to get accurate timing.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 1fr 60px 60px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 0.8, borderBottom: `1px solid ${C.b1}` }}>
+                      <span>CLOCK</span><span>PERIOD</span><span>FREQUENCY</span><span>SOURCE</span><span>WNS</span><span>PATHS</span>
+                    </div>
+                    {t.clocks.map((ck, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 1fr 60px 60px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}` }}>
+                        <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ck.name}</span>
+                        <span style={{ color: C.t2 }}>{ck.period}</span>
+                        <span style={{ color: C.t1, fontWeight: 600 }}>{ck.freq}</span>
+                        <span style={{ color: C.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ck.source}</span>
+                        <span style={{ color: parseFloat(ck.wns) >= 0 ? C.ok : C.err, fontWeight: 600 }}>{ck.wns}</span>
+                        <span style={{ color: C.t3 }}>{ck.paths}</span>
                       </div>
-                      <div style={{ height: 6, borderRadius: 3, background: C.b1, overflow: "hidden", marginBottom: 2 }}>
-                        <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: `linear-gradient(90deg,${col}88,${col})` }} />
-                      </div>
-                      {r.detail && <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>{r.detail}</div>}
+                    ))}
+                  </>
+                )}
+              </Collapsible>
+
+              {/* Critical Paths */}
+              <Collapsible title={<>Critical Paths {"\u2014"} Setup <Badge color={C.t3}>{t.criticalPaths.length} shown</Badge></>} icon={<Warn />} defaultOpen={false}>
+                {t.criticalPaths.map((p, i) => (
+                  <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${parseFloat(p.slack) < 1 ? C.warn : C.ok}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                      <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color: C.t3, width: 20 }}>#{p.rank}</span>
+                      <span style={{ fontSize: 10, fontFamily: MONO, color: C.cyan, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.from}</span>
+                      <Arrow />
+                      <span style={{ fontSize: 10, fontFamily: MONO, color: C.cyan, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.to}</span>
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <Collapsible title="Utilization by Module" defaultOpen={false}>
-            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
-              <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
-            </div>
-            {REPORTS.utilization.byModule.map((m, i) => {
-              const pct = parseFloat(m.pct);
-              return (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "140px 1fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
-                  <span style={{ color: C.cyan, fontWeight: 600 }}>{m.module}</span>
-                  <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
-                  </div>
-                  <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
-                  <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
-                  <span style={{ color: C.t3 }}>{m.ebr}</span>
-                  <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
-                </div>
-              );
-            })}
-          </Collapsible>
-
-          <RawLogDrawer projectDir={projectDir} reportType="map" />
-        </div>
-      )}
-
-      {/* ════════════════ POWER REPORT ════════════════ */}
-      {rptTab === "power" && !REPORTS.power && <NoData label="power" />}
-      {rptTab === "power" && REPORTS.power && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.warnDim})` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Bolt />
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Power Estimation</span>
-              <Badge color={C.warn}>{REPORTS.power.confidence}</Badge>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
-              {[
-                { l: "Total Power", v: REPORTS.power.total, c: C.warn },
-                { l: "Junction Temp", v: REPORTS.power.junction, c: C.t1 },
-                { l: "Ambient", v: REPORTS.power.ambient, c: C.t2 },
-                { l: "\u0398_JA", v: REPORTS.power.theta_ja, c: C.t3 },
-              ].map((m, i) => (
-                <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
-                  <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 3 }}>{m.l}</div>
-                  <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 24, borderRadius: 6, overflow: "hidden", display: "flex", marginBottom: 10 }}>
-              {REPORTS.power.breakdown.map((b, i) => (
-                <div key={i} style={{ width: `${b.pct}%`, background: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontFamily: MONO, color: "#fff", fontWeight: 700 }}>
-                  {b.pct > 8 ? `${b.pct}%` : ""}
-                </div>
-              ))}
-            </div>
-            {REPORTS.power.breakdown.map((b, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: b.color, flexShrink: 0 }} />
-                <span style={{ color: C.t1, flex: 1 }}>{b.cat}</span>
-                <span style={{ color: b.color, fontWeight: 700 }}>{b.mw} mW</span>
-                <span style={{ color: C.t3, width: 35, textAlign: "right" }}>{b.pct}%</span>
-              </div>
-            ))}
-          </div>
-          <Collapsible title="Power by Rail" defaultOpen={false}>
-            {REPORTS.power.byRail.map((r, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
-                <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
-              </div>
-            ))}
-          </Collapsible>
-        </div>
-      )}
-
-      {/* ════════════════ DRC REPORT ════════════════ */}
-      {rptTab === "drc" && !REPORTS.drc && <NoData label="DRC" />}
-      {rptTab === "drc" && REPORTS.drc && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", gap: 10 }}>
-            {[
-              { l: "Errors", v: REPORTS.drc.summary.errors, c: C.err },
-              { l: "Critical Warnings", v: REPORTS.drc.summary.critWarns, c: C.warn },
-              { l: "Warnings", v: REPORTS.drc.summary.warnings, c: C.orange },
-              { l: "Info", v: REPORTS.drc.summary.info, c: C.accent },
-              { l: "Waived", v: REPORTS.drc.summary.waived, c: C.t3 },
-            ].map((m, i) => (
-              <div key={i} style={{ flex: 1, padding: 10, background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${m.c}`, textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 700, color: m.v > 0 ? m.c : C.t3 }}>{m.v}</div>
-                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2 }}>{m.l}</div>
-              </div>
-            ))}
-          </div>
-          {REPORTS.drc.items.map((d, i) => {
-            const sevColors: Record<string, string> = { crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
-            const sevLabels: Record<string, string> = { crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
-            return (
-              <div key={i} style={{ padding: "10px 12px", background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${sevColors[d.sev] || C.t3}`, display: "flex", gap: 10 }}>
-                <Badge color={sevColors[d.sev] || C.t3} style={{ flexShrink: 0, alignSelf: "flex-start" }}>
-                  {sevLabels[d.sev] || d.sev}
-                </Badge>
-                <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
-                  <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
-                    <span style={{ color: sevColors[d.sev] || C.t3 }}>[{d.code}]</span> {d.msg}
-                  </div>
-                  <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
-                    {d.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {d.loc}</span>}
-                    <span>&rarr; {d.action}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ════════════════ I/O BANKING REPORT ════════════════ */}
-      {rptTab === "io" && !REPORTS.io && <NoData label="I/O banking" />}
-      {rptTab === "io" && REPORTS.io && REPORTS.utilization && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={panelP}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Pin />
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
-              <Badge color={C.accent}>{REPORTS.utilization.device}</Badge>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-              {REPORTS.io.banks.map((bk, i) => {
-                const pct = Math.round((bk.used / bk.total) * 100);
-                return (
-                  <div key={i} style={{ padding: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${pct > 80 ? C.warn : C.accent}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: C.t1 }}>Bank {bk.id}</span>
-                      <Badge color={C.cyan}>{bk.vccio}</Badge>
+                    <div style={{ display: "flex", gap: 10, fontSize: 9, fontFamily: MONO, flexWrap: "wrap" }}>
+                      <span><span style={{ color: C.t3 }}>Slack: </span><span style={{ color: parseFloat(p.slack) < 0 ? C.err : parseFloat(p.slack) < 1 ? C.warn : C.ok, fontWeight: 700 }}>{p.slack}</span></span>
+                      <span><span style={{ color: C.t3 }}>Req: </span><span style={{ color: C.t2 }}>{p.req}</span></span>
+                      <span><span style={{ color: C.t3 }}>Delay: </span><span style={{ color: C.t2 }}>{p.delay}</span></span>
+                      <span><span style={{ color: C.t3 }}>Levels: </span><span style={{ color: C.t2 }}>{p.levels}</span></span>
+                      <span><span style={{ color: C.t3 }}>Clock: </span><span style={{ color: C.cyan }}>{p.clk}</span></span>
                     </div>
-                    <div style={{ fontSize: 10, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>{bk.used}/{bk.total} pins ({pct}%)</div>
-                    <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden", marginBottom: 8 }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: pct > 80 ? C.warn : C.accent, borderRadius: 2 }} />
+                    <div style={{ marginTop: 6, height: 3, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
+                      <div style={{ height: "100%", borderRadius: 2, width: `${Math.min(100, (parseFloat(p.delay) / Math.max(0.01, parseFloat(p.req))) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${parseFloat(p.slack) < 0 ? C.err : parseFloat(p.slack) < 1 ? C.warn : C.ok})` }} />
                     </div>
-                    {bk.pins.map((p, pi) => {
-                      const [pin, net, dir] = p.split(" ");
-                      const dirColors: Record<string, string> = { IN: C.accent, OUT: C.ok, BIDIR: C.purple };
+                  </div>
+                ))}
+              </Collapsible>
+
+              {/* Hold Analysis */}
+              {t.holdPaths.length > 0 && (
+                <Collapsible title="Hold Analysis (worst paths)" defaultOpen={false}>
+                  {t.holdPaths.map((p, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}` }}>
+                      <span style={{ color: C.t3 }}>#{p.rank}</span>
+                      <span style={{ color: C.cyan, flex: 1 }}>{p.from} {"\u2192"} {p.to}</span>
+                      <Badge color={parseFloat(p.slack) < 0.1 ? C.warn : C.ok}>{p.slack}</Badge>
+                    </div>
+                  ))}
+                </Collapsible>
+              )}
+
+              {/* Unconstrained Paths */}
+              {t.unconstrained.length > 0 && (
+                <div style={{ ...panelP, borderLeft: `3px solid ${C.warn}` }}>
+                  {hdr("Unconstrained Paths", <Warn />)}
+                  {t.unconstrained.map((u, i) => (
+                    <div key={i} style={{ fontSize: 10, fontFamily: MONO, color: C.warn, padding: "4px 0" }}>{u}</div>
+                  ))}
+                </div>
+              )}
+
+              <RawLogDrawer projectDir={projectDir} reportType="timing" />
+            </>
+          );
+        })()}
+
+        {/* ════════════════ UTILIZATION REPORT ════════════════ */}
+        {rptTab === "util" && !REPORTS.utilization && <NoData label="utilization" />}
+        {rptTab === "util" && REPORTS.utilization && (() => {
+          const u = REPORTS.utilization!;
+          return (
+            <>
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Gauge />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Resource Utilization</span>
+                  <Badge color={C.accent}>{u.device}</Badge>
+                </div>
+                {u.summary.map((cat, ci) => (
+                  <div key={ci} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 6 }}>
+                      {cat.cat.toUpperCase()}
+                    </div>
+                    {cat.items.map((r, ri) => {
+                      const pct = r.total > 0 ? Math.round((r.used / r.total) * 100) : 0;
+                      const col = pct > 85 ? C.err : pct > 65 ? C.warn : C.accent;
                       return (
-                        <div key={pi} style={{ fontSize: 9, fontFamily: MONO, padding: "2px 0", display: "flex", gap: 4 }}>
-                          <span style={{ color: C.cyan, width: 28, flexShrink: 0 }}>{pin}</span>
-                          <span style={{ color: C.t1, flex: 1 }}>{net}</span>
-                          <span style={{ color: dirColors[dir] || C.t3, fontSize: 8 }}>{dir}</span>
+                        <div key={ri} style={{ marginBottom: 8 }} title={`${r.r}: ${r.used.toLocaleString()} used of ${r.total.toLocaleString()} available (${pct}%). ${r.detail || ""}`}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, fontFamily: MONO, marginBottom: 3 }}>
+                            <span style={{ color: C.t1, fontWeight: 600 }}>{r.r}</span>
+                            <span style={{ color: col, fontWeight: 600 }}>{r.used.toLocaleString()} / {r.total.toLocaleString()} ({pct}%)</span>
+                          </div>
+                          <div style={{ height: 6, borderRadius: 3, background: C.b1, overflow: "hidden", marginBottom: 2 }}>
+                            <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: `linear-gradient(90deg,${col}88,${col})` }} />
+                          </div>
+                          {r.detail && <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>{r.detail}</div>}
                         </div>
                       );
                     })}
                   </div>
+                ))}
+              </div>
+
+              <Collapsible title="Utilization by Module" defaultOpen={false}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
+                  <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
+                </div>
+                {u.byModule.map((m, i) => {
+                  const pct = parseFloat(m.pct);
+                  return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
+                      <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.module}</span>
+                      <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
+                      </div>
+                      <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
+                      <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
+                      <span style={{ color: C.t3 }}>{m.ebr}</span>
+                      <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
+                    </div>
+                  );
+                })}
+              </Collapsible>
+
+              <RawLogDrawer projectDir={projectDir} reportType="map" />
+            </>
+          );
+        })()}
+
+        {/* ════════════════ POWER REPORT ════════════════ */}
+        {rptTab === "power" && !REPORTS.power && <NoData label="power" />}
+        {rptTab === "power" && REPORTS.power && (() => {
+          const pw = REPORTS.power!;
+          return (
+            <>
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.warnDim})` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Bolt />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Power Estimation</span>
+                  <Badge color={C.warn}>{pw.confidence}</Badge>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                  {[
+                    { l: "Total Power", v: pw.total, c: C.warn },
+                    { l: "Junction Temp", v: pw.junction, c: C.t1 },
+                    { l: "Ambient", v: pw.ambient, c: C.t2 },
+                    { l: "\u0398_JA", v: pw.theta_ja, c: C.t3 },
+                  ].map((m, i) => (
+                    <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
+                      <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 3 }}>{m.l}</div>
+                      <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ height: 24, borderRadius: 6, overflow: "hidden", display: "flex", marginBottom: 10 }}>
+                  {pw.breakdown.map((b, i) => (
+                    <div key={i} style={{ width: `${b.pct}%`, background: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontFamily: MONO, color: "#fff", fontWeight: 700 }}>
+                      {b.pct > 8 ? `${b.pct}%` : ""}
+                    </div>
+                  ))}
+                </div>
+                {pw.breakdown.map((b, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: b.color, flexShrink: 0 }} />
+                    <span style={{ color: C.t1, flex: 1 }}>{b.cat}</span>
+                    <span style={{ color: b.color, fontWeight: 700 }}>{b.mw} mW</span>
+                    <span style={{ color: C.t3, width: 35, textAlign: "right" }}>{b.pct}%</span>
+                  </div>
+                ))}
+              </div>
+              <Collapsible title="Power by Rail" defaultOpen={false}>
+                {pw.byRail.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                    <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
+                    <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
+                  </div>
+                ))}
+              </Collapsible>
+            </>
+          );
+        })()}
+
+        {/* ════════════════ DRC REPORT ════════════════ */}
+        {rptTab === "drc" && !REPORTS.drc && <NoData label="DRC" />}
+        {rptTab === "drc" && REPORTS.drc && (() => {
+          const d = REPORTS.drc!;
+          return (
+            <>
+              <div style={{ display: "flex", gap: 10 }}>
+                {[
+                  { l: "Errors", v: d.summary.errors, c: C.err },
+                  { l: "Critical Warnings", v: d.summary.critWarns, c: C.warn },
+                  { l: "Warnings", v: d.summary.warnings, c: C.orange },
+                  { l: "Info", v: d.summary.info, c: C.accent },
+                  { l: "Waived", v: d.summary.waived, c: C.t3 },
+                ].map((m, i) => (
+                  <div key={i} style={{ flex: 1, padding: 10, background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${m.c}`, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 700, color: m.v > 0 ? m.c : C.t3 }}>{m.v}</div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2 }}>{m.l}</div>
+                  </div>
+                ))}
+              </div>
+              {d.items.map((item, i) => {
+                const sevColors: Record<string, string> = { crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
+                const sevLabels: Record<string, string> = { crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
+                return (
+                  <div key={i} style={{ padding: "10px 12px", background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${sevColors[item.sev] || C.t3}`, display: "flex", gap: 10 }}>
+                    <Badge color={sevColors[item.sev] || C.t3} style={{ flexShrink: 0, alignSelf: "flex-start" }}>
+                      {sevLabels[item.sev] || item.sev}
+                    </Badge>
+                    <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
+                      <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
+                        <span style={{ color: sevColors[item.sev] || C.t3 }}>[{item.code}]</span> {item.msg}
+                      </div>
+                      <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
+                        {item.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {item.loc}</span>}
+                        <span>{"\u2192"} {item.action}</span>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
-            </div>
-          </div>
-        </div>
-      )}
+            </>
+          );
+        })()}
 
-      {/* ════════════════ STAGE LOG TABS ════════════════ */}
-      {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={panelP}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>
+        {/* ════════════════ I/O BANKING REPORT ════════════════ */}
+        {rptTab === "io" && !REPORTS.io && <NoData label="I/O banking" />}
+        {rptTab === "io" && REPORTS.io && REPORTS.utilization && (() => {
+          const io = REPORTS.io!;
+          return (
+            <div style={panelP}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Pin />
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
+                <Badge color={C.accent}>{REPORTS.utilization!.device}</Badge>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+                {io.banks.map((bk, i) => {
+                  const pct = bk.total > 0 ? Math.round((bk.used / bk.total) * 100) : 0;
+                  return (
+                    <div key={i} style={{ padding: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${pct > 80 ? C.warn : C.accent}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: C.t1 }}>Bank {bk.id}</span>
+                        <Badge color={C.cyan}>{bk.vccio}</Badge>
+                      </div>
+                      <div style={{ fontSize: 10, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>{bk.used}/{bk.total} pins ({pct}%)</div>
+                      <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden", marginBottom: 8 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: pct > 80 ? C.warn : C.accent, borderRadius: 2 }} />
+                      </div>
+                      {bk.pins.map((p, pi) => {
+                        const [pin, net, dir] = p.split(" ");
+                        const dirColors: Record<string, string> = { IN: C.accent, OUT: C.ok, BIDIR: C.purple };
+                        return (
+                          <div key={pi} style={{ fontSize: 9, fontFamily: MONO, padding: "2px 0", display: "flex", gap: 4 }}>
+                            <span style={{ color: C.cyan, width: 28, flexShrink: 0 }}>{pin}</span>
+                            <span style={{ color: C.t1, flex: 1 }}>{net}</span>
+                            <span style={{ color: dirColors[dir] || C.t3, fontSize: 8 }}>{dir}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ════════════════ STAGE LOG TABS ════════════════ */}
+        {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
+          <div style={{
+            ...panel,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+          }}>
+            <div style={{
+              padding: "10px 14px",
+              borderBottom: `1px solid ${C.b1}`,
+              display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>
                 {rptTab === "synth" ? "Synthesis Report" :
                  rptTab === "map" ? "Map Report" :
                  rptTab === "par" ? "Place & Route Report" :
                  "Bitstream Report"}
               </span>
+              <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+                Raw vendor output from impl1/
+              </span>
             </div>
-            <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, marginBottom: 8 }}>
-              Expand the raw log below to view the full report file from impl1/.
+            <div style={{
+              flex: 1,
+              overflowY: "auto",
+              overflowX: "hidden",
+              scrollbarWidth: "thin",
+              scrollbarColor: `${C.b2} ${C.bg}`,
+            }}>
+              <RawLogViewer projectDir={projectDir} reportType={rptTab} />
             </div>
           </div>
-          <RawLogDrawer projectDir={projectDir} reportType={rptTab} />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

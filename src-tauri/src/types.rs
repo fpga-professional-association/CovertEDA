@@ -261,6 +261,7 @@ pub enum FileType {
 // ── Git Status ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitStatus {
     pub branch: String,
     pub commit_hash: String,

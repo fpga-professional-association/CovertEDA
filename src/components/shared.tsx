@@ -1,4 +1,4 @@
-import React, { useState, ReactNode } from "react";
+import React, { useState, useRef, useEffect, useCallback, ReactNode } from "react";
 import { useTheme } from "../context/ThemeContext";
 
 // ── Badge ──
@@ -222,6 +222,115 @@ export function Input({
         ...sx,
       }}
     />
+  );
+}
+
+// ── Custom Select Dropdown ──
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  style: sx,
+  compact,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  style?: React.CSSProperties;
+  compact?: boolean;
+}) {
+  const { C, MONO } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [hIdx, setHIdx] = useState(-1);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => { setOpen(false); setHIdx(-1); }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open, close]);
+
+  const selected = options.find((o) => o.value === value);
+  const fontSize = compact ? 8 : 9;
+  const pad = compact ? "2px 6px" : "3px 8px";
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block", ...sx }}>
+      <div
+        onClick={() => setOpen((p) => !p)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 4,
+          padding: pad,
+          borderRadius: 3,
+          border: `1px solid ${open ? C.accent : C.b1}`,
+          background: C.s1,
+          color: selected ? C.t1 : C.t3,
+          fontFamily: MONO,
+          fontSize,
+          fontWeight: 600,
+          cursor: "pointer",
+          minWidth: compact ? 80 : 100,
+          transition: "border-color .1s",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          {selected ? selected.label : (placeholder ?? "Select...")}
+        </span>
+        <span style={{ fontSize: 6, color: C.t3, flexShrink: 0 }}>{open ? "\u25B2" : "\u25BC"}</span>
+      </div>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            minWidth: "100%",
+            width: "max-content",
+            maxHeight: 200,
+            overflowY: "auto",
+            background: C.s1,
+            border: `1px solid ${C.b1}`,
+            borderRadius: 4,
+            marginTop: 2,
+            zIndex: 999,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          {options.map((o, i) => (
+            <div
+              key={o.value}
+              onMouseEnter={() => setHIdx(i)}
+              onMouseLeave={() => setHIdx(-1)}
+              onClick={() => { onChange(o.value); close(); }}
+              style={{
+                padding: pad,
+                fontSize,
+                fontFamily: MONO,
+                fontWeight: 600,
+                color: o.value === value ? C.accent : C.t1,
+                background: hIdx === i ? C.s3 : "transparent",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
