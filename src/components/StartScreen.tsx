@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { RecentProject, ProjectConfig, BackendMeta, ExampleProject, DetectedTool, LicenseCheckResult } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
-import { Chip, Zap, Key } from "./Icons";
+import { Chip, Zap, Key, Settings } from "./Icons";
 import { BACKEND_META, EXAMPLE_PROJECTS } from "../data/mockData";
 import {
   getRecentProjects,
@@ -34,8 +34,10 @@ function backendMeta(id: string): BackendMeta {
 
 export default function StartScreen({
   onOpenProject,
+  onOpenSettings,
 }: {
   onOpenProject: (dir: string, config: ProjectConfig) => void;
+  onOpenSettings?: () => void;
 }) {
   const { C, MONO, SANS } = useTheme();
   const [recents, setRecents] = useState<RecentProject[]>([]);
@@ -138,6 +140,30 @@ export default function StartScreen({
           CovertEDA
         </span>
         <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.1.0</span>
+        <div style={{ flex: 1 }} />
+        {onOpenSettings && (
+          <span
+            onClick={onOpenSettings}
+            style={{
+              cursor: "pointer",
+              color: C.t3,
+              padding: "4px 8px",
+              borderRadius: 4,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 9,
+              fontFamily: MONO,
+              fontWeight: 600,
+              transition: "color .1s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+          >
+            <Settings />
+            Settings
+          </span>
+        )}
       </div>
 
       <div

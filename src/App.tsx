@@ -491,7 +491,12 @@ export default function App() {
 
   // ── Start Screen ──
   if (view === "start") {
-    return <StartScreen onOpenProject={handleOpenProject} />;
+    return (
+      <>
+        <StartScreen onOpenProject={handleOpenProject} onOpenSettings={() => setSettingsOpen(true)} />
+        {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      </>
+    );
   }
 
   // ── IDE ──
@@ -975,21 +980,54 @@ export default function App() {
               </div>
             )}
 
-            {/* Placeholder sections */}
-            {["ip", "interconnect", "ai", "regmap"].includes(sec) && !viewingFile && (
+            {/* IP Catalog */}
+            {sec === "ip" && !viewingFile && (
               <div style={panelP}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: C.t1,
-                    marginBottom: 10,
-                  }}
-                >
-                  {sec.charAt(0).toUpperCase() + sec.slice(1)}
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Box />
+                  IP Catalog
                 </div>
                 <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
-                  Coming soon.
+                  No IP cores in this project. Use your vendor tool to generate IP, then refresh the file tree.
+                </div>
+              </div>
+            )}
+
+            {/* Interconnect */}
+            {sec === "interconnect" && !viewingFile && (
+              <div style={panelP}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Link />
+                  Interconnect View
+                </div>
+                <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
+                  Run a build to generate interconnect data. Block-level routing visualization will appear here.
+                </div>
+              </div>
+            )}
+
+            {/* AI Assistant */}
+            {sec === "ai" && !viewingFile && (
+              <div style={panelP}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Brain />
+                  AI Assistant
+                </div>
+                <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
+                  Ask questions about your design, timing constraints, or build errors. Configure an API key in Settings to enable.
+                </div>
+              </div>
+            )}
+
+            {/* Register Map */}
+            {sec === "regmap" && !viewingFile && (
+              <div style={panelP}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                  <MapIcon />
+                  Register Map
+                </div>
+                <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
+                  No register map defined. Add a register description file (.rdl, .json) to your project.
                 </div>
               </div>
             )}
