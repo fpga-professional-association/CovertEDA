@@ -274,7 +274,7 @@ export type Section =
   | "console"
   | "license";
 
-export type ReportTab = "timing" | "util" | "power" | "drc" | "io";
+export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream";
 
 // ── Project Config (.coverteda) ──
 export interface ProjectConfig {

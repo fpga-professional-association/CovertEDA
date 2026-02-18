@@ -82,6 +82,11 @@ export async function getUtilizationReport(backendId: string, implDir: string) {
   return invoke<RustResourceReport>("get_utilization_report", { backendId, implDir });
 }
 
+export async function getRawReport(projectDir: string, reportType: string): Promise<string> {
+  if (!isTauri) return `[Mock] No raw ${reportType} report in browser mode.`;
+  return invoke<string>("get_raw_report", { projectDir, reportType });
+}
+
 // ── Runtime backend loading ──
 
 interface RustBackendInfo {

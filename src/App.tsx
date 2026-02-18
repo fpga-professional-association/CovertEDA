@@ -911,6 +911,7 @@ export default function App() {
                   io: null,
                 }}
                 device={project?.device ?? B.defaultDev}
+                projectDir={projectDir}
               />
             )}
 

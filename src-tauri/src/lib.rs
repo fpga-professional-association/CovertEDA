@@ -50,6 +50,7 @@ pub fn run() {
             commands::get_app_config,
             commands::save_app_config,
             commands::check_sources_stale,
+            commands::get_raw_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

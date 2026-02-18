@@ -931,6 +931,52 @@ fn uuid_v4() -> String {
     format!("{:x}", t)
 }
 
+// ── Raw report file reading ──
+
+#[tauri::command]
+pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String, String> {
+    let impl_dir = PathBuf::from(&project_dir).join("impl1");
+    if !impl_dir.exists() {
+        return Err("No impl1 directory found".to_string());
+    }
+
+    // Find the appropriate report file by extension
+    let ext = match report_type.as_str() {
+        "synth" => "srr",
+        "map" => "mrp",
+        "par" => "par",
+        "bitstream" => "bgn",
+        "timing" => "twr",
+        _ => return Err(format!("Unknown report type: {}", report_type)),
+    };
+
+    // Also check alternate names: .srp for synth, .rpt for par
+    let alternates: &[&str] = match report_type.as_str() {
+        "synth" => &["srr", "srp"],
+        "par" => &["par", "rpt"],
+        _ => &[ext],
+    };
+
+    for try_ext in alternates {
+        let found = std::fs::read_dir(&impl_dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path()
+                    .extension()
+                    .map(|x| x == *try_ext)
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path());
+
+        if let Some(path) = found {
+            return std::fs::read_to_string(&path).map_err(|e| e.to_string());
+        }
+    }
+
+    Err(format!("No .{} file found in impl1", ext))
+}
+
 // ── App Config commands ──
 
 #[tauri::command]

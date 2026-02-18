@@ -157,6 +157,37 @@ pub enum DrcSeverity {
     Waived,
 }
 
+// ── Synthesis Report ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SynthesisReport {
+    pub lut_count: u64,
+    pub reg_count: u64,
+    pub ram_count: u64,
+    pub dsp_count: u64,
+    pub fmax_estimate_mhz: f64,
+    pub cpu_time_secs: f64,
+    pub errors: u32,
+    pub warnings: u32,
+}
+
+// ── PAR Report ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParReport {
+    pub routing_pct: f64,
+    pub slice_used: u64,
+    pub slice_total: u64,
+    pub signals: u64,
+    pub connections: u64,
+    pub placement_time_secs: f64,
+    pub routing_time_secs: f64,
+    pub total_time_secs: f64,
+    pub peak_memory_mb: f64,
+    pub par_errors: u32,
+    pub run_status: String,
+}
+
 // ── Constraints ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
