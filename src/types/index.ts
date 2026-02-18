@@ -271,7 +271,8 @@ export type Section =
   | "regmap"
   | "constraints"
   | "resources"
-  | "console";
+  | "console"
+  | "license";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io";
 

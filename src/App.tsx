@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend } from "./types";
+import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult } from "./types";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar } from "./components/shared";
 import {
@@ -32,6 +32,7 @@ import {
   getRuntimeBackends,
   getAppConfig,
   deleteFile,
+  checkLicenses,
 } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
@@ -89,6 +90,8 @@ export default function App() {
   const [realUtilReport, setRealUtilReport] = useState<UtilizationReportData | null>(null);
   const [buildDone, setBuildDone] = useState(false);
   const [activeStage, setActiveStage] = useState<number | null>(null);
+  const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
+  const [licenseLoading, setLicenseLoading] = useState(false);
 
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
@@ -463,6 +466,16 @@ export default function App() {
     return () => window.removeEventListener("keydown", h);
   }, [view]);
 
+  // Load license info when license section opens
+  useEffect(() => {
+    if (sec === "license" && !licenseResult && !licenseLoading) {
+      setLicenseLoading(true);
+      checkLicenses()
+        .then(setLicenseResult)
+        .finally(() => setLicenseLoading(false));
+    }
+  }, [sec, licenseResult, licenseLoading]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -602,7 +615,7 @@ export default function App() {
           <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} />
           <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} />
           <div style={{ flex: 1 }} />
-          <NavBtn icon={<Key />} label="Lic" accent={C.warn} />
+          <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} />
           <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} />
           <div
             onClick={handleCloseProject}
@@ -871,6 +884,87 @@ export default function App() {
                 >
                   Open Full I/O Report {"\u2192"}
                 </Btn>
+              </div>
+            )}
+
+            {/* License Section */}
+            {sec === "license" && !viewingFile && (
+              <div style={panelP}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: C.t1,
+                    marginBottom: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <Key />
+                  License Status
+                </div>
+                {licenseLoading && (
+                  <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
+                    Checking licenses...
+                  </div>
+                )}
+                {licenseResult && (
+                  <>
+                    <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginBottom: 10 }}>
+                      {licenseResult.licenseFile
+                        ? `License file: ${licenseResult.licenseFile}`
+                        : "No license file found"}
+                    </div>
+                    {licenseResult.features.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {licenseResult.features.map((f, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 80px 100px 80px",
+                              gap: 8,
+                              padding: "5px 8px",
+                              borderRadius: 4,
+                              background: `${C.s2}`,
+                              fontSize: 9,
+                              fontFamily: MONO,
+                            }}
+                          >
+                            <span style={{ color: C.t1, fontWeight: 600 }}>{f.feature}</span>
+                            <span style={{ color: C.t3 }}>{f.vendor}</span>
+                            <span style={{ color: C.t3 }}>{f.expires}</span>
+                            <span
+                              style={{
+                                color: f.status === "active" ? C.ok : C.err,
+                                fontWeight: 600,
+                                textAlign: "right",
+                              }}
+                            >
+                              {f.status.toUpperCase()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
+                        No license features found.
+                      </div>
+                    )}
+                    <div style={{ marginTop: 10 }}>
+                      <Btn
+                        small
+                        onClick={() => {
+                          setLicenseResult(null);
+                          setLicenseLoading(false);
+                        }}
+                      >
+                        Refresh
+                      </Btn>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
