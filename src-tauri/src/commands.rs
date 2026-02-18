@@ -432,6 +432,39 @@ pub fn start_build(
 }
 
 #[tauri::command]
+pub fn clean_build(project_dir: String) -> Result<u32, String> {
+    let project_path = PathBuf::from(&project_dir);
+    let mut removed = 0u32;
+
+    // Remove impl directories (impl1/, impl2/, etc.)
+    if let Ok(entries) = std::fs::read_dir(&project_path) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("impl") && entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                if let Ok(_) = std::fs::remove_dir_all(entry.path()) {
+                    removed += 1;
+                }
+            }
+        }
+    }
+
+    // Remove build artifacts in project root
+    let artifacts = [
+        ".coverteda_build.tcl",
+        ".coverteda_build.log",
+    ];
+    for name in &artifacts {
+        let p = project_path.join(name);
+        if p.exists() {
+            let _ = std::fs::remove_file(&p);
+            removed += 1;
+        }
+    }
+
+    Ok(removed)
+}
+
+#[tauri::command]
 pub fn cancel_build(
     state: State<'_, AppState>,
     _build_id: String,

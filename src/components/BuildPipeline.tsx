@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
@@ -125,7 +126,7 @@ function PStep({
   );
 }
 
-export default function BuildPipeline({
+export default memo(function BuildPipeline({
   backend,
   building,
   buildStep,
@@ -254,4 +255,4 @@ export default function BuildPipeline({
       </div>
     </div>
   );
-}
+})

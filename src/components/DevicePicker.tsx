@@ -113,13 +113,13 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
             position: "absolute",
             top: "100%",
             left: 0,
-            right: 0,
+            minWidth: 460,
             zIndex: 100,
             background: C.s1,
             border: `1px solid ${C.b1}`,
             borderRadius: 6,
             marginTop: 2,
-            maxHeight: 280,
+            maxHeight: 320,
             overflowY: "auto",
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}
@@ -167,17 +167,17 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
                     }}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 50px 40px 40px",
-                      gap: 6,
-                      padding: "4px 10px",
-                      fontSize: 9,
+                      gridTemplateColumns: "1fr 60px 50px 80px",
+                      gap: 8,
+                      padding: "5px 12px",
+                      fontSize: 10,
                       fontFamily: MONO,
                       cursor: "pointer",
                       background: selected ? `${C.accent}10` : "transparent",
                       transition: "background .08s",
                     }}
                   >
-                    <span style={{ color: selected ? C.accent : C.t1, fontWeight: selected ? 600 : 400 }}>
+                    <span style={{ color: selected ? C.accent : C.t1, fontWeight: selected ? 600 : 400, whiteSpace: "nowrap" }}>
                       {d.partNumber}
                     </span>
                     <span style={{ color: C.t3, textAlign: "right" }}>
@@ -186,8 +186,8 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
                     <span style={{ color: C.t3, textAlign: "right" }}>
                       {d.io} I/O
                     </span>
-                    <span style={{ color: C.t3, textAlign: "right" }}>
-                      {d.package.replace(/[a-z]/g, "").slice(0, 5)}
+                    <span style={{ color: C.t3, textAlign: "right", whiteSpace: "nowrap" }}>
+                      {d.package}
                     </span>
                   </div>
                 );

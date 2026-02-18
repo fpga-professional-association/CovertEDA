@@ -52,6 +52,10 @@ export async function cancelBuild(buildId: string) {
   return invoke<void>("cancel_build", { buildId });
 }
 
+export async function cleanBuild(projectDir: string) {
+  return invoke<number>("clean_build", { projectDir });
+}
+
 export async function switchBackend(backendId: string) {
   return invoke<void>("switch_backend", { backendId });
 }

@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { ProjectFile } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 
 // ── FileTreeRow ──
 
-function FileTreeRow({
+const FileTreeRow = memo(function FileTreeRow({
   f,
   active,
   onPick,
@@ -125,6 +125,7 @@ function FileTreeRow({
         )}
         {/* File name */}
         <span
+          title={f.path ?? f.n}
           style={{
             color: active ? C.t1 : C.t2,
             overflow: "hidden",
@@ -193,7 +194,7 @@ function FileTreeRow({
       </span>
     </div>
   );
-}
+});
 
 // ── FileTree ──
 
@@ -202,9 +203,11 @@ interface FileTreeProps {
   activeFile: string;
   setActiveFile: (name: string, path?: string) => void;
   onFileContextMenu?: (file: ProjectFile, x: number, y: number) => void;
+  width: number;
+  onWidthChange: (w: number) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, width, onWidthChange }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -240,16 +243,53 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu }: FileT
     [files, activeFile],
   );
 
+  // Drag-to-resize logic
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startW = useRef(width);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startX.current = e.clientX;
+    startW.current = width;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [width]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = e.clientX - startX.current;
+      const newW = Math.max(160, Math.min(600, startW.current + delta));
+      onWidthChange(newW);
+    };
+    const onUp = () => {
+      if (dragging.current) {
+        dragging.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [onWidthChange]);
+
   return (
+    <div style={{ display: "flex", flexShrink: 0 }}>
     <div
       style={{
-        width: 230,
+        width,
         flexShrink: 0,
         background: C.s1,
-        borderRight: `1px solid ${C.b1}`,
         display: "flex",
         flexDirection: "column",
         fontSize: 10,
+        overflow: "hidden",
       }}
     >
       {/* File panel header */}
@@ -393,6 +433,20 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu }: FileT
           </div>
         </div>
       )}
+    </div>
+    {/* Resize handle */}
+    <div
+      onMouseDown={onMouseDown}
+      style={{
+        width: 4,
+        cursor: "col-resize",
+        background: "transparent",
+        flexShrink: 0,
+        borderRight: `1px solid ${C.b1}`,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${C.accent}40`; }}
+      onMouseLeave={(e) => { if (!dragging.current) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+    />
     </div>
   );
 }

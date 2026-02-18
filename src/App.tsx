@@ -33,6 +33,7 @@ import {
   getAppConfig,
   deleteFile,
   checkLicenses,
+  cleanBuild,
 } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -82,6 +83,7 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
+  const [fileTreeWidth, setFileTreeWidth] = useState(250);
   const [rptTab, setRptTab] = useState<ReportTab>("timing");
   const [gitExpanded, setGitExpanded] = useState(false);
   const [realFiles, setRealFiles] = useState<ProjectFile[] | null>(null);
@@ -441,6 +443,28 @@ export default function App() {
     }
   }, [B, bid, projectDir, startLogFlush, stopLogFlush, runMockBuild]);
 
+  const runCleanBuild = useCallback(async () => {
+    if (!isTauri || !projectDir) {
+      runBuild();
+      return;
+    }
+    setLogs([{ t: "info", m: "Cleaning build artifacts..." }]);
+    setSec("build");
+    setBuildDone(false);
+    setRealTimingReport(null);
+    setRealUtilReport(null);
+    try {
+      const removed = await cleanBuild(projectDir);
+      setLogs((p) => [...p, { t: "ok", m: `Cleaned ${removed} artifact(s)` }]);
+      // Refresh file tree after clean
+      getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+    } catch (err) {
+      setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}` }]);
+    }
+    // Now run the build
+    runBuild();
+  }, [projectDir, runBuild]);
+
   const handleFileClick = useCallback((name: string, path?: string) => {
     setAFile(name);
     if (path && isTauri) {
@@ -510,6 +534,7 @@ export default function App() {
 
   const commands = [
     { label: "Build All", category: "Build", desc: `${B.short} flow`, action: runBuild },
+    { label: "Clean Build", category: "Build", desc: "Delete artifacts, then rebuild", action: runCleanBuild },
     { label: "Reports", category: "View", desc: "Timing, Utilization, Power, DRC, I/O", action: () => navClick("reports") },
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
     ...backends.filter((b) => b.available).map((b) => ({
@@ -657,6 +682,8 @@ export default function App() {
             files={realFiles ?? emptyFiles}
             activeFile={aFile}
             setActiveFile={handleFileClick}
+            width={fileTreeWidth}
+            onWidthChange={setFileTreeWidth}
             onFileContextMenu={(file, x, y) => {
               const items: ContextMenuItem[] = file.ty === "folder"
                 ? [
@@ -760,6 +787,9 @@ export default function App() {
                 {"\u2318K"}
               </span>
             </div>
+            <Btn small onClick={runCleanBuild} disabled={building}>
+              Clean
+            </Btn>
             <Btn primary small icon={<Play />} onClick={runBuild} disabled={building}>
               {building ? "Building..." : "Build"}
             </Btn>

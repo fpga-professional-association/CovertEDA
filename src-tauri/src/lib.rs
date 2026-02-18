@@ -28,6 +28,7 @@ pub fn run() {
             commands::get_git_status,
             commands::start_build,
             commands::cancel_build,
+            commands::clean_build,
             commands::get_timing_report,
             commands::get_utilization_report,
             commands::switch_backend,

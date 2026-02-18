@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, memo } from "react";
 import { LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn } from "./shared";
@@ -22,7 +22,7 @@ const linePrefixes: Record<string, string> = {
   out: "  ",
 };
 
-export default function Console({
+export default memo(function Console({
   logs,
   building,
   backendShort,
@@ -152,4 +152,4 @@ export default function Console({
       </div>
     </div>
   );
-}
+})
