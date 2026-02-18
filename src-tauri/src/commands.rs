@@ -147,9 +147,10 @@ pub fn start_build(
     if backend_id == "radiant" {
         let radiant = crate::backend::radiant::RadiantBackend::new();
         if let Some(lic_path) = radiant.find_license() {
+            // Convert WSL path to Windows path for the Windows-native radiantc.exe
             env_vars.insert(
                 "LM_LICENSE_FILE".into(),
-                lic_path.display().to_string(),
+                wsl_to_windows_path(&lic_path),
             );
         }
     }
