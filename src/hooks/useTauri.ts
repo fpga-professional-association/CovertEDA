@@ -302,6 +302,11 @@ export async function pickFile(filters?: { name: string; extensions: string[] }[
   return selected as string | null;
 }
 
+export async function deleteFile(path: string): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("delete_file", { path });
+}
+
 export async function pickDirectory(): Promise<string | null> {
   if (!isTauri) {
     return window.prompt("Enter project directory path:") || null;

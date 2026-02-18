@@ -9,10 +9,12 @@ function FileTreeRow({
   f,
   active,
   onPick,
+  onContextMenu,
 }: {
   f: ProjectFile;
   active: boolean;
   onPick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
@@ -38,9 +40,15 @@ function FileTreeRow({
     clean: null,
   };
 
+  const handleCtx = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onContextMenu?.(e);
+  };
+
   if (f.ty === "folder") {
     return (
       <div
+        onContextMenu={handleCtx}
         style={{
           display: "flex",
           alignItems: "center",
@@ -70,6 +78,7 @@ function FileTreeRow({
   return (
     <div
       onClick={onPick}
+      onContextMenu={handleCtx}
       onMouseEnter={() => setH(true)}
       onMouseLeave={() => setH(false)}
       style={{
@@ -192,9 +201,10 @@ interface FileTreeProps {
   files: ProjectFile[];
   activeFile: string;
   setActiveFile: (name: string, path?: string) => void;
+  onFileContextMenu?: (file: ProjectFile, x: number, y: number) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -304,6 +314,7 @@ function FileTree({ files, activeFile, setActiveFile }: FileTreeProps) {
             f={f}
             active={f.n === activeFile}
             onPick={() => f.ty !== "folder" && setActiveFile(f.n, f.path)}
+            onContextMenu={onFileContextMenu ? (e) => onFileContextMenu(f, e.clientX, e.clientY) : undefined}
           />
         ))}
       </div>

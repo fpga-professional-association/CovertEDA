@@ -45,6 +45,7 @@ pub fn run() {
             commands::check_licenses,
             commands::read_file,
             commands::read_build_log,
+            commands::delete_file,
             commands::get_app_config,
             commands::save_app_config,
         ])

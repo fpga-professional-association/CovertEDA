@@ -826,6 +826,29 @@ fn uuid_v4() -> String {
 // ── App Config commands ──
 
 #[tauri::command]
+pub fn delete_file(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let file_path = PathBuf::from(&path);
+
+    // Security check: file must be within the current project directory
+    let project_guard = state.current_project.lock().map_err(|e| e.to_string())?;
+    if let Some((project_dir, _)) = &*project_guard {
+        let canonical_file = file_path.canonicalize()
+            .map_err(|e| format!("Cannot resolve path {}: {}", path, e))?;
+        let canonical_dir = project_dir.canonicalize()
+            .map_err(|e| format!("Cannot resolve project dir: {}", e))?;
+        if !canonical_file.starts_with(&canonical_dir) {
+            return Err("File is outside the project directory".to_string());
+        }
+    } else {
+        return Err("No project is currently open".to_string());
+    }
+    drop(project_guard);
+
+    std::fs::remove_file(&file_path)
+        .map_err(|e| format!("Failed to delete {}: {}", path, e))
+}
+
+#[tauri::command]
 pub fn get_app_config() -> Result<crate::config::AppConfig, String> {
     Ok(crate::config::AppConfig::load())
 }

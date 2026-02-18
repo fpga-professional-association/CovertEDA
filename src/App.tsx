@@ -17,6 +17,7 @@ import StartScreen from "./components/StartScreen";
 import FileViewer from "./components/FileViewer";
 import BuildArtifacts from "./components/BuildArtifacts";
 import SettingsPanel from "./components/SettingsPanel";
+import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -30,6 +31,7 @@ import {
   mapUtilizationReport,
   getRuntimeBackends,
   getAppConfig,
+  deleteFile,
 } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
@@ -76,6 +78,7 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
   const [rptTab, setRptTab] = useState<ReportTab>("timing");
@@ -535,6 +538,16 @@ export default function App() {
       {/* Settings Panel */}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* ══════ LEFT NAV ══════ */}
         <div
@@ -621,6 +634,31 @@ export default function App() {
             files={realFiles ?? emptyFiles}
             activeFile={aFile}
             setActiveFile={handleFileClick}
+            onFileContextMenu={(file, x, y) => {
+              const items: ContextMenuItem[] = file.ty === "folder"
+                ? [
+                    { label: "Copy Path", icon: "\u2398", onClick: () => { if (file.path) navigator.clipboard.writeText(file.path); } },
+                  ]
+                : [
+                    { label: "Open in Viewer", icon: "\u25A3", onClick: () => handleFileClick(file.n, file.path) },
+                    { label: "Copy Path", icon: "\u2398", onClick: () => { if (file.path) navigator.clipboard.writeText(file.path); } },
+                    { label: "Copy Name", icon: "\u2399", onClick: () => navigator.clipboard.writeText(file.n) },
+                    { label: "", separator: true, onClick: () => {} },
+                    {
+                      label: "Delete File",
+                      icon: "\u2715",
+                      danger: true,
+                      onClick: () => {
+                        if (file.path && window.confirm(`Delete ${file.n}?`)) {
+                          deleteFile(file.path).then(() => {
+                            if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+                          }).catch(() => {});
+                        }
+                      },
+                    },
+                  ];
+              setContextMenu({ x, y, items });
+            }}
           />
         )}
 
