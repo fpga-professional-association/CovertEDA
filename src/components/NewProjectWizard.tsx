@@ -3,6 +3,7 @@ import { ProjectConfig, BackendMeta } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge, Input } from "./shared";
 import { BACKEND_META } from "../data/mockData";
+import DevicePicker from "./DevicePicker";
 import { createProject, pickDirectory } from "../hooks/useTauri";
 
 export default function NewProjectWizard({
@@ -174,10 +175,10 @@ export default function NewProjectWizard({
               {selectedBackend.short}
             </Badge>
           </span>
-          <Input
+          <DevicePicker
             value={device}
             onChange={setDevice}
-            placeholder="Device part number"
+            backendId={backendId}
           />
         </div>
 
