@@ -287,6 +287,8 @@ export interface AppConfig {
   theme: string;
   scale_factor: number;
   license_file: string | null;
+  ai_api_key: string | null;
+  ai_model: string | null;
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
@@ -298,6 +300,8 @@ export async function getAppConfig(): Promise<AppConfig> {
       theme: "dark",
       scale_factor: 1.0,
       license_file: null,
+      ai_api_key: null,
+      ai_model: null,
     };
   }
   return invoke<AppConfig>("get_app_config");

@@ -4,12 +4,15 @@ import { ThemeId } from "../theme";
 import { Btn, Input } from "./shared";
 import { getAppConfig, saveAppConfig, pickDirectory, pickFile, AppConfig } from "../hooks/useTauri";
 
-const SCALE_OPTIONS = [
-  { label: "80%", value: 0.8 },
-  { label: "90%", value: 0.9 },
+const SCALE_PRESETS = [
+  { label: "50%", value: 0.5 },
+  { label: "75%", value: 0.75 },
   { label: "100%", value: 1.0 },
-  { label: "110%", value: 1.1 },
   { label: "120%", value: 1.2 },
+  { label: "150%", value: 1.5 },
+  { label: "200%", value: 2.0 },
+  { label: "250%", value: 2.5 },
+  { label: "300%", value: 3.0 },
 ];
 
 const THEME_OPTIONS: { id: ThemeId; label: string; desc: string }[] = [
@@ -184,21 +187,34 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Scale */}
         <div style={{ marginBottom: 20 }}>
-          <span style={label}>TEXT SCALE</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            {SCALE_OPTIONS.map((s) => {
+          <span style={label}>ZOOM ({Math.round(scaleFactor * 100)}%)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>50%</span>
+            <input
+              type="range"
+              min={50}
+              max={300}
+              step={5}
+              value={Math.round(scaleFactor * 100)}
+              onChange={(e) => handleScaleChange(Number(e.target.value) / 100)}
+              style={{ flex: 1, accentColor: C.accent }}
+            />
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>300%</span>
+          </div>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {SCALE_PRESETS.map((s) => {
               const selected = Math.abs(scaleFactor - s.value) < 0.01;
               return (
                 <div
                   key={s.value}
                   onClick={() => handleScaleChange(s.value)}
                   style={{
-                    padding: "4px 10px",
+                    padding: "3px 8px",
                     borderRadius: 4,
                     border: `1px solid ${selected ? C.accent : C.b1}`,
                     background: selected ? `${C.accent}18` : C.bg,
                     cursor: "pointer",
-                    fontSize: 9,
+                    fontSize: 8,
                     fontFamily: MONO,
                     fontWeight: 600,
                     color: selected ? C.accent : C.t2,
@@ -256,6 +272,73 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               style={{ flex: 1 }}
             />
             <Btn small onClick={handleLicenseFileBrowse}>Browse</Btn>
+          </div>
+        </div>
+
+        {/* ── AI Assistant ── */}
+        <div style={{ ...sectionTitle, marginTop: 8 }}>
+          <span style={{ color: C.pink }}>{"\u25CF"}</span>
+          AI Assistant
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <span style={label}>CLAUDE API KEY</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input
+              value={config?.ai_api_key ?? ""}
+              onChange={(v) => {
+                setConfig((prev) => {
+                  if (!prev) return prev;
+                  const updated = { ...prev, ai_api_key: v || null };
+                  save(updated);
+                  return updated;
+                });
+              }}
+              placeholder="sk-ant-api03-..."
+              style={{ flex: 1 }}
+            />
+          </div>
+          <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
+            Get your key at console.anthropic.com. Stored locally only.
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <span style={label}>AI MODEL</span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[
+              { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+              { id: "claude-opus-4-6", label: "Opus 4.6" },
+              { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+            ].map((m) => {
+              const selected = (config?.ai_model ?? "claude-sonnet-4-6") === m.id;
+              return (
+                <div
+                  key={m.id}
+                  onClick={() => {
+                    setConfig((prev) => {
+                      if (!prev) return prev;
+                      const updated = { ...prev, ai_model: m.id };
+                      save(updated);
+                      return updated;
+                    });
+                  }}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    border: `1px solid ${selected ? C.accent : C.b1}`,
+                    background: selected ? `${C.accent}18` : C.bg,
+                    cursor: "pointer",
+                    fontSize: 8,
+                    fontFamily: MONO,
+                    fontWeight: 600,
+                    color: selected ? C.accent : C.t2,
+                  }}
+                >
+                  {m.label}
+                </div>
+              );
+            })}
           </div>
         </div>
 

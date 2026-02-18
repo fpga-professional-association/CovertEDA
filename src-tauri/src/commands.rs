@@ -262,7 +262,72 @@ pub fn start_build(
 
                             let lower = line.to_lowercase();
 
-                            // Detect stage starts — emit info lines and track progress
+                            // Detect Quartus stages
+                            if backend_id == "quartus" {
+                                // Quartus Pro uses execute_module -tool <name>
+                                if current_stage < 0
+                                    && (lower.contains("quartus_syn") || lower.contains("execute_module -tool syn"))
+                                {
+                                    current_stage = 0;
+                                    let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                        "buildId": &build_id_clone,
+                                        "line": "\u{25b6} [Stage 1/4] Synthesis started...",
+                                    }));
+                                }
+                                if current_stage < 1
+                                    && (lower.contains("quartus_fit") || lower.contains("execute_module -tool fit"))
+                                {
+                                    if current_stage == 0 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 0,
+                                            status: BuildStatus::Success, message: "Synthesis complete".into(),
+                                        });
+                                    }
+                                    current_stage = 1;
+                                    let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                        "buildId": &build_id_clone,
+                                        "line": "\u{25b6} [Stage 2/4] Fitter started...",
+                                    }));
+                                }
+                                if current_stage < 2
+                                    && (lower.contains("quartus_sta") || lower.contains("execute_module -tool sta"))
+                                {
+                                    if current_stage == 1 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 1,
+                                            status: BuildStatus::Success, message: "Fitter complete".into(),
+                                        });
+                                    }
+                                    current_stage = 2;
+                                    let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                        "buildId": &build_id_clone,
+                                        "line": "\u{25b6} [Stage 3/4] Timing Analysis started...",
+                                    }));
+                                }
+                                if current_stage < 3
+                                    && (lower.contains("quartus_asm") || lower.contains("execute_module -tool asm"))
+                                {
+                                    if current_stage == 2 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 2,
+                                            status: BuildStatus::Success, message: "Timing Analysis complete".into(),
+                                        });
+                                    }
+                                    current_stage = 3;
+                                    let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                        "buildId": &build_id_clone,
+                                        "line": "\u{25b6} [Stage 4/4] Assembler started...",
+                                    }));
+                                }
+                                if lower.contains("quartus_asm") && lower.contains("successful") {
+                                    let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                        build_id: build_id_clone.clone(), stage_idx: 3,
+                                        status: BuildStatus::Success, message: "Assembler complete".into(),
+                                    });
+                                }
+                            }
+
+                            // Detect Radiant stage starts — emit info lines and track progress
                             if current_stage < 0
                                 && (lower.contains("running synthesis")
                                     || lower.contains("prj_run_synthesis")
@@ -769,12 +834,16 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
     let mut tools: Vec<DetectedTool> = backends
         .iter()
         .map(|b| {
-            // For Radiant, include the install path
-            let install_path = if b.id == "radiant" {
-                let radiant = crate::backend::radiant::RadiantBackend::new();
-                radiant.install_dir().map(|p| p.display().to_string())
-            } else {
-                None
+            let install_path = match b.id.as_str() {
+                "radiant" => {
+                    let radiant = crate::backend::radiant::RadiantBackend::new();
+                    radiant.install_dir().map(|p| p.display().to_string())
+                }
+                "quartus" => {
+                    let quartus = crate::backend::quartus::QuartusBackend::new();
+                    quartus.install_dir().map(|p| p.display().to_string())
+                }
+                _ => None,
             };
             DetectedTool {
                 backend_id: b.id.clone(),
@@ -904,6 +973,13 @@ fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
             }
             cli_tool.to_string()
         }
+        "quartus" => {
+            let quartus = crate::backend::quartus::QuartusBackend::new();
+            if let Some(path) = quartus.quartus_sh_path_public() {
+                return path.display().to_string();
+            }
+            cli_tool.to_string()
+        }
         _ => cli_tool.to_string(),
     }
 }
@@ -935,46 +1011,60 @@ fn uuid_v4() -> String {
 
 #[tauri::command]
 pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String, String> {
-    let impl_dir = PathBuf::from(&project_dir).join("impl1");
-    if !impl_dir.exists() {
-        return Err("No impl1 directory found".to_string());
-    }
+    let project_path = PathBuf::from(&project_dir);
 
-    // Find the appropriate report file by extension
-    let ext = match report_type.as_str() {
-        "synth" => "srr",
-        "map" => "mrp",
-        "par" => "par",
-        "bitstream" => "bgn",
-        "timing" => "twr",
+    // Search in both Radiant (impl1/) and Quartus (output_files/) directories
+    let search_dirs: Vec<PathBuf> = vec![
+        project_path.join("impl1"),
+        project_path.join("output_files"),
+    ];
+
+    // Map report type to file extensions/patterns
+    let patterns: Vec<&str> = match report_type.as_str() {
+        "synth" => vec!["srr", "srp", "syn.rpt"],
+        "map" => vec!["mrp", "map.rpt"],
+        "par" => vec!["par", "fit.rpt"],
+        "bitstream" => vec!["bgn"],
+        "timing" => vec!["twr", "sta.rpt"],
+        "fit" => vec!["fit.rpt", "par"],
+        "sta" => vec!["sta.rpt", "twr"],
+        "asm" => vec!["asm.rpt", "bgn"],
+        "flow" => vec!["flow.rpt"],
         _ => return Err(format!("Unknown report type: {}", report_type)),
     };
 
-    // Also check alternate names: .srp for synth, .rpt for par
-    let alternates: &[&str] = match report_type.as_str() {
-        "synth" => &["srr", "srp"],
-        "par" => &["par", "rpt"],
-        _ => &[ext],
-    };
-
-    for try_ext in alternates {
-        let found = std::fs::read_dir(&impl_dir)
+    for dir in &search_dirs {
+        if !dir.exists() {
+            continue;
+        }
+        let entries: Vec<_> = std::fs::read_dir(dir)
             .map_err(|e| e.to_string())?
             .filter_map(|e| e.ok())
-            .find(|e| {
-                e.path()
-                    .extension()
-                    .map(|x| x == *try_ext)
-                    .unwrap_or(false)
-            })
-            .map(|e| e.path());
+            .collect();
 
-        if let Some(path) = found {
-            return std::fs::read_to_string(&path).map_err(|e| e.to_string());
+        for pattern in &patterns {
+            // Check if pattern contains a dot (suffix match) vs plain extension
+            if pattern.contains('.') {
+                // Match files ending with this suffix
+                let found = entries.iter().find(|e| {
+                    e.path().to_str().map(|s| s.ends_with(pattern)).unwrap_or(false)
+                });
+                if let Some(entry) = found {
+                    return std::fs::read_to_string(entry.path()).map_err(|e| e.to_string());
+                }
+            } else {
+                // Match by extension
+                let found = entries.iter().find(|e| {
+                    e.path().extension().map(|x| x == *pattern).unwrap_or(false)
+                });
+                if let Some(entry) = found {
+                    return std::fs::read_to_string(entry.path()).map_err(|e| e.to_string());
+                }
+            }
         }
     }
 
-    Err(format!("No .{} file found in impl1", ext))
+    Err(format!("No report file found for type '{}'", report_type))
 }
 
 // ── App Config commands ──

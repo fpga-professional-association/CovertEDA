@@ -62,6 +62,7 @@ function PStep({
   // Stage-specific option fields
   const stageOptions: Record<string, { key: string; label: string; type: "text" | "select"; choices?: string[] }[]> = {
     synth: [
+      { key: "synth_engine", label: "Synth Engine", type: "select", choices: ["LSE", "Synplify Pro"] },
       { key: "syn_frequency", label: "Frequency (MHz)", type: "text" },
       { key: "syn_optimization", label: "Optimization", type: "select", choices: ["Timing", "Balanced", "Area"] },
     ],

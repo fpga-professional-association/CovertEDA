@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult } from "./types";
-import { RADIANT_IP_CATALOG, IP_CATEGORIES } from "./data/ipCatalog";
+import { RADIANT_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar } from "./components/shared";
 import {
@@ -19,6 +19,7 @@ import FileViewer from "./components/FileViewer";
 import BuildArtifacts from "./components/BuildArtifacts";
 import SettingsPanel from "./components/SettingsPanel";
 import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
+import AiAssistant from "./components/AiAssistant";
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -64,6 +65,11 @@ const FALLBACK_BACKEND: RuntimeBackend = {
 function IpCatalogSection() {
   const { C, MONO } = useTheme();
   const [ipSearch, setIpSearch] = useState("");
+  const [configuring, setConfiguring] = useState<IpCore | null>(null);
+  const [ipParams, setIpParams] = useState<Record<string, string>>({});
+  const [instanceName, setInstanceName] = useState("u_inst");
+  const [copiedTemplate, setCopiedTemplate] = useState(false);
+
   const filtered = useMemo(() => {
     if (!ipSearch) return RADIANT_IP_CATALOG;
     const q = ipSearch.toLowerCase();
@@ -79,70 +85,241 @@ function IpCatalogSection() {
     return Object.entries(map).filter(([, items]) => items.length > 0);
   }, [filtered]);
 
+  const openConfigurator = useCallback((ip: IpCore) => {
+    setConfiguring(ip);
+    const defaults: Record<string, string> = {};
+    for (const p of ip.params ?? []) defaults[p.key] = p.default;
+    setIpParams(defaults);
+    setInstanceName(`u_${ip.name.toLowerCase().replace(/\s+/g, "_")}`);
+    setCopiedTemplate(false);
+  }, []);
+
+  const generateTemplate = useMemo(() => {
+    if (!configuring?.template) return null;
+    let t = configuring.template;
+    for (const [key, val] of Object.entries(ipParams)) {
+      t = t.replace(new RegExp(`\\{${key}\\}`, "g"), val);
+    }
+    t = t.replace(/\{INSTANCE_NAME\}/g, instanceName);
+    return t;
+  }, [configuring, ipParams, instanceName]);
+
+  const copyTemplate = useCallback(() => {
+    if (generateTemplate) {
+      navigator.clipboard.writeText(generateTemplate);
+      setCopiedTemplate(true);
+      setTimeout(() => setCopiedTemplate(false), 2000);
+    }
+  }, [generateTemplate]);
+
   const panelP: React.CSSProperties = {
     background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={panelP}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-          <Box />
-          IP Catalog
-          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
-            {filtered.length} cores
-          </span>
-        </div>
-        <input
-          type="text"
-          value={ipSearch}
-          onChange={(e) => setIpSearch(e.target.value)}
-          placeholder="Search IP cores..."
-          style={{
-            width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
-            background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
-            outline: "none", marginBottom: 10, boxSizing: "border-box",
-          }}
-        />
-        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
-          Use Radiant IP Configurator to generate and add IP to your project.
-        </div>
-      </div>
-      {grouped.map(([cat, items]) => (
-        <div key={cat} style={panelP}>
-          <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
-            {cat.toUpperCase()}
+    <div style={{ display: "flex", gap: 12 }}>
+      {/* Left: Catalog */}
+      <div style={{ flex: configuring ? "0 0 300px" : 1, display: "flex", flexDirection: "column", gap: 12, overflow: "auto" }}>
+        <div style={panelP}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+            <Box />
+            IP Catalog
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
+              {filtered.length} cores
+            </span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
-            {items.map((ip) => (
-              <div
-                key={ip.name}
-                style={{
-                  padding: "8px 10px", background: C.bg, borderRadius: 5,
-                  border: `1px solid ${C.b1}`,
-                }}
-              >
-                <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, marginBottom: 3 }}>
-                  {ip.name}
+          <input
+            type="text"
+            value={ipSearch}
+            onChange={(e) => setIpSearch(e.target.value)}
+            placeholder="Search IP cores..."
+            style={{
+              width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
+              background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
+              outline: "none", marginBottom: 10, boxSizing: "border-box",
+            }}
+          />
+          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
+            Click "Configure" on any IP to set parameters and generate instantiation code.
+          </div>
+        </div>
+        {grouped.map(([cat, items]) => (
+          <div key={cat} style={panelP}>
+            <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
+              {cat.toUpperCase()}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: configuring ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+              {items.map((ip) => (
+                <div
+                  key={ip.name}
+                  style={{
+                    padding: "8px 10px", background: configuring?.name === ip.name ? `${C.accent}10` : C.bg, borderRadius: 5,
+                    border: `1px solid ${configuring?.name === ip.name ? C.accent : C.b1}`,
+                    cursor: ip.params ? "pointer" : "default",
+                  }}
+                  onClick={() => { if (ip.params) openConfigurator(ip); }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, flex: 1 }}>
+                      {ip.name}
+                    </div>
+                    {ip.params && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); openConfigurator(ip); }}
+                        style={{
+                          fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
+                          background: `${C.accent}15`, color: C.accent, fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
+                        Configure
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
+                    {ip.description}
+                  </div>
+                  {!configuring && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
+                      {ip.families.map((f) => (
+                        <span key={f} style={{
+                          fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
+                          background: `${C.accent}15`, color: C.accent, fontWeight: 600,
+                        }}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4, lineHeight: 1.4 }}>
-                  {ip.description}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                  {ip.families.map((f) => (
-                    <span key={f} style={{
-                      fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
-                      background: `${C.accent}15`, color: C.accent, fontWeight: 600,
-                    }}>
-                      {f}
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Right: Configurator */}
+      {configuring && (
+        <div style={{ flex: 1, ...panelP, display: "flex", flexDirection: "column", overflow: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, flex: 1 }}>
+              {configuring.name}
+            </div>
+            <span
+              onClick={() => setConfiguring(null)}
+              style={{ fontSize: 9, color: C.t3, cursor: "pointer", fontFamily: MONO }}
+            >
+              Close
+            </span>
+          </div>
+          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>
+            {configuring.description}
+          </div>
+
+          {/* Instance Name */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
+              INSTANCE NAME
+            </div>
+            <input
+              value={instanceName}
+              onChange={(e) => setInstanceName(e.target.value)}
+              style={{
+                width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
+                background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Parameters */}
+          {configuring.params?.map((p) => (
+            <div key={p.key} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
+                {p.label} {p.unit && <span style={{ fontWeight: 400 }}>({p.unit})</span>}
+              </div>
+              {p.type === "select" ? (
+                <select
+                  value={ipParams[p.key] ?? p.default}
+                  onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                  style={{
+                    width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
+                    background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
+                  }}
+                >
+                  {p.choices?.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              ) : p.type === "boolean" ? (
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["true", "false"].map((v) => (
+                    <span
+                      key={v}
+                      onClick={() => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
+                      style={{
+                        padding: "3px 8px", borderRadius: 3, cursor: "pointer",
+                        fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                        border: `1px solid ${(ipParams[p.key] ?? p.default) === v ? C.accent : C.b1}`,
+                        color: (ipParams[p.key] ?? p.default) === v ? C.accent : C.t2,
+                        background: (ipParams[p.key] ?? p.default) === v ? `${C.accent}15` : C.bg,
+                      }}
+                    >
+                      {v === "true" ? "Yes" : "No"}
                     </span>
                   ))}
                 </div>
+              ) : (
+                <input
+                  type={p.type === "number" ? "number" : "text"}
+                  value={ipParams[p.key] ?? p.default}
+                  onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                  min={p.min}
+                  max={p.max}
+                  style={{
+                    width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
+                    background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              )}
+            </div>
+          ))}
+
+          {/* Generated Template */}
+          {generateTemplate && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
+                  INSTANTIATION
+                </div>
+                <span
+                  onClick={copyTemplate}
+                  style={{
+                    fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
+                    background: copiedTemplate ? `${C.ok}15` : `${C.accent}15`,
+                    color: copiedTemplate ? C.ok : C.accent,
+                    fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {copiedTemplate ? "Copied!" : "Copy"}
+                </span>
               </div>
-            ))}
-          </div>
+              <pre style={{
+                fontSize: 8, fontFamily: MONO, color: C.t1, background: C.bg,
+                border: `1px solid ${C.b1}`, borderRadius: 4, padding: "8px 10px",
+                overflow: "auto", lineHeight: 1.5, whiteSpace: "pre-wrap",
+                margin: 0,
+              }}>
+                {generateTemplate}
+              </pre>
+            </div>
+          )}
+
+          {!configuring.template && configuring.params && (
+            <div style={{ marginTop: 12, fontSize: 8, fontFamily: MONO, color: C.t3, fontStyle: "italic" }}>
+              Template generation not available for this IP. Use Radiant IP Configurator to generate the HDL wrapper.
+            </div>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -198,7 +375,7 @@ export default function App() {
     getAppConfig().then((cfg) => {
       const tid = cfg.theme as "dark" | "light" | "colorblind";
       if (tid === "dark" || tid === "light" || tid === "colorblind") setThemeId(tid);
-      if (cfg.scale_factor >= 0.5 && cfg.scale_factor <= 2.0) setScaleFactor(cfg.scale_factor);
+      if (cfg.scale_factor >= 0.5 && cfg.scale_factor <= 3.0) setScaleFactor(cfg.scale_factor);
     }).catch(() => {});
   }, [setThemeId, setScaleFactor]);
 
@@ -579,6 +756,22 @@ export default function App() {
         e.preventDefault();
         if (view === "ide") setCmdOpen((p) => !p);
       }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        setScaleFactor(Math.min(3.0, scaleFactor + 0.1));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "-") {
+        e.preventDefault();
+        setScaleFactor(Math.max(0.5, scaleFactor - 0.1));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        setScaleFactor(1.2);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "b" && !e.shiftKey) {
+        e.preventDefault();
+        if (view === "ide" && !building) runBuild();
+      }
       if (e.key === "Escape") {
         setCmdOpen(false);
         setDevOpen(false);
@@ -586,7 +779,7 @@ export default function App() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [view]);
+  }, [view, scaleFactor, building, runBuild, setScaleFactor]);
 
   // Load license info when license section opens
   useEffect(() => {
@@ -626,14 +819,45 @@ export default function App() {
   };
 
   const commands = [
-    { label: "Build All", category: "Build", desc: `${B.short} flow`, action: runBuild },
+    // Build
+    { label: "Build All", category: "Build", desc: `Run full ${B.short} flow`, action: runBuild },
+    { label: "Build Selected Stages", category: "Build", desc: "Run only checked stages", action: runBuild },
     { label: "Clean", category: "Build", desc: "Delete build artifacts", action: runClean },
+    // View / Navigation
+    { label: "Build Pipeline", category: "View", desc: "Stage selector and options", action: () => navClick("build") },
     { label: "Reports", category: "View", desc: "Timing, Utilization, Power, DRC, I/O", action: () => navClick("reports") },
+    { label: "Timing Report", category: "View", desc: "Fmax, WNS, critical paths", action: () => { navClick("reports"); setRptTab("timing"); } },
+    { label: "Utilization Report", category: "View", desc: "LUT, FF, BRAM usage", action: () => { navClick("reports"); setRptTab("util"); } },
+    { label: "Synthesis Log", category: "View", desc: "Raw synthesis report", action: () => { navClick("reports"); setRptTab("synth"); } },
+    { label: "Map Report", category: "View", desc: "Technology mapping log", action: () => { navClick("reports"); setRptTab("map"); } },
+    { label: "PAR Report", category: "View", desc: "Place & Route log", action: () => { navClick("reports"); setRptTab("par"); } },
+    { label: "IP Catalog", category: "View", desc: "Browse and configure IP cores", action: () => navClick("ip") },
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
+    { label: "Constraints", category: "View", desc: "Pin assignments", action: () => navClick("constraints") },
+    { label: "Resources", category: "View", desc: "Utilization overview", action: () => navClick("resources") },
+    { label: "License Status", category: "View", desc: "FlexLM license info", action: () => navClick("license") },
+    { label: "AI Assistant", category: "View", desc: "FPGA design help", action: () => navClick("ai") },
+    // Zoom
+    { label: "Zoom In", category: "Zoom", desc: `Current: ${Math.round(scaleFactor * 100)}%`, action: () => {
+      const next = Math.min(3.0, scaleFactor + 0.1);
+      setScaleFactor(next);
+    }},
+    { label: "Zoom Out", category: "Zoom", desc: `Current: ${Math.round(scaleFactor * 100)}%`, action: () => {
+      const next = Math.max(0.5, scaleFactor - 0.1);
+      setScaleFactor(next);
+    }},
+    { label: "Reset Zoom (120%)", category: "Zoom", action: () => setScaleFactor(1.2) },
+    { label: "Zoom 100%", category: "Zoom", action: () => setScaleFactor(1.0) },
+    { label: "Zoom 150%", category: "Zoom", action: () => setScaleFactor(1.5) },
+    { label: "Zoom 200%", category: "Zoom", action: () => setScaleFactor(2.0) },
+    // Backend switching
     ...backends.filter((b) => b.available).map((b) => ({
-      label: `Switch: ${b.name}`, category: "Backend", action: () => switchBackend(b.id),
+      label: `Switch: ${b.name}`, category: "Backend", desc: `${b.version || ""}`, action: () => switchBackend(b.id),
     })),
-    { label: "Close Project", category: "Project", action: handleCloseProject },
+    // Project
+    { label: "Settings", category: "Project", desc: "Tool paths, theme, zoom", action: () => setSettingsOpen(true) },
+    { label: "Toggle File Tree", category: "Project", desc: showFiles ? "Hide files" : "Show files", action: () => setShowFiles((p) => !p) },
+    { label: "Close Project", category: "Project", desc: "Return to start screen", action: handleCloseProject },
   ];
 
   const emptyFiles: ProjectFile[] = [];
@@ -1186,14 +1410,10 @@ export default function App() {
 
             {/* AI Assistant */}
             {sec === "ai" && !viewingFile && (
-              <div style={panelP}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-                  <Brain />
-                  AI Assistant
-                </div>
-                <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
-                  Ask questions about your design, timing constraints, or build errors. Configure an API key in Settings to enable.
-                </div>
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <AiAssistant
+                  projectContext={project ? `Project: ${project.name}, Backend: ${B.name}, Device: ${project.device}, Top: ${project.topModule}` : undefined}
+                />
               </div>
             )}
 

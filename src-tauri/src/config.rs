@@ -11,10 +11,14 @@ pub struct AppConfig {
     pub scale_factor: f64,
     #[serde(default)]
     pub license_file: Option<String>,
+    #[serde(default)]
+    pub ai_api_key: Option<String>,
+    #[serde(default)]
+    pub ai_model: Option<String>,
 }
 
 fn default_scale() -> f64 {
-    1.0
+    1.2
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,8 +51,10 @@ impl Default for AppConfig {
             license_servers: vec![],
             default_backend: "diamond".to_string(),
             theme: "dark".to_string(),
-            scale_factor: 1.0,
+            scale_factor: 1.2,
             license_file: None,
+            ai_api_key: None,
+            ai_model: None,
         }
     }
 }

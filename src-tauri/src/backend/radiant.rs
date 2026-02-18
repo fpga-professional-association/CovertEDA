@@ -253,6 +253,19 @@ impl FpgaBackend for RadiantBackend {
             rdf = rdf_display,
         );
 
+        // Synthesis engine selection (LSE or Synplify Pro)
+        if let Some(engine) = options.get("synth_engine") {
+            match engine.as_str() {
+                "synplify" | "synplify_pro" => {
+                    script.push_str("prj_set_strategy_value -strategy Strategy1 {SYN_Tool=SYNPLIFY_PRO}\n");
+                }
+                _ => {
+                    // LSE is the default — explicitly set to be safe
+                    script.push_str("prj_set_strategy_value -strategy Strategy1 {SYN_Tool=LSE}\n");
+                }
+            }
+        }
+
         // Strategy value options (applied before running stages)
         if let Some(freq) = options.get("syn_frequency") {
             if !freq.is_empty() {
