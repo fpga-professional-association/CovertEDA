@@ -822,3 +822,15 @@ fn uuid_v4() -> String {
         .as_nanos();
     format!("{:x}", t)
 }
+
+// ── App Config commands ──
+
+#[tauri::command]
+pub fn get_app_config() -> Result<crate::config::AppConfig, String> {
+    Ok(crate::config::AppConfig::load())
+}
+
+#[tauri::command]
+pub fn save_app_config(config: crate::config::AppConfig) -> Result<(), String> {
+    config.save().map_err(|e| e.to_string())
+}

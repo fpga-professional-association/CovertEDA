@@ -16,6 +16,7 @@ import BackendSwitcher from "./components/BackendSwitcher";
 import StartScreen from "./components/StartScreen";
 import FileViewer from "./components/FileViewer";
 import BuildArtifacts from "./components/BuildArtifacts";
+import SettingsPanel from "./components/SettingsPanel";
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -28,6 +29,7 @@ import {
   mapTimingReport,
   mapUtilizationReport,
   getRuntimeBackends,
+  getAppConfig,
 } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
@@ -53,7 +55,7 @@ const FALLBACK_BACKEND: RuntimeBackend = {
 };
 
 export default function App() {
-  const { C, MONO, SANS } = useTheme();
+  const { C, MONO, SANS, setThemeId, scaleFactor, setScaleFactor } = useTheme();
 
   // ── View routing ──
   const [view, setView] = useState<AppView>("start");
@@ -73,6 +75,7 @@ export default function App() {
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
   const [rptTab, setRptTab] = useState<ReportTab>("timing");
@@ -87,10 +90,15 @@ export default function App() {
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
 
-  // Load backends on mount
+  // Load backends and config on mount
   useEffect(() => {
     getRuntimeBackends().then(setBackends);
-  }, []);
+    getAppConfig().then((cfg) => {
+      const tid = cfg.theme as "dark" | "light" | "colorblind";
+      if (tid === "dark" || tid === "light" || tid === "colorblind") setThemeId(tid);
+      if (cfg.scale_factor >= 0.5 && cfg.scale_factor <= 2.0) setScaleFactor(cfg.scale_factor);
+    }).catch(() => {});
+  }, [setThemeId, setScaleFactor]);
 
   // Flush log buffer periodically during builds for performance
   const startLogFlush = useCallback(() => {
@@ -497,6 +505,7 @@ export default function App() {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        zoom: scaleFactor !== 1 ? scaleFactor : undefined,
       }}
     >
       {/* Git Status Bar */}
@@ -522,6 +531,9 @@ export default function App() {
         activeId={bid}
         onSwitch={switchBackend}
       />
+
+      {/* Settings Panel */}
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* ══════ LEFT NAV ══════ */}
@@ -578,7 +590,7 @@ export default function App() {
           <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} />
           <div style={{ flex: 1 }} />
           <NavBtn icon={<Key />} label="Lic" accent={C.warn} />
-          <NavBtn icon={<Settings />} label="Cfg" />
+          <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} />
           <div
             onClick={handleCloseProject}
             title="Close Project"

@@ -7,11 +7,20 @@ pub struct AppConfig {
     pub license_servers: Vec<LicenseServer>,
     pub default_backend: String,
     pub theme: String,
+    #[serde(default = "default_scale")]
+    pub scale_factor: f64,
+    #[serde(default)]
+    pub license_file: Option<String>,
+}
+
+fn default_scale() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPaths {
     pub diamond: Option<PathBuf>,
+    pub radiant: Option<PathBuf>,
     pub quartus: Option<PathBuf>,
     pub vivado: Option<PathBuf>,
     pub yosys: Option<PathBuf>,
@@ -29,6 +38,7 @@ impl Default for AppConfig {
         Self {
             tool_paths: ToolPaths {
                 diamond: None,
+                radiant: None,
                 quartus: None,
                 vivado: None,
                 yosys: None,
@@ -37,6 +47,8 @@ impl Default for AppConfig {
             license_servers: vec![],
             default_backend: "diamond".to_string(),
             theme: "dark".to_string(),
+            scale_factor: 1.0,
+            license_file: None,
         }
     }
 }

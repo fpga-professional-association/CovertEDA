@@ -252,6 +252,56 @@ export async function checkLicenses(): Promise<LicenseCheckResult> {
   return invoke<LicenseCheckResult>("check_licenses");
 }
 
+// ── App Config ──
+
+export interface AppConfig {
+  tool_paths: {
+    diamond: string | null;
+    radiant: string | null;
+    quartus: string | null;
+    vivado: string | null;
+    yosys: string | null;
+    nextpnr: string | null;
+  };
+  license_servers: { vendor: string; address: string }[];
+  default_backend: string;
+  theme: string;
+  scale_factor: number;
+  license_file: string | null;
+}
+
+export async function getAppConfig(): Promise<AppConfig> {
+  if (!isTauri) {
+    return {
+      tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null },
+      license_servers: [],
+      default_backend: "radiant",
+      theme: "dark",
+      scale_factor: 1.0,
+      license_file: null,
+    };
+  }
+  return invoke<AppConfig>("get_app_config");
+}
+
+export async function saveAppConfig(config: AppConfig): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("save_app_config", { config });
+}
+
+export async function pickFile(filters?: { name: string; extensions: string[] }[]): Promise<string | null> {
+  if (!isTauri) {
+    return window.prompt("Enter file path:") || null;
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selected = await open({
+    directory: false,
+    multiple: false,
+    filters: filters ?? [],
+  });
+  return selected as string | null;
+}
+
 export async function pickDirectory(): Promise<string | null> {
   if (!isTauri) {
     return window.prompt("Enter project directory path:") || null;
