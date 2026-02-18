@@ -1,27 +1,6 @@
-// ── Theme Colors ──
-export const C = {
-  bg: "#06080c",
-  s1: "#0c1018",
-  s2: "#121a26",
-  s3: "#1a2438",
-  b1: "#1c2840",
-  b2: "#2a4060",
-  t1: "#e8f0fa",
-  t2: "#9ab0cc",
-  t3: "#546880",
-  accent: "#3b9eff",
-  accentDim: "#122a48",
-  ok: "#2ecc71",
-  okDim: "#0a2816",
-  warn: "#f0a030",
-  warnDim: "#2a1c06",
-  err: "#e74c3c",
-  errDim: "#2a0c0c",
-  cyan: "#22d3ee",
-  purple: "#a78bfa",
-  pink: "#f472b6",
-  orange: "#fb923c",
-} as const;
+// ── Theme Colors (backward compat re-export from theme.ts) ──
+export { DARK as C } from "../theme";
+export type { ThemeColors } from "../theme";
 
 // ── Fonts ──
 export const MONO = "'IBM Plex Mono', monospace";
@@ -258,11 +237,21 @@ export interface GitState {
   }[];
 }
 
+// ── File Content (read-only viewer) ──
+export interface FileContent {
+  path: string;
+  content: string;
+  sizeBytes: number;
+  isBinary: boolean;
+  lineCount: number;
+}
+
 // ── File Tree ──
 export interface ProjectFile {
   n: string;
   d: number;
   ty: string;
+  path?: string;
   open?: boolean;
   saved?: boolean;
   git?: string;
@@ -285,3 +274,84 @@ export type Section =
   | "console";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io";
+
+// ── Project Config (.coverteda) ──
+export interface ProjectConfig {
+  name: string;
+  backendId: string;
+  device: string;
+  topModule: string;
+  sourcePatterns: string[];
+  constraintFiles: string[];
+  implDir: string;
+  backendConfig: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecentProject {
+  path: string;
+  name: string;
+  backendId: string;
+  device: string;
+  lastOpened: string;
+}
+
+// ── Backend metadata (lightweight, for start screen) ──
+export interface BackendMeta {
+  id: string;
+  name: string;
+  short: string;
+  color: string;
+  icon: string;
+  defaultDevice: string;
+}
+
+export type AppView = "start" | "ide";
+
+// ── Runtime Backend (live data, no mock) ──
+export interface RuntimeBackend {
+  id: string;
+  name: string;
+  short: string;
+  color: string;
+  icon: string;
+  version: string;
+  cli: string;
+  defaultDev: string;
+  constrExt: string;
+  pipeline: PipelineStage[];
+  available: boolean;
+}
+
+// ── Example Projects ──
+export interface ExampleProject {
+  name: string;
+  description: string;
+  backendId: string;
+  device: string;
+  topModule: string;
+  path: string;
+}
+
+// ── Tool Detection ──
+export interface DetectedTool {
+  backendId: string;
+  name: string;
+  version: string;
+  installPath: string | null;
+  available: boolean;
+}
+
+export interface LicenseFeature {
+  feature: string;
+  vendor: string;
+  expires: string;
+  hostId: string;
+  status: string;
+}
+
+export interface LicenseCheckResult {
+  licenseFile: string | null;
+  features: LicenseFeature[];
+}

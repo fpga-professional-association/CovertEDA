@@ -10,7 +10,6 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "title": "CovertEDA — Unified FPGA Development Platform",
     "windows": [
       {
         "title": "CovertEDA",

@@ -9,7 +9,7 @@
 }
 
 body {
-  background: #06080c;
+  background: var(--app-bg, #06080c);
   overflow: hidden;
   font-family: 'Outfit', sans-serif;
 }

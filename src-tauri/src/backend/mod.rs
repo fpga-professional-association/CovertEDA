@@ -1,6 +1,7 @@
 pub mod diamond;
 pub mod oss;
 pub mod quartus;
+pub mod radiant;
 pub mod vivado;
 
 use crate::types::*;
@@ -17,6 +18,8 @@ pub enum BackendError {
     ReportNotFound(String),
     #[error("Parse error: {0}")]
     ParseError(String),
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -111,6 +114,7 @@ impl BackendRegistry {
         Self {
             backends: vec![
                 Box::new(diamond::DiamondBackend::new()),
+                Box::new(radiant::RadiantBackend::new()),
                 Box::new(quartus::QuartusBackend::new()),
                 Box::new(vivado::VivadoBackend::new()),
                 Box::new(oss::OssBackend::new()),
@@ -138,6 +142,13 @@ impl BackendRegistry {
 
     pub fn active_id(&self) -> &str {
         self.backends[self.active_idx].id()
+    }
+
+    pub fn get(&self, id: &str) -> Option<&dyn FpgaBackend> {
+        self.backends
+            .iter()
+            .find(|b| b.id() == id)
+            .map(|b| b.as_ref())
     }
 }
 

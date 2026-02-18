@@ -1,39 +1,15 @@
-import React from "react";
-import { C, MONO, Backend, PipelineStage } from "../types";
-import { Badge, Btn } from "./shared";
-import { Zap, Check, Bolt } from "./Icons";
+import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
+import { useTheme } from "../context/ThemeContext";
+import { Badge } from "./shared";
+import { Zap, Check } from "./Icons";
 
 interface BuildPipelineProps {
-  backend: Backend;
+  backend: RuntimeBackend;
   building: boolean;
   buildStep: number;
-}
-
-const panel: React.CSSProperties = {
-  background: C.s1,
-  borderRadius: 7,
-  border: `1px solid ${C.b1}`,
-  overflow: "hidden",
-  padding: 14,
-};
-
-function Hdr({ title, icon }: { title: React.ReactNode; icon: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        fontWeight: 700,
-        color: C.t1,
-        marginBottom: 10,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-      }}
-    >
-      {icon}
-      {title}
-    </div>
-  );
+  logs: LogEntry[];
+  activeStage: number | null;
+  onStageClick: (idx: number) => void;
 }
 
 function PStep({
@@ -42,13 +18,18 @@ function PStep({
   total,
   building,
   buildStep,
+  active,
+  onClick,
 }: {
   s: PipelineStage;
   i: number;
   total: number;
   building: boolean;
   buildStep: number;
+  active: boolean;
+  onClick: () => void;
 }) {
+  const { C, MONO } = useTheme();
   let st: "done" | "run" | "pending" = "pending";
   if (building) {
     if (i < buildStep) st = "done";
@@ -60,7 +41,19 @@ function PStep({
   const col = { done: C.ok, run: C.accent, pending: C.t3 }[st];
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+    <div
+      onClick={st !== "pending" ? onClick : undefined}
+      style={{
+        display: "flex",
+        gap: 8,
+        alignItems: "flex-start",
+        cursor: st !== "pending" ? "pointer" : "default",
+        background: active ? `${C.accent}10` : undefined,
+        borderRadius: 4,
+        padding: "2px 4px",
+        margin: "0 -4px",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -132,21 +125,53 @@ function PStep({
   );
 }
 
-function BuildPipeline({ backend, building, buildStep }: BuildPipelineProps) {
+export default function BuildPipeline({
+  backend,
+  building,
+  buildStep,
+  logs,
+  activeStage,
+  onStageClick,
+}: BuildPipelineProps) {
+  const { C, MONO } = useTheme();
   const B = backend;
+  const allDone = !building && buildStep >= B.pipeline.length && buildStep >= 0;
+
+  const panel: React.CSSProperties = {
+    background: C.s1,
+    borderRadius: 7,
+    border: `1px solid ${C.b1}`,
+    overflow: "hidden",
+    padding: 14,
+  };
+
+  const lineColors: Record<string, string> = {
+    info: C.t3,
+    cmd: C.cyan,
+    ok: C.ok,
+    warn: C.warn,
+    err: C.err,
+    out: C.t2,
+  };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
       {/* Left column: Build Pipeline */}
       <div style={panel}>
-        <Hdr
-          title={
-            <>
-              Build Pipeline <Badge color={B.color}>{B.short}</Badge>
-            </>
-          }
-          icon={<Zap />}
-        />
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: C.t1,
+            marginBottom: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          <Zap />
+          Build Pipeline <Badge color={B.color}>{B.short}</Badge>
+        </div>
         {B.pipeline.map((s, i) => (
           <PStep
             key={s.id}
@@ -155,9 +180,11 @@ function BuildPipeline({ backend, building, buildStep }: BuildPipelineProps) {
             total={B.pipeline.length}
             building={building}
             buildStep={buildStep}
+            active={activeStage === i}
+            onClick={() => onStageClick(i)}
           />
         ))}
-        {!building && buildStep >= B.pipeline.length && buildStep >= 0 && (
+        {allDone && (
           <div
             style={{
               marginTop: 10,
@@ -172,72 +199,59 @@ function BuildPipeline({ backend, building, buildStep }: BuildPipelineProps) {
               alignItems: "center",
             }}
           >
-            <Check /> Fmax {B.timing.fmax} MHz — {B.timing.setup} ns slack
+            <Check /> Build complete
           </div>
         )}
       </div>
 
-      {/* Right column */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Quick Actions */}
-        <div style={panel}>
-          <Hdr title="Quick Actions" icon={<Bolt />} />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 4,
-            }}
-          >
-            {B.pipeline.map((s, i) => (
-              <Btn
-                key={i}
-                small
-                style={{ justifyContent: "flex-start", fontSize: 8 }}
-              >
-                {s.label}
-              </Btn>
-            ))}
-          </div>
+      {/* Right column: Live output */}
+      <div style={panel}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: C.t1,
+            marginBottom: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          {"\u25B6"} {activeStage !== null && B.pipeline[activeStage]
+            ? B.pipeline[activeStage].label
+            : "Build Output"}
         </div>
-
-        {/* Build History */}
-        <div style={panel}>
-          <Hdr title="Build History" icon={null} />
-          {B.history.map((h, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 0",
-                borderBottom:
-                  i < B.history.length - 1
-                    ? `1px solid ${C.b1}`
-                    : "none",
-                fontSize: 9,
-                fontFamily: MONO,
-              }}
-            >
-              <span
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 3,
-                  background: h.ok ? C.ok : C.err,
-                }}
-              />
-              <span style={{ color: C.t3, width: 34 }}>{h.time}</span>
-              <span style={{ color: C.t1, flex: 1 }}>Fmax: {h.fmax}</span>
-              <span style={{ color: C.t3 }}>{h.util}</span>
-              {h.w > 0 && <Badge color={C.warn}>{h.w}W</Badge>}
+        <div
+          style={{
+            background: "#030508",
+            borderRadius: 4,
+            padding: "6px 10px",
+            height: 280,
+            overflowY: "auto",
+            fontSize: 9,
+            fontFamily: MONO,
+            lineHeight: 1.6,
+          }}
+        >
+          {logs.length === 0 && !building ? (
+            <div style={{ color: C.t3, padding: 8, textAlign: "center" }}>
+              Click a stage to view its output, or hit Build to start.
             </div>
-          ))}
+          ) : (
+            logs.slice(-500).map((l, i) => (
+              <div key={i} style={{ color: lineColors[l.t] || C.t2 }}>
+                {l.m}
+              </div>
+            ))
+          )}
+          {building && (
+            <div style={{ color: C.accent }}>
+              <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span>{" "}
+              Running...
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-
-export default BuildPipeline;

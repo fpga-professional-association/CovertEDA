@@ -1,27 +1,7 @@
 import { useState, useMemo } from "react";
-import { C, MONO, ProjectFile } from "../types";
+import { ProjectFile } from "../types";
+import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
-
-// File type colors
-const FTC: Record<string, string> = {
-  rtl: C.accent,
-  tb: C.purple,
-  constr: C.warn,
-  ip: C.cyan,
-  output: C.t3,
-  config: C.t3,
-  doc: C.t3,
-  folder: C.warn,
-};
-
-// Git status colors
-const GTC: Record<string, string | null> = {
-  M: C.warn,
-  A: C.ok,
-  U: C.orange,
-  D: C.err,
-  clean: null,
-};
 
 // ── FileTreeRow ──
 
@@ -34,7 +14,29 @@ function FileTreeRow({
   active: boolean;
   onPick: () => void;
 }) {
+  const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
+
+  // File type colors
+  const FTC: Record<string, string> = {
+    rtl: C.accent,
+    tb: C.purple,
+    constr: C.warn,
+    ip: C.cyan,
+    output: C.t3,
+    config: C.t3,
+    doc: C.t3,
+    folder: C.warn,
+  };
+
+  // Git status colors
+  const GTC: Record<string, string | null> = {
+    M: C.warn,
+    A: C.ok,
+    U: C.orange,
+    D: C.err,
+    clean: null,
+  };
 
   if (f.ty === "folder") {
     return (
@@ -189,10 +191,24 @@ function FileTreeRow({
 interface FileTreeProps {
   files: ProjectFile[];
   activeFile: string;
-  setActiveFile: (name: string) => void;
+  setActiveFile: (name: string, path?: string) => void;
 }
 
 function FileTree({ files, activeFile, setActiveFile }: FileTreeProps) {
+  const { C, MONO } = useTheme();
+
+  // File type colors for the detail panel
+  const FTC: Record<string, string> = {
+    rtl: C.accent,
+    tb: C.purple,
+    constr: C.warn,
+    ip: C.cyan,
+    output: C.t3,
+    config: C.t3,
+    doc: C.t3,
+    folder: C.warn,
+  };
+
   const unsavedFiles = useMemo(
     () => files.filter((f) => f.ty !== "folder" && !f.saved),
     [files],
@@ -287,7 +303,7 @@ function FileTree({ files, activeFile, setActiveFile }: FileTreeProps) {
             key={i}
             f={f}
             active={f.n === activeFile}
-            onPick={() => f.ty !== "folder" && setActiveFile(f.n)}
+            onPick={() => f.ty !== "folder" && setActiveFile(f.n, f.path)}
           />
         ))}
       </div>

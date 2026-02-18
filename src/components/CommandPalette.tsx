@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { C, MONO, SANS } from "../types";
+import { useTheme } from "../context/ThemeContext";
 import { HoverRow } from "./shared";
 import { Search } from "./Icons";
 
@@ -21,6 +21,7 @@ export default function CommandPalette({
   onClose,
   commands,
 }: CommandPaletteProps) {
+  const { C, MONO, SANS } = useTheme();
   const [query, setQuery] = useState("");
 
   if (!open) return null;

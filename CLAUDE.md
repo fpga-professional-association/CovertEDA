@@ -79,6 +79,17 @@ Custom regex-based parsers convert vendor-specific text reports into unified str
 - `serde`/`serde_json` — serialization
 - `thiserror` — error types
 
+## Performance (CRITICAL)
+
+**All code must be optimized to run as fast as possible.** This is a major requirement across both the Rust backend and React frontend:
+
+- **No mock/fake data in production paths.** All data comes from Tauri IPC (real backend). Mock data is only for BACKEND_META visual constants (colors, icons).
+- **Batch state updates.** Never create O(n) React state updates for streaming data (build logs). Use refs + periodic flush.
+- **Avoid unnecessary re-renders.** Use `useCallback`, `useMemo`, and refs where appropriate.
+- **Rust: minimize allocations in hot paths.** Build log streaming, file scanning, and report parsing must be efficient.
+- **Lazy loading.** Only load data when needed (file content on click, reports after build).
+- **No blocking IPC.** All Tauri commands that do I/O must be fast or async.
+
 ## Design Principles
 
 **Progressive Disclosure UI:** Max 2 levels of nesting. Level 1 = essentials, Level 2 = "Advanced" expander. There is no Level 3. See spec Section 18 before building any UI.

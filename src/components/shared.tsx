@@ -1,16 +1,18 @@
 import React, { useState, ReactNode } from "react";
-import { C, MONO } from "../types";
+import { useTheme } from "../context/ThemeContext";
 
 // ── Badge ──
 export function Badge({
   children,
-  color = C.accent,
+  color,
   style,
 }: {
   children: ReactNode;
   color?: string;
   style?: React.CSSProperties;
 }) {
+  const { C, MONO } = useTheme();
+  const c = color ?? C.accent;
   return (
     <span
       style={{
@@ -21,8 +23,8 @@ export function Badge({
         fontSize: 9,
         fontFamily: MONO,
         fontWeight: 600,
-        color,
-        background: `${color}18`,
+        color: c,
+        background: `${c}18`,
         letterSpacing: 0.3,
         ...style,
       }}
@@ -50,6 +52,7 @@ export function Btn({
   style?: React.CSSProperties;
   icon?: ReactNode;
 }) {
+  const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
   return (
     <button
@@ -96,6 +99,7 @@ export function HoverRow({
   style?: React.CSSProperties;
   onClick?: () => void;
 }) {
+  const { C } = useTheme();
   const [h, setH] = useState(false);
   return (
     <div
@@ -130,6 +134,7 @@ export function NavBtn({
   accent?: string;
   badge?: boolean;
 }) {
+  const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
   return (
     <div
@@ -183,6 +188,43 @@ export function NavBtn({
   );
 }
 
+// ── Input ──
+export function Input({
+  value,
+  onChange,
+  placeholder,
+  style: sx,
+  readOnly,
+}: {
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  style?: React.CSSProperties;
+  readOnly?: boolean;
+}) {
+  const { C, MONO } = useTheme();
+  return (
+    <input
+      value={value}
+      onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      style={{
+        width: "100%",
+        padding: "6px 10px",
+        borderRadius: 4,
+        border: `1px solid ${C.b1}`,
+        background: C.bg,
+        color: C.t1,
+        fontFamily: MONO,
+        fontSize: 11,
+        outline: "none",
+        ...sx,
+      }}
+    />
+  );
+}
+
 // ── Resource Bar ──
 export function ResourceBar({
   label,
@@ -193,6 +235,7 @@ export function ResourceBar({
   used: number;
   total: number;
 }) {
+  const { C, MONO } = useTheme();
   const p = Math.round((used / total) * 100);
   const col = p > 85 ? C.err : p > 65 ? C.warn : C.accent;
   return (

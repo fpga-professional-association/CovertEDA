@@ -5,8 +5,12 @@
 import {
   C,
   Backend,
+  BackendMeta,
   GitState,
   ProjectFile,
+  ProjectConfig,
+  RecentProject,
+  ExampleProject,
   TimingReportData,
   UtilizationReportData,
   PowerReportData,
@@ -173,6 +177,96 @@ export const BACKENDS: Record<string, Backend> = {
             name: "SPI Controller",
             desc: "Lattice SPI Hard IP",
             params: ["Clock Div: 2-512", "CPOL/CPHA", "Width: 8-32"],
+          },
+        ],
+      },
+    ],
+  },
+
+  radiant: {
+    id: "radiant",
+    name: "Lattice Radiant",
+    short: "Radiant",
+    color: "#a855f7",
+    icon: "\u2756", // ❖
+    version: "2025.2",
+    cli: "radiantc",
+    defaultDev: "LIFCL-40-7BG400I",
+    constrExt: ".pdc",
+    pipeline: [
+      {
+        id: "synth",
+        label: "Synthesis (LSE)",
+        cmd: "prj_run_synthesis",
+        detail: "RTL synthesis",
+      },
+      {
+        id: "map",
+        label: "Map",
+        cmd: "prj_run_map",
+        detail: "Technology mapping",
+      },
+      {
+        id: "par",
+        label: "Place & Route",
+        cmd: "prj_run_par",
+        detail: "Placement + routing",
+      },
+      {
+        id: "bitgen",
+        label: "Bitstream",
+        cmd: "prj_run_bitstream",
+        detail: ".bit generation",
+      },
+    ],
+    resources: [
+      { label: "LUT4", used: 48, total: 39600 },
+      { label: "Registers", used: 8, total: 39744 },
+      { label: "I/O Pins", used: 10, total: 220 },
+      { label: "EBR", used: 0, total: 104, unit: " blk" },
+      { label: "PLL", used: 0, total: 4 },
+    ],
+    timing: { fmax: "250.0", target: "100.0", setup: "+6.00", hold: "+0.15" },
+    constraints: [
+      { pin: "A4", net: "clk", dir: "IN", std: "LVCMOS33", bank: "0", lock: true },
+      { pin: "B2", net: "rst", dir: "IN", std: "LVCMOS33", bank: "0", lock: true },
+    ],
+    paths: [],
+    history: [],
+    log: [
+      { t: "cmd", m: "radiantc build.tcl" },
+      { t: "info", m: "CovertEDA \u2192 Radiant 2025.2" },
+      { t: "cmd", m: "prj_run_synthesis" },
+      { t: "out", m: "LSE: reading sources..." },
+      { t: "ok", m: "Synthesis: 0E 0W" },
+      { t: "cmd", m: "prj_run_par" },
+      { t: "ok", m: "PnR complete" },
+      { t: "ok", m: "Fmax=250.0 MHz \u2713" },
+      { t: "info", m: "\u2550\u2550\u2550 DONE \u2550\u2550\u2550 28s" },
+    ],
+    ipCatalog: [
+      {
+        cat: "Memory",
+        items: [
+          {
+            name: "EBR",
+            desc: "Embedded Block RAM",
+            params: ["Width: 1-36", "Depth: 256-32768"],
+          },
+          {
+            name: "LRAM",
+            desc: "Large RAM (Nexus)",
+            params: ["Width: 32", "Depth: 2048"],
+          },
+        ],
+      },
+      {
+        cat: "Clock",
+        items: [
+          {
+            name: "PLL",
+            desc: "Phase-Locked Loop",
+            params: ["Input: 10-400 MHz", "Outputs: 1-4"],
           },
         ],
       },
@@ -1347,5 +1441,80 @@ IOBUF PORT "i2c_scl" IO_TYPE=LVCMOS33 DRIVE=4 SLEWRATE=SLOW PULLMODE=UP;
 Also verify your clock divider: at 25MHz input with a divide of 62, you get ~403kHz which is borderline. Use 64 for clean 390kHz with margin.
 
 Should I update the constraint file?`,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// 9. BACKEND_META — lightweight backend info for start screen
+// ═══════════════════════════════════════════════════════════════
+
+export const BACKEND_META: BackendMeta[] = [
+  { id: "diamond", name: "Lattice Diamond", short: "Diamond", color: "#e74c3c", icon: "\u25C6", defaultDevice: "LCMXO3LF-6900C-5BG256C" },
+  { id: "radiant", name: "Lattice Radiant", short: "Radiant", color: "#a855f7", icon: "\u2756", defaultDevice: "LIFCL-40-7BG400I" },
+  { id: "quartus", name: "Intel Quartus Prime", short: "Quartus", color: "#0091ff", icon: "\u25C7", defaultDevice: "5CSEMA5F31C6" },
+  { id: "vivado", name: "AMD Vivado", short: "Vivado", color: "#8cc63f", icon: "\u25B2", defaultDevice: "xc7a100tcsg324-1" },
+  { id: "opensource", name: "OSS CAD Suite", short: "OSS CAD", color: "#fb923c", icon: "\u2726", defaultDevice: "LFE5U-85F-6BG381C" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// 10. MOCK_RECENT_PROJECTS / MOCK_PROJECT_CONFIG
+// ═══════════════════════════════════════════════════════════════
+
+export const MOCK_RECENT_PROJECTS: RecentProject[] = [
+  {
+    path: "/home/user/projects/dc-scm-controller",
+    name: "DC-SCM Controller",
+    backendId: "diamond",
+    device: "LCMXO3LF-6900C-5BG256C",
+    lastOpened: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    path: "/home/user/projects/pqc-accelerator",
+    name: "PQC Accelerator",
+    backendId: "quartus",
+    device: "5CSEMA5F31C6",
+    lastOpened: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    path: "/home/user/projects/sensor-hub",
+    name: "Sensor Hub",
+    backendId: "vivado",
+    device: "xc7a100tcsg324-1",
+    lastOpened: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    path: "/home/user/projects/led-blinky",
+    name: "LED Blinky",
+    backendId: "opensource",
+    device: "LFE5U-85F-6BG381C",
+    lastOpened: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+export const MOCK_PROJECT_CONFIG: ProjectConfig = {
+  name: "DC-SCM Controller",
+  backendId: "diamond",
+  device: "LCMXO3LF-6900C-5BG256C",
+  topModule: "top_level",
+  sourcePatterns: ["src/**/*.v", "src/**/*.sv"],
+  constraintFiles: ["constraints/*.lpf"],
+  implDir: "impl1",
+  backendConfig: {},
+  createdAt: "2025-01-15T10:00:00Z",
+  updatedAt: new Date().toISOString(),
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 11. EXAMPLE_PROJECTS — bundled examples for the start screen
+// ═══════════════════════════════════════════════════════════════
+
+export const EXAMPLE_PROJECTS: ExampleProject[] = [
+  {
+    name: "8-Bit Counter",
+    description: "Simple 8-bit counter with async reset. Radiant LSE synthesis, LIFCL-40 target.",
+    backendId: "radiant",
+    device: "LIFCL-40-7BG400I",
+    topModule: "count",
+    path: "/mnt/c/Users/tcove/projects/test_radiant_counter",
   },
 ];

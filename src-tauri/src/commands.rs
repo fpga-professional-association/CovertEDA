@@ -1,12 +1,21 @@
 use crate::backend::BackendRegistry;
+use crate::project::{ProjectConfig, RecentProject, RecentProjectsList};
 use crate::types::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
 
 pub struct AppState {
     pub registry: Mutex<BackendRegistry>,
-    pub active_build: Mutex<Option<String>>,
+    pub active_build: Mutex<Option<BuildHandle>>,
+    pub current_project: Mutex<Option<(PathBuf, ProjectConfig)>>,
+}
+
+/// Handle for a running build process — stored so we can cancel it.
+pub struct BuildHandle {
+    pub build_id: String,
+    pub child_pid: Option<u32>,
 }
 
 impl Default for AppState {
@@ -14,6 +23,7 @@ impl Default for AppState {
         Self {
             registry: Mutex::new(BackendRegistry::new()),
             active_build: Mutex::new(None),
+            current_project: Mutex::new(None),
         }
     }
 }
@@ -24,47 +34,455 @@ pub fn get_file_tree(project_dir: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
+pub fn read_file(path: String) -> Result<FileContent, String> {
+    let file_path = PathBuf::from(&path);
+    let metadata = std::fs::metadata(&file_path)
+        .map_err(|e| format!("Cannot read {}: {}", path, e))?;
+    let size_bytes = metadata.len();
+
+    // Cap at 2MB for text files
+    const MAX_TEXT_SIZE: u64 = 2 * 1024 * 1024;
+
+    // Read first 8KB to detect binary
+    let mut file = std::fs::File::open(&file_path)
+        .map_err(|e| format!("Cannot open {}: {}", path, e))?;
+    let mut probe = vec![0u8; 8192.min(size_bytes as usize)];
+    use std::io::Read;
+    file.read_exact(&mut probe)
+        .map_err(|e| format!("Cannot read {}: {}", path, e))?;
+
+    let is_binary = probe.contains(&0);
+
+    if is_binary {
+        let ext = file_path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown");
+        let size_display = if size_bytes >= 1024 * 1024 {
+            format!("{:.1} MB", size_bytes as f64 / (1024.0 * 1024.0))
+        } else {
+            format!("{:.0} KB", size_bytes as f64 / 1024.0)
+        };
+        return Ok(FileContent {
+            path,
+            content: format!("Binary file \u{2014} {} \u{2014} .{} file", size_display, ext),
+            size_bytes,
+            is_binary: true,
+            line_count: 0,
+        });
+    }
+
+    if size_bytes > MAX_TEXT_SIZE {
+        return Err(format!("File too large ({} bytes, max 2MB)", size_bytes));
+    }
+
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("Cannot read {}: {}", path, e))?;
+    let line_count = content.lines().count() as u32;
+
+    Ok(FileContent {
+        path,
+        content,
+        size_bytes,
+        is_binary: false,
+        line_count,
+    })
+}
+
+#[tauri::command]
+pub fn read_build_log(project_dir: String) -> Result<String, String> {
+    let log_path = PathBuf::from(&project_dir).join(".coverteda_build.log");
+    std::fs::read_to_string(&log_path)
+        .map_err(|e| format!("No build log found: {}", e))
+}
+
+#[tauri::command]
 pub fn get_git_status(project_dir: String) -> Result<GitStatus, String> {
     crate::git::get_status(&PathBuf::from(project_dir)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn start_build(
-    _state: State<'_, AppState>,
-    _backend_id: String,
-    _project_dir: String,
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    backend_id: String,
+    project_dir: String,
 ) -> Result<String, String> {
-    // TODO: spawn actual build process
     let build_id = uuid_v4();
+    let project_path = PathBuf::from(&project_dir);
+
+    // Get the project config to know device/top_module
+    let current = state.current_project.lock().map_err(|e| e.to_string())?;
+    let config = current
+        .as_ref()
+        .map(|(_, c)| c.clone())
+        .ok_or("No project is open")?;
+    drop(current);
+
+    // Generate the build script via the backend
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+
+    let script = backend
+        .generate_build_script(&project_path, &config.device, &config.top_module)
+        .map_err(|e| e.to_string())?;
+    let cli_tool = backend.cli_tool().to_string();
+    drop(registry);
+
+    // Write the build script to a temp file in the project directory
+    let script_path = project_path.join(".coverteda_build.tcl");
+    std::fs::write(&script_path, &script)
+        .map_err(|e| format!("Failed to write build script: {}", e))?;
+
+    // Determine the executable path for this backend
+    let executable = resolve_cli_executable(&cli_tool, &backend_id);
+
+    // Determine the script path that the tool sees
+    // For WSL→Windows executables, convert the WSL path to a Windows path
+    let script_arg = wsl_to_windows_path(&script_path);
+
+    // Determine license environment variables
+    let mut env_vars: HashMap<String, String> = HashMap::new();
+    if backend_id == "radiant" {
+        let radiant = crate::backend::radiant::RadiantBackend::new();
+        if let Some(lic_path) = radiant.find_license() {
+            env_vars.insert(
+                "LM_LICENSE_FILE".into(),
+                lic_path.display().to_string(),
+            );
+        }
+    }
+
+    // Record the build
+    let bid = build_id.clone();
+    {
+        let mut active = state.active_build.lock().map_err(|e| e.to_string())?;
+        *active = Some(BuildHandle {
+            build_id: bid.clone(),
+            child_pid: None,
+        });
+    }
+
+    // Spawn the build in a background thread
+    let build_id_clone = build_id.clone();
+    let log_path = project_path.join(".coverteda_build.log");
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+
+        // Open log file for writing
+        let mut log_file = std::fs::File::create(&log_path).ok();
+        let start_time = std::time::Instant::now();
+
+        let write_log = |log_file: &mut Option<std::fs::File>, line: &str| {
+            if let Some(ref mut f) = log_file {
+                use std::io::Write;
+                let _ = writeln!(f, "{}", line);
+            }
+        };
+
+        // Emit the build plan so the user sees what CovertEDA is doing
+        let emit_info = |msg: &str| {
+            let _ = app_handle.emit("build:stdout", serde_json::json!({
+                "buildId": &build_id_clone,
+                "line": msg,
+            }));
+        };
+
+        emit_info(&format!("═══ CovertEDA Build ═══"));
+        emit_info(&format!("Backend: {} ({})", backend_id, &executable));
+        emit_info(&format!("Project: {}", project_dir));
+        for (key, val) in &env_vars {
+            emit_info(&format!("ENV: {}={}", key, val));
+        }
+        emit_info(&format!("Script: {}", &script_arg));
+        emit_info("───── TCL commands ─────");
+        for tcl_line in script.lines() {
+            let trimmed = tcl_line.trim();
+            if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                emit_info(&format!("  $ {}", trimmed));
+            }
+        }
+        emit_info("────────────────────────");
+        emit_info(&format!("Spawning: {} {}", &executable, &script_arg));
+        emit_info("");
+
+        let mut cmd = Command::new(&executable);
+        cmd.arg(&script_arg)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        for (key, val) in &env_vars {
+            cmd.env(key, val);
+        }
+
+        match cmd.spawn() {
+            Ok(mut child) => {
+                // Capture stderr in a separate thread
+                let stderr_handle = child.stderr.take().map(|stderr| {
+                    let app_h = app_handle.clone();
+                    let bid = build_id_clone.clone();
+                    let log_p = log_path.clone();
+                    std::thread::spawn(move || {
+                        let reader = std::io::BufReader::new(stderr);
+                        let mut log_f = std::fs::OpenOptions::new()
+                            .append(true)
+                            .open(&log_p)
+                            .ok();
+                        for line in reader.lines().flatten() {
+                            if let Some(ref mut f) = log_f {
+                                use std::io::Write;
+                                let _ = writeln!(f, "[stderr] {}", line);
+                            }
+                            let _ = app_h.emit("build:stdout", serde_json::json!({
+                                "buildId": &bid,
+                                "line": &line,
+                            }));
+                        }
+                    })
+                });
+
+                // Stream stdout line by line
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = std::io::BufReader::new(stdout);
+                    let mut current_stage: i32 = -1;
+
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            write_log(&mut log_file, &line);
+
+                            let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                "buildId": &build_id_clone,
+                                "line": &line,
+                            }));
+
+                            let lower = line.to_lowercase();
+
+                            // Detect stage starts — emit info lines and track progress
+                            if current_stage < 0
+                                && (lower.contains("running synthesis")
+                                    || lower.contains("prj_run_synthesis")
+                                    || lower.contains("lse :"))
+                            {
+                                current_stage = 0;
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": "▶ [Stage 1/4] Synthesis (LSE) started...",
+                                }));
+                            }
+                            if current_stage < 1
+                                && (lower.contains("running map")
+                                    || lower.contains("prj_run_map")
+                                    || (lower.contains("map :") && lower.contains("version")))
+                            {
+                                current_stage = 1;
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": "▶ [Stage 2/4] Map started...",
+                                }));
+                            }
+                            if current_stage < 2
+                                && (lower.contains("running par")
+                                    || lower.contains("prj_run_par")
+                                    || (lower.contains("par :") && lower.contains("version")))
+                            {
+                                current_stage = 2;
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": "▶ [Stage 3/4] Place & Route started...",
+                                }));
+                            }
+                            if current_stage < 3
+                                && (lower.contains("running bitstream")
+                                    || lower.contains("prj_run_bitstream")
+                                    || lower.contains("bitgen :"))
+                            {
+                                current_stage = 3;
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": "▶ [Stage 4/4] Bitstream generation started...",
+                                }));
+                            }
+
+                            // Detect stage completions from real Radiant output
+                            if lower.contains("checksum -- syn")
+                                || (lower.contains("synthesis") && lower.contains("total cpu time"))
+                            {
+                                let elapsed = start_time.elapsed().as_secs();
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": format!("✓ Synthesis complete ({}s)", elapsed),
+                                }));
+                                let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                    build_id: build_id_clone.clone(),
+                                    stage_idx: 0,
+                                    status: BuildStatus::Success,
+                                    message: "Synthesis complete".into(),
+                                });
+                            }
+                            if lower.contains("checksum -- map")
+                                || (lower.contains("map ") && lower.contains("total cpu time"))
+                            {
+                                let elapsed = start_time.elapsed().as_secs();
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": format!("✓ Map complete ({}s)", elapsed),
+                                }));
+                                let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                    build_id: build_id_clone.clone(),
+                                    stage_idx: 1,
+                                    status: BuildStatus::Success,
+                                    message: "Map complete".into(),
+                                });
+                            }
+                            if lower.contains("par done!")
+                                || lower.contains("par_summary::run status = completed")
+                            {
+                                let elapsed = start_time.elapsed().as_secs();
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": format!("✓ Place & Route complete ({}s)", elapsed),
+                                }));
+                                let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                    build_id: build_id_clone.clone(),
+                                    stage_idx: 2,
+                                    status: BuildStatus::Success,
+                                    message: "Place & Route complete".into(),
+                                });
+                            }
+                            if lower.contains("bitstream generation complete")
+                                || (lower.contains("bitgen") && lower.contains("total cpu time"))
+                            {
+                                let elapsed = start_time.elapsed().as_secs();
+                                let _ = app_handle.emit("build:stdout", serde_json::json!({
+                                    "buildId": &build_id_clone,
+                                    "line": format!("✓ Bitstream generation complete ({}s)", elapsed),
+                                }));
+                                let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                    build_id: build_id_clone.clone(),
+                                    stage_idx: 3,
+                                    status: BuildStatus::Success,
+                                    message: "Bitstream complete".into(),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Wait for stderr thread
+                if let Some(h) = stderr_handle {
+                    let _ = h.join();
+                }
+
+                // Wait for process to finish
+                match child.wait() {
+                    Ok(status) => {
+                        let total_secs = start_time.elapsed().as_secs();
+                        let mins = total_secs / 60;
+                        let secs = total_secs % 60;
+                        let final_status = if status.success() {
+                            BuildStatus::Success
+                        } else {
+                            BuildStatus::Failed
+                        };
+                        let msg = if status.success() {
+                            format!("═══ BUILD COMPLETE ═══  {}m {}s", mins, secs)
+                        } else {
+                            format!("═══ BUILD FAILED ═══  {} ({}m {}s)", status, mins, secs)
+                        };
+                        write_log(&mut log_file, &msg);
+                        let _ = app_handle.emit("build:finished", BuildEvent {
+                            build_id: build_id_clone.clone(),
+                            stage_idx: 0,
+                            status: final_status,
+                            message: msg,
+                        });
+                    }
+                    Err(e) => {
+                        let msg = format!("Build wait error: {}", e);
+                        write_log(&mut log_file, &msg);
+                        let _ = app_handle.emit("build:finished", BuildEvent {
+                            build_id: build_id_clone.clone(),
+                            stage_idx: 0,
+                            status: BuildStatus::Failed,
+                            message: msg,
+                        });
+                    }
+                }
+
+                // Clean up the temp script
+                let _ = std::fs::remove_file(&script_path);
+            }
+            Err(e) => {
+                let msg = format!("Failed to spawn {}: {}", executable, e);
+                write_log(&mut log_file, &msg);
+                let _ = app_handle.emit("build:finished", BuildEvent {
+                    build_id: build_id_clone.clone(),
+                    stage_idx: 0,
+                    status: BuildStatus::Failed,
+                    message: msg,
+                });
+            }
+        }
+    });
+
     Ok(build_id)
 }
 
 #[tauri::command]
 pub fn cancel_build(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     _build_id: String,
 ) -> Result<(), String> {
-    // TODO: kill build process
+    let mut active = state.active_build.lock().map_err(|e| e.to_string())?;
+    if let Some(handle) = active.as_ref() {
+        if let Some(pid) = handle.child_pid {
+            // Send SIGTERM on Unix
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
+            }
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(&["/PID", &pid.to_string(), "/F"])
+                    .spawn();
+            }
+        }
+    }
+    *active = None;
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_timing_report(
-    _state: State<'_, AppState>,
-    _backend_id: String,
-    _impl_dir: String,
+    state: State<'_, AppState>,
+    backend_id: String,
+    impl_dir: String,
 ) -> Result<TimingReport, String> {
-    // TODO: delegate to active backend
-    Err("No report available yet".to_string())
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend
+        .parse_timing_report(&PathBuf::from(&impl_dir))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_utilization_report(
-    _state: State<'_, AppState>,
-    _backend_id: String,
-    _impl_dir: String,
+    state: State<'_, AppState>,
+    backend_id: String,
+    impl_dir: String,
 ) -> Result<ResourceReport, String> {
-    Err("No report available yet".to_string())
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend
+        .parse_utilization_report(&PathBuf::from(&impl_dir))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -116,6 +534,284 @@ pub fn write_constraints(
     _output_file: String,
 ) -> Result<(), String> {
     Err("Not implemented yet".to_string())
+}
+
+// ── Project Management Commands ──
+
+#[tauri::command]
+pub fn get_recent_projects() -> Result<Vec<RecentProject>, String> {
+    let mut list = RecentProjectsList::load();
+    list.prune();
+    let _ = list.save();
+    Ok(list.projects)
+}
+
+#[tauri::command]
+pub fn create_project(
+    state: State<'_, AppState>,
+    dir: String,
+    name: String,
+    backend_id: String,
+    device: String,
+    top_module: String,
+) -> Result<ProjectConfig, String> {
+    let project_dir = PathBuf::from(&dir);
+    if !project_dir.exists() {
+        std::fs::create_dir_all(&project_dir)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    let mut config = ProjectConfig::new_with_defaults(&name, &backend_id, &device, &top_module);
+    config.save(&project_dir)?;
+
+    let mut list = RecentProjectsList::load();
+    list.add(&project_dir, &config);
+    list.save()?;
+
+    let mut current = state.current_project.lock().map_err(|e| e.to_string())?;
+    *current = Some((project_dir, config.clone()));
+
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn open_project(
+    state: State<'_, AppState>,
+    dir: String,
+) -> Result<ProjectConfig, String> {
+    let project_dir = PathBuf::from(&dir);
+    let config = ProjectConfig::load(&project_dir)?;
+
+    let mut list = RecentProjectsList::load();
+    list.add(&project_dir, &config);
+    list.save()?;
+
+    let mut current = state.current_project.lock().map_err(|e| e.to_string())?;
+    *current = Some((project_dir, config.clone()));
+
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn check_project_dir(dir: String) -> Result<Option<ProjectConfig>, String> {
+    let project_dir = PathBuf::from(&dir);
+    if ProjectConfig::exists(&project_dir) {
+        Ok(Some(ProjectConfig::load(&project_dir)?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+pub fn save_project(
+    state: State<'_, AppState>,
+    dir: String,
+    config: ProjectConfig,
+) -> Result<(), String> {
+    let project_dir = PathBuf::from(&dir);
+    let mut config = config;
+    config.save(&project_dir)?;
+
+    let mut current = state.current_project.lock().map_err(|e| e.to_string())?;
+    *current = Some((project_dir, config));
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_recent_project(path: String) -> Result<(), String> {
+    let mut list = RecentProjectsList::load();
+    list.remove(&path);
+    list.save()
+}
+
+// ── Tool Detection & License Commands ──
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedTool {
+    pub backend_id: String,
+    pub name: String,
+    pub version: String,
+    pub install_path: Option<String>,
+    pub available: bool,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LicenseFeature {
+    pub feature: String,
+    pub vendor: String,
+    pub expires: String,
+    pub host_id: String,
+    pub status: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LicenseCheckResult {
+    pub license_file: Option<String>,
+    pub features: Vec<LicenseFeature>,
+}
+
+#[tauri::command]
+pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, String> {
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backends = registry.list();
+
+    let mut tools: Vec<DetectedTool> = backends
+        .iter()
+        .map(|b| {
+            // For Radiant, include the install path
+            let install_path = if b.id == "radiant" {
+                let radiant = crate::backend::radiant::RadiantBackend::new();
+                radiant.install_dir().map(|p| p.display().to_string())
+            } else {
+                None
+            };
+            DetectedTool {
+                backend_id: b.id.clone(),
+                name: b.name.clone(),
+                version: b.version.clone(),
+                install_path,
+                available: b.available,
+            }
+        })
+        .collect();
+
+    // Sort so available tools come first
+    tools.sort_by(|a, b| b.available.cmp(&a.available));
+    Ok(tools)
+}
+
+#[tauri::command]
+pub fn check_licenses() -> Result<LicenseCheckResult, String> {
+    let radiant = crate::backend::radiant::RadiantBackend::new();
+    let license_path = radiant.find_license();
+
+    let features = if let Some(ref path) = license_path {
+        parse_license_file(path)
+    } else {
+        vec![]
+    };
+
+    Ok(LicenseCheckResult {
+        license_file: license_path.map(|p| p.display().to_string()),
+        features,
+    })
+}
+
+fn parse_license_file(path: &std::path::Path) -> Vec<LicenseFeature> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+
+    let mut features = vec![];
+    // Join continuation lines (lines ending with \)
+    let joined = content.replace("\\\n", " ").replace("\\\r\n", " ");
+
+    for line in joined.lines() {
+        let line = line.trim();
+        if line.starts_with("FEATURE ") || line.starts_with("INCREMENT ") {
+            // Format: FEATURE <name> <vendor> <version> <expiry> <count> <key> [options...]
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 6 {
+                let feature_name = parts[1].to_string();
+                let vendor = parts[2].to_string();
+                let expires = parts[4].to_string();
+
+                // Extract HOSTID if present
+                let host_id = parts
+                    .iter()
+                    .find(|p| p.starts_with("HOSTID="))
+                    .map(|p| p.trim_start_matches("HOSTID=").to_string())
+                    .unwrap_or_default();
+
+                // Determine status based on expiry date
+                let status = if expires == "permanent" || expires == "0" {
+                    "active".to_string()
+                } else {
+                    // Try to parse the date
+                    match parse_license_date(&expires) {
+                        Some(exp_date) => {
+                            let now = chrono::Utc::now().date_naive();
+                            if exp_date < now {
+                                "expired".to_string()
+                            } else {
+                                let days_left = (exp_date - now).num_days();
+                                if days_left < 30 {
+                                    "warning".to_string()
+                                } else {
+                                    "active".to_string()
+                                }
+                            }
+                        }
+                        None => "unknown".to_string(),
+                    }
+                };
+
+                features.push(LicenseFeature {
+                    feature: feature_name,
+                    vendor,
+                    expires,
+                    host_id,
+                    status,
+                });
+            }
+        }
+    }
+
+    features
+}
+
+fn parse_license_date(s: &str) -> Option<chrono::NaiveDate> {
+    // FlexLM date format: "26-dec-2026" or "31-jan-2025"
+    let months = [
+        ("jan", 1), ("feb", 2), ("mar", 3), ("apr", 4),
+        ("may", 5), ("jun", 6), ("jul", 7), ("aug", 8),
+        ("sep", 9), ("oct", 10), ("nov", 11), ("dec", 12),
+    ];
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() == 3 {
+        let day: u32 = parts[0].parse().ok()?;
+        let month = months
+            .iter()
+            .find(|(name, _)| *name == parts[1].to_lowercase())
+            .map(|(_, num)| *num)?;
+        let year: i32 = parts[2].parse().ok()?;
+        chrono::NaiveDate::from_ymd_opt(year, month, day)
+    } else {
+        None
+    }
+}
+
+/// Resolve the CLI executable path for a given backend.
+/// Checks the backend's detected installation path first, then falls back to PATH.
+fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
+    match backend_id {
+        "radiant" => {
+            let radiant = crate::backend::radiant::RadiantBackend::new();
+            if let Some(path) = radiant.radiantc_path_public() {
+                return path.display().to_string();
+            }
+            cli_tool.to_string()
+        }
+        _ => cli_tool.to_string(),
+    }
+}
+
+/// Convert a WSL path to a Windows path for use by Windows executables.
+/// e.g., /mnt/c/Users/foo/project → C:/Users/foo/project
+/// Non-WSL paths are returned as-is.
+fn wsl_to_windows_path(path: &std::path::Path) -> String {
+    let s = path.display().to_string();
+    if s.starts_with("/mnt/") && s.len() > 6 {
+        let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
+        let rest = &s[6..];
+        format!("{}:{}", drive, rest.replace('/', "\\"))
+    } else {
+        s
+    }
 }
 
 fn uuid_v4() -> String {

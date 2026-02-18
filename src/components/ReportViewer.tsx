@@ -1,7 +1,5 @@
 import React, { ReactNode } from "react";
 import {
-  C,
-  MONO,
   ReportTab,
   TimingReportData,
   UtilizationReportData,
@@ -9,50 +7,40 @@ import {
   DrcReportData,
   IoBankData,
 } from "../types";
+import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 import { Clock, Warn, Arrow, Gauge, Bolt, Pin } from "./Icons";
-
-// ── Local styles ──
-const panel: React.CSSProperties = {
-  background: C.s1,
-  borderRadius: 7,
-  border: `1px solid ${C.b1}`,
-  overflow: "hidden",
-};
-const panelP: React.CSSProperties = { ...panel, padding: 14 };
-
-// ── Section header helper ──
-function hdr(t: ReactNode, icon: ReactNode) {
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        fontWeight: 700,
-        color: C.t1,
-        marginBottom: 10,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-      }}
-    >
-      {icon}
-      {t}
-    </div>
-  );
-}
 
 // ── Props ──
 interface ReportViewerProps {
   rptTab: ReportTab;
   setRptTab: (tab: ReportTab) => void;
   reports: {
-    timing: TimingReportData;
-    utilization: UtilizationReportData;
-    power: PowerReportData;
-    drc: DrcReportData;
-    io: { title: string; generated: string; banks: IoBankData[] };
+    timing: TimingReportData | null;
+    utilization: UtilizationReportData | null;
+    power: PowerReportData | null;
+    drc: DrcReportData | null;
+    io: { title: string; generated: string; banks: IoBankData[] } | null;
   };
   device: string;
+}
+
+function NoData({ label }: { label: string }) {
+  const { C, MONO } = useTheme();
+  const panelP: React.CSSProperties = {
+    background: C.s1,
+    borderRadius: 7,
+    border: `1px solid ${C.b1}`,
+    overflow: "hidden",
+    padding: 14,
+  };
+  return (
+    <div style={panelP}>
+      <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO, padding: 20, textAlign: "center" }}>
+        No {label} data available. Run a build to generate reports.
+      </div>
+    </div>
+  );
 }
 
 export default function ReportViewer({
@@ -60,23 +48,53 @@ export default function ReportViewer({
   setRptTab,
   reports,
 }: ReportViewerProps) {
+  const { C, MONO } = useTheme();
   const REPORTS = reports;
+
+  const panel: React.CSSProperties = {
+    background: C.s1,
+    borderRadius: 7,
+    border: `1px solid ${C.b1}`,
+    overflow: "hidden",
+  };
+  const panelP: React.CSSProperties = { ...panel, padding: 14 };
+
+  function hdr(t: ReactNode, icon: ReactNode) {
+    return (
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.t1,
+          marginBottom: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        {icon}
+        {t}
+      </div>
+    );
+  }
 
   // ── Tab definitions ──
   const tabs: { id: ReportTab; l: string; c?: string }[] = [
     {
       id: "timing",
       l: "\u23F1 Timing",
-      c:
-        REPORTS.timing.summary.failingPaths > 0 ? C.err : C.ok,
+      c: REPORTS.timing
+        ? (REPORTS.timing.summary.failingPaths > 0 ? C.err : C.ok)
+        : undefined,
     },
     { id: "util", l: "\uD83D\uDCCA Utilization" },
     { id: "power", l: "\u26A1 Power" },
     {
       id: "drc",
       l: "\u26A0 DRC",
-      c:
-        REPORTS.drc.summary.critWarns > 0 ? C.warn : C.ok,
+      c: REPORTS.drc
+        ? (REPORTS.drc.summary.critWarns > 0 ? C.warn : C.ok)
+        : undefined,
     },
     { id: "io", l: "\uD83D\uDCCC I/O Banking" },
   ];
@@ -140,7 +158,8 @@ export default function ReportViewer({
       </div>
 
       {/* ════════════════ TIMING REPORT ════════════════ */}
-      {rptTab === "timing" && (
+      {rptTab === "timing" && !REPORTS.timing && <NoData label="timing" />}
+      {rptTab === "timing" && REPORTS.timing && (
         <div
           style={{
             flex: 1,
@@ -583,7 +602,8 @@ export default function ReportViewer({
       )}
 
       {/* ════════════════ UTILIZATION REPORT ════════════════ */}
-      {rptTab === "util" && (
+      {rptTab === "util" && !REPORTS.utilization && <NoData label="utilization" />}
+      {rptTab === "util" && REPORTS.utilization && (
         <div
           style={{
             flex: 1,
@@ -792,7 +812,8 @@ export default function ReportViewer({
       )}
 
       {/* ════════════════ POWER REPORT ════════════════ */}
-      {rptTab === "power" && (
+      {rptTab === "power" && !REPORTS.power && <NoData label="power" />}
+      {rptTab === "power" && REPORTS.power && (
         <div
           style={{
             flex: 1,
@@ -997,7 +1018,8 @@ export default function ReportViewer({
       )}
 
       {/* ════════════════ DRC REPORT ════════════════ */}
-      {rptTab === "drc" && (
+      {rptTab === "drc" && !REPORTS.drc && <NoData label="DRC" />}
+      {rptTab === "drc" && REPORTS.drc && (
         <div
           style={{
             flex: 1,
@@ -1156,7 +1178,8 @@ export default function ReportViewer({
       )}
 
       {/* ════════════════ I/O BANKING REPORT ════════════════ */}
-      {rptTab === "io" && (
+      {rptTab === "io" && !REPORTS.io && <NoData label="I/O banking" />}
+      {rptTab === "io" && REPORTS.io && REPORTS.utilization && (
         <div
           style={{
             flex: 1,

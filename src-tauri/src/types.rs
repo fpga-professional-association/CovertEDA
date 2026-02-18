@@ -188,6 +188,18 @@ pub struct IoBankPin {
     pub direction: String,
 }
 
+// ── File Content (read-only viewer) ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileContent {
+    pub path: String,
+    pub content: String,
+    pub size_bytes: u64,
+    pub is_binary: bool,
+    pub line_count: u32,
+}
+
 // ── File Tree ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,0 +1,430 @@
+use crate::backend::{BackendError, BackendResult, FpgaBackend};
+use crate::types::*;
+use std::path::{Path, PathBuf};
+
+/// Lattice Radiant backend — drives radiantc / pnmainc (TCL shell)
+/// for Nexus (LIFCL, CrossLink-NX, Avant) and CertusPro-NX families.
+pub struct RadiantBackend {
+    version: String,
+    install_dir: Option<PathBuf>,
+}
+
+impl RadiantBackend {
+    pub fn new() -> Self {
+        let (version, install_dir) = Self::detect_installation();
+        Self {
+            version,
+            install_dir,
+        }
+    }
+
+    /// Scan known installation paths for Lattice Radiant.
+    fn detect_installation() -> (String, Option<PathBuf>) {
+        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            // Standard Windows install paths
+            vec![PathBuf::from(r"C:\lscc\radiant")]
+        } else {
+            // Linux + WSL: check both native and /mnt/c
+            vec![
+                PathBuf::from("/usr/local/radiant"),
+                PathBuf::from("/opt/lscc/radiant"),
+                PathBuf::from("/mnt/c/lscc/radiant"),
+            ]
+        };
+
+        for base in &candidates {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                // Find the newest version directory (e.g., "2025.2")
+                let mut versions: Vec<String> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        // Version dirs look like "2025.2", "2024.1", etc.
+                        if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                            Some(name)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                versions.sort();
+                if let Some(ver) = versions.last() {
+                    let install = base.join(ver);
+                    return (ver.clone(), Some(install));
+                }
+            }
+        }
+
+        ("unknown".to_string(), None)
+    }
+
+    /// Path to the radiantc / pnmainc TCL shell executable.
+    fn radiantc_path(&self) -> Option<PathBuf> {
+        let dir = self.install_dir.as_ref()?;
+        let bin = if cfg!(target_os = "windows") {
+            dir.join("bin").join("nt64").join("radiantc.exe")
+        } else if dir.starts_with("/mnt/c") || dir.starts_with("/mnt/d") {
+            // WSL accessing Windows install — use .exe
+            dir.join("bin").join("nt64").join("radiantc.exe")
+        } else {
+            dir.join("bin").join("lin64").join("radiantc")
+        };
+        if bin.exists() {
+            Some(bin)
+        } else {
+            None
+        }
+    }
+
+    /// Get the installation directory (for external use).
+    pub fn install_dir(&self) -> Option<&Path> {
+        self.install_dir.as_deref()
+    }
+
+    /// Public accessor for the radiantc executable path.
+    pub fn radiantc_path_public(&self) -> Option<PathBuf> {
+        self.radiantc_path()
+    }
+
+    /// Find the .rdf project file in a directory.
+    /// Radiant project files may not match the top module name (e.g., "8_bit_counter.rdf").
+    pub fn find_rdf_file(project_dir: &Path, top_module: &str) -> Option<PathBuf> {
+        // First try exact match: <top_module>.rdf
+        let exact = project_dir.join(format!("{}.rdf", top_module));
+        if exact.exists() {
+            return Some(exact);
+        }
+
+        // Scan for any .rdf files
+        let rdfs: Vec<PathBuf> = std::fs::read_dir(project_dir)
+            .ok()?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|ext| ext == "rdf").unwrap_or(false))
+            .collect();
+
+        match rdfs.len() {
+            0 => None,
+            1 => Some(rdfs.into_iter().next().unwrap()),
+            _ => {
+                // Multiple .rdf files — prefer one containing the top module name
+                rdfs.iter()
+                    .find(|p| {
+                        p.file_stem()
+                            .and_then(|s| s.to_str())
+                            .map(|s| s.contains(top_module))
+                            .unwrap_or(false)
+                    })
+                    .cloned()
+                    .or_else(|| rdfs.into_iter().next())
+            }
+        }
+    }
+
+    /// Check if a license file is found and contains LSC_RADIANT feature.
+    pub fn find_license(&self) -> Option<PathBuf> {
+        // Check LM_LICENSE_FILE env var first
+        if let Ok(lic_path) = std::env::var("LM_LICENSE_FILE") {
+            let p = PathBuf::from(&lic_path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+
+        // Check common license file locations
+        let candidates = if cfg!(target_os = "windows") {
+            vec![
+                dirs::home_dir().map(|h| h.join("license.dat")),
+                Some(PathBuf::from(r"C:\license.dat")),
+            ]
+        } else {
+            vec![
+                // WSL: check Windows user home
+                Some(PathBuf::from("/mnt/c/Users"))
+                    .and_then(|p| {
+                        std::fs::read_dir(&p)
+                            .ok()?
+                            .filter_map(|e| e.ok())
+                            .find(|e| {
+                                e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                                    && e.file_name() != "Public"
+                                    && e.file_name() != "Default"
+                                    && e.file_name() != "Default User"
+                                    && e.file_name() != "All Users"
+                            })
+                            .map(|e| e.path().join("license.dat"))
+                    }),
+                dirs::home_dir().map(|h| h.join("license.dat")),
+            ]
+        };
+
+        for candidate in candidates.into_iter().flatten() {
+            if candidate.exists() {
+                // Verify it contains a Lattice feature
+                if let Ok(content) = std::fs::read_to_string(&candidate) {
+                    if content.contains("LSC_RADIANT") || content.contains("lattice") {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+impl FpgaBackend for RadiantBackend {
+    fn id(&self) -> &str {
+        "radiant"
+    }
+    fn name(&self) -> &str {
+        "Lattice Radiant"
+    }
+    fn short_name(&self) -> &str {
+        "Radiant"
+    }
+    fn version(&self) -> &str {
+        &self.version
+    }
+    fn cli_tool(&self) -> &str {
+        "radiantc"
+    }
+    fn default_device(&self) -> &str {
+        "LIFCL-40-7BG400I"
+    }
+    fn constraint_ext(&self) -> &str {
+        ".pdc"
+    }
+
+    fn pipeline_stages(&self) -> Vec<PipelineStage> {
+        vec![
+            PipelineStage {
+                id: "synth".into(),
+                label: "Synthesis (LSE)".into(),
+                cmd: "prj_run_synthesis".into(),
+                detail: "RTL to technology mapping".into(),
+            },
+            PipelineStage {
+                id: "map".into(),
+                label: "Map".into(),
+                cmd: "prj_run_map".into(),
+                detail: "Technology mapping to device primitives".into(),
+            },
+            PipelineStage {
+                id: "par".into(),
+                label: "Place & Route".into(),
+                cmd: "prj_run_par".into(),
+                detail: "Placement and routing".into(),
+            },
+            PipelineStage {
+                id: "bitgen".into(),
+                label: "Bitstream".into(),
+                cmd: "prj_run_bitstream".into(),
+                detail: ".bit generation".into(),
+            },
+        ]
+    }
+
+    fn generate_build_script(
+        &self,
+        project_dir: &Path,
+        device: &str,
+        top_module: &str,
+    ) -> BackendResult<String> {
+        let rdf = Self::find_rdf_file(project_dir, top_module)
+            .ok_or_else(|| BackendError::ConfigError(format!(
+                "No .rdf project file found in {}",
+                project_dir.display()
+            )))?;
+        // Convert WSL path to Windows path for radiantc.exe (TCL uses forward slashes)
+        let rdf_display = to_tcl_path(&rdf);
+        Ok(format!(
+            r#"# CovertEDA — Radiant Build Script
+# Device: {device}
+# Top: {top_module}
+
+prj_open "{rdf}"
+prj_run_synthesis
+prj_run_map
+prj_run_par
+prj_run_bitstream
+prj_close
+"#,
+            rdf = rdf_display,
+        ))
+    }
+
+    fn detect_tool(&self) -> bool {
+        self.radiantc_path().is_some()
+    }
+
+    fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
+        // Radiant timing reports are in impl1/<top>.twr or impl1/<top>_par.twr
+        let twr = impl_dir.join("impl1");
+        if !twr.exists() {
+            return Err(BackendError::ReportNotFound(
+                twr.display().to_string(),
+            ));
+        }
+        // Look for any .twr file
+        let twr_file = std::fs::read_dir(&twr)
+            .map_err(|e| BackendError::IoError(e))?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "twr")
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path())
+            .ok_or_else(|| {
+                BackendError::ReportNotFound("No .twr file found in impl1".to_string())
+            })?;
+
+        let content = std::fs::read_to_string(&twr_file)?;
+        crate::parser::timing::parse_radiant_timing(&content)
+    }
+
+    fn parse_utilization_report(&self, impl_dir: &Path) -> BackendResult<ResourceReport> {
+        let mrp_dir = impl_dir.join("impl1");
+        if !mrp_dir.exists() {
+            return Err(BackendError::ReportNotFound(
+                mrp_dir.display().to_string(),
+            ));
+        }
+        let mrp_file = std::fs::read_dir(&mrp_dir)
+            .map_err(|e| BackendError::IoError(e))?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "mrp")
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path())
+            .ok_or_else(|| {
+                BackendError::ReportNotFound("No .mrp file found in impl1".to_string())
+            })?;
+
+        let content = std::fs::read_to_string(&mrp_file)?;
+        crate::parser::utilization::parse_radiant_utilization(&content, self.default_device())
+    }
+
+    fn parse_power_report(&self, _impl_dir: &Path) -> BackendResult<Option<PowerReport>> {
+        Ok(None)
+    }
+
+    fn parse_drc_report(&self, impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
+        let drc_dir = impl_dir.join("impl1");
+        if !drc_dir.exists() {
+            return Ok(None);
+        }
+        let drc_file = std::fs::read_dir(&drc_dir)
+            .map_err(|e| BackendError::IoError(e))?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "drc")
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path());
+
+        let drc_file = match drc_file {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        let content = std::fs::read_to_string(&drc_file)?;
+
+        let mut errors = 0u32;
+        let mut warnings = 0u32;
+        let mut items = Vec::new();
+
+        // Parse "DRC detected N errors and N warnings."
+        let summary_re = regex::Regex::new(
+            r"DRC detected (\d+) errors? and (\d+) warnings?"
+        ).unwrap();
+        if let Some(caps) = summary_re.captures(&content) {
+            errors = caps[1].parse().unwrap_or(0);
+            warnings = caps[2].parse().unwrap_or(0);
+        }
+
+        // Parse individual DRC items: "ERROR/WARNING - <code>: <message>"
+        let item_re = regex::Regex::new(
+            r"(?m)^(ERROR|WARNING)\s*-\s*([A-Z0-9_]+):\s*(.+)$"
+        ).unwrap();
+        for caps in item_re.captures_iter(&content) {
+            let sev = match &caps[1] {
+                "ERROR" => DrcSeverity::Error,
+                _ => DrcSeverity::Warning,
+            };
+            items.push(DrcItem {
+                severity: sev,
+                code: caps[2].to_string(),
+                message: caps[3].trim().to_string(),
+                location: String::new(),
+                action: String::new(),
+            });
+        }
+
+        Ok(Some(DrcReport {
+            errors,
+            critical_warnings: 0,
+            warnings,
+            info: 0,
+            waived: 0,
+            items,
+        }))
+    }
+
+    fn read_constraints(&self, constraint_file: &Path) -> BackendResult<Vec<PinConstraint>> {
+        if !constraint_file.exists() {
+            return Err(BackendError::ReportNotFound(
+                constraint_file.display().to_string(),
+            ));
+        }
+        let ext = constraint_file
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        let content = std::fs::read_to_string(constraint_file)?;
+        match ext {
+            "lpf" => crate::parser::constraints::parse_lpf(&content),
+            "pdc" => {
+                // PDC is TCL-based; for now return empty
+                Ok(vec![])
+            }
+            _ => Err(BackendError::ParseError(format!(
+                "Unknown constraint format: {}",
+                ext
+            ))),
+        }
+    }
+
+    fn write_constraints(
+        &self,
+        constraints: &[PinConstraint],
+        output_file: &Path,
+    ) -> BackendResult<()> {
+        let content = crate::parser::constraints::write_lpf(constraints);
+        std::fs::write(output_file, content)?;
+        Ok(())
+    }
+}
+
+/// Convert a WSL path to a Windows-style path for use inside TCL scripts
+/// executed by Windows-native radiantc.exe.
+/// e.g., /mnt/c/Users/foo/project/file.rdf → C:/Users/foo/project/file.rdf
+/// Non-WSL paths just get backslashes converted to forward slashes.
+fn to_tcl_path(path: &Path) -> String {
+    let s = path.display().to_string();
+    if s.starts_with("/mnt/") && s.len() > 6 {
+        let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
+        let rest = &s[6..]; // already has forward slashes from Linux
+        format!("{}:{}", drive, rest)
+    } else {
+        s.replace('\\', "/")
+    }
+}

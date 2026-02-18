@@ -1,18 +1,53 @@
-import { C, MONO, GitState } from "../types";
+import { GitState } from "../types";
+import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, HoverRow } from "./shared";
 import { Branch, Git } from "./Icons";
 
 interface GitStatusBarProps {
-  git: GitState;
+  git: GitState | null;
+  projectName?: string;
   gitExpanded: boolean;
   setGitExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
 }
 
 export default function GitStatusBar({
   git,
+  projectName,
   gitExpanded,
   setGitExpanded,
 }: GitStatusBarProps) {
+  const { C, MONO } = useTheme();
+  // Minimal bar when no git data
+  if (!git) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          height: 28,
+          padding: "0 12px",
+          background: "#080a10",
+          borderBottom: `1px solid ${C.b1}`,
+          gap: 8,
+          fontSize: 9,
+          fontFamily: MONO,
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ display: "flex", color: C.t3 }}>
+          <Branch />
+        </span>
+        <span style={{ color: C.t3 }}>
+          {projectName || "No project"}
+        </span>
+        <div style={{ flex: 1 }} />
+        <span style={{ color: C.t3, opacity: 0.5 }}>
+          No git repository detected
+        </span>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* ══════════════ GIT STATUS BAR ══════════════ */}

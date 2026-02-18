@@ -7,7 +7,7 @@ pub fn scan_directory(project_dir: &Path) -> Result<Vec<FileEntry>, std::io::Err
     let mut entries = Vec::new();
 
     for entry in WalkDir::new(project_dir)
-        .max_depth(4)
+        .max_depth(6)
         .into_iter()
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
@@ -59,17 +59,33 @@ fn classify_file(name: &str, _path: &Path) -> FileType {
         || lower.ends_with(".sdc")
         || lower.ends_with(".xdc")
         || lower.ends_with(".pcf")
+        || lower.ends_with(".pdc")
     {
         FileType::Constraint
     } else if lower.ends_with(".jed")
         || lower.ends_with(".bit")
         || lower.ends_with(".sof")
         || lower.ends_with(".bin")
+        || lower.ends_with(".twr")
+        || lower.ends_with(".mrp")
+        || lower.ends_with(".par")
+        || lower.ends_with(".bgn")
+        || lower.ends_with(".drc")
+        || lower.ends_with(".srp")
+        || lower.ends_with(".pad")
+        || lower.ends_with(".arearep")
+        || lower.ends_with(".log")
     {
         FileType::Output
     } else if lower.ends_with(".md") || lower.ends_with(".txt") || lower.ends_with(".pdf") {
         FileType::Doc
-    } else if lower.ends_with(".tcl") || lower.ends_with(".do") || lower.ends_with(".toml") || lower.ends_with(".json") {
+    } else if lower.ends_with(".tcl")
+        || lower.ends_with(".do")
+        || lower.ends_with(".toml")
+        || lower.ends_with(".json")
+        || lower.ends_with(".rdf")
+        || lower.ends_with(".sty")
+    {
         FileType::Config
     } else {
         FileType::Other

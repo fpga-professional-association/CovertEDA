@@ -1,24 +1,15 @@
-import React, { useRef, useEffect } from "react";
-import { C, MONO, LogEntry } from "../types";
+import { useRef, useEffect, useCallback } from "react";
+import { LogEntry } from "../types";
+import { useTheme } from "../context/ThemeContext";
 import { Btn } from "./shared";
 
 interface ConsoleProps {
   logs: LogEntry[];
   building: boolean;
   backendShort: string;
-  backendIcon: string;
   backendColor: string;
   onClear: () => void;
 }
-
-const lineColors: Record<string, string> = {
-  info: C.t3,
-  cmd: C.cyan,
-  ok: C.ok,
-  warn: C.warn,
-  err: C.err,
-  out: C.t2,
-};
 
 const linePrefixes: Record<string, string> = {
   cmd: "$ ",
@@ -33,30 +24,50 @@ export default function Console({
   logs,
   building,
   backendShort,
-  backendIcon,
   backendColor,
   onClear,
 }: ConsoleProps) {
-  const logRef = useRef<HTMLDivElement>(null);
+  const { C, MONO } = useTheme();
 
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  const panel: React.CSSProperties = {
-    background: C.s1,
-    borderRadius: 7,
-    border: `1px solid ${C.b1}`,
-    overflow: "hidden",
-    height: "calc(100vh - 120px)",
-    display: "flex",
-    flexDirection: "column",
+  const lineColors: Record<string, string> = {
+    info: C.t3,
+    cmd: C.cyan,
+    ok: C.ok,
+    warn: C.warn,
+    err: C.err,
+    out: C.t2,
   };
 
+  const logRef = useRef<HTMLDivElement>(null);
+  const wasAtBottom = useRef(true);
+
+  // Auto-scroll only if user was already at bottom
+  useEffect(() => {
+    const el = logRef.current;
+    if (el && wasAtBottom.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [logs.length]);
+
+  const handleScroll = useCallback(() => {
+    const el = logRef.current;
+    if (el) {
+      wasAtBottom.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+    }
+  }, []);
+
   return (
-    <div style={panel}>
+    <div
+      style={{
+        background: C.s1,
+        borderRadius: 7,
+        border: `1px solid ${C.b1}`,
+        overflow: "hidden",
+        height: "calc(100vh - 120px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -69,7 +80,7 @@ export default function Console({
           color: C.t3,
         }}
       >
-        <span style={{ color: backendColor }}>{backendIcon}</span>
+        <span style={{ color: backendColor }}>{"\u25CF"}</span>
         {backendShort} Output
         <span style={{ flex: 1 }} />
         {logs.length} lines
@@ -79,6 +90,7 @@ export default function Console({
       </div>
       <div
         ref={logRef}
+        onScroll={handleScroll}
         style={{
           flex: 1,
           overflowY: "auto",
@@ -86,7 +98,7 @@ export default function Console({
           background: "#030508",
         }}
       >
-        {logs.length === 0 && (
+        {logs.length === 0 && !building && (
           <div
             style={{
               color: C.t3,
@@ -96,7 +108,7 @@ export default function Console({
               textAlign: "center",
             }}
           >
-            Hit Build or \u2318K
+            No build output yet. Hit Build to start.
           </div>
         )}
         {logs.map((l, i) => (
@@ -115,7 +127,7 @@ export default function Console({
         ))}
         {building && (
           <div style={{ fontSize: 10, color: C.accent, fontFamily: MONO }}>
-            <span style={{ animation: "pulse 1s infinite" }}>\u25CF</span>{" "}
+            <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span>{" "}
             Building...
           </div>
         )}

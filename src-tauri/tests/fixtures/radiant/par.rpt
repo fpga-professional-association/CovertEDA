@@ -1,0 +1,227 @@
+                         Lattice PAR Report File
+Radiant Software (64-bit) 2025.2.0.48.0
+Tue Feb 17 16:40:35 2026
+
+Command Line: par -w -n 1 -t 1 -s 1 -cores 1 -hsp m -exp parPathBased=ON \
+	8_bit_counter_impl1_map.udb 8_bit_counter_impl1.udb 
+
+
+Level/       Number       Estimated       Timing       Estimated Worst    Timing          Run      Run
+Cost [udb]   Unrouted     Worst Slack     Score        Slack(hold)        Score(hold)     Time     Status
+----------   --------     -----------     ------       ---------------    -----------     ----     ------
+5_1   *      0            -               -            -                  -               20       Completed
+
+* : Design saved.
+
+Total (real) run time for 1-seed: 20 secs 
+
+par done!
+
+PAR: Place And Route Radiant Software (64-bit) 2025.2.0.48.0.
+PARed on: Tue Feb 17 16:40:35 2026
+
+Command Line: par -w -t 1 -cores 1 -hsp m -exp parPathBased=ON \
+	8_bit_counter_impl1_map.udb 8_bit_counter_impl1_par.dir/5_1.udb 
+
+Loading 8_bit_counter_impl1_map.udb ...
+Loading device for application GENERIC from file 'je5d30.nph' in environment: C:/lscc/radiant/2025.2/ispfpga.
+Package Status:                     Final          Version 1.
+Performance Hardware Data Status:   Final          Version 118.1.
+
+
+
+Design:  count
+Family:  LIFCL
+Device:  LIFCL-40
+Package: CABGA400
+Performance Grade:   7_High-Performance_1.0V
+
+Constraint Summary
+   Total number of constraints: 1
+   Total number of constraints dropped: 0
+
+
+Device SLICE utilization summary after final SLICE packing:
+   SLICE              6/16128        <1% used
+
+Number of Signals: 23
+Number of Connections: 56
+Device utilization summary:
+
+   GSR                   1/1           100% used
+   SEIO33               10/185           5% used
+                        10/111           9% bonded
+   SLICE                 6/16128        <1% used
+     LUT                11/32256        <1% used
+     REG                 8/32256        <1% used
+
+
+Pin Constraint Summary:
+   0 out of 10 pins locked (0% locked).
+.
+Starting Placer Phase 0 (HIER). CPU time: 2 secs , REAL time: 8 secs 
+..........
+Finished Placer Phase 0 (HIER). CPU time: 2 secs , REAL time: 8 secs 
+
+Starting Placer Phase 1. CPU time: 2 secs , REAL time: 8 secs 
+..  ..
+....................
+
+Placer score = 4560.
+Finished Placer Phase 1. CPU time: 8 secs , REAL time: 14 secs 
+
+Starting Placer Phase 2.
+.
+
+Placer score =  4560
+Finished Placer Phase 2.  CPU time: 8 secs , REAL time: 14 secs 
+
+
+------------------ Clock Report ------------------
+
+Global Clock Resources:
+  CLK_PIN    : 1 out of 26 (3%)
+  PLL        : 0 out of 3 (0%)
+  DCS        : 0 out of 1 (0%)
+  DCC        : 0 out of 62 (0%)
+  ECLKDIV    : 0 out of 12 (0%)
+  PCLKDIV    : 0 out of 1 (0%)
+  OSC        : 0 out of 1 (0%)
+  DPHY       : 0 out of 2 (0%)
+  PCIE       : 0 out of 1 (0%)
+
+Global Clocks:
+  PRIMARY "clk_c" from comp "clk" on CLK_PIN site "E12 (PT76A)", clk load = 5, ce load = 0, sr load = 0
+
+  PRIMARY  : 1 out of 16 (6%)
+
+Edge Clocks:
+
+  No edge clock selected.
+
+
+--------------- End of Clock Report ---------------
+
+
+I/O Usage Summary (final):
+   10 out of 185 (5.4%) SEIO33 sites used.
+   10 out of 111 (9.0%) bonded SEIO33 sites used.
+   Number of SEIO33 components: 10; differential: 0
+   Number of Vref pins used: 0
+   0 out of 74 (0.0%) SEIO18 sites used.
+   0 out of 74 (0.0%) bonded SEIO18 sites used.
+   Number of SEIO18 components: 0; differential: 0
+   0 out of 37 (0.0%) DIFFIO18 sites used.
+   0 out of 37 (0.0%) bonded DIFFIO18 sites used.
+   Number of DIFFIO18 components: 0; differential: 0
+
+I/O Bank Usage Summary:
++----------+---------------+------------+------------+------------+
+| I/O Bank | Usage         | Bank Vccio | Bank Vref1 | Bank Vref2 |
++----------+---------------+------------+------------+------------+
+| 0        | 1 / 12 (  8%) | 3.3V       | -          | -          |
+| 1        | 2 / 21 (  9%) | 3.3V       | -          | -          |
+| 2        | 7 / 28 ( 25%) | 3.3V       | -          | -          |
+| 3        | 0 / 32 (  0%) | -          | -          | -          |
+| 4        | 0 / 32 (  0%) | -          | -          | -          |
+| 5        | 0 / 10 (  0%) | -          | -          | -          |
+| 6        | 0 / 28 (  0%) | -          | -          | -          |
+| 7        | 0 / 22 (  0%) | -          | -          | -          |
++----------+---------------+------------+------------+------------+
+
+Total Placer CPU time: 8 secs , REAL time: 14 secs 
+
+
+Checksum -- place: 310826a9d8cdc2311a911a66254d1fc942658c1f
+Writing design to file 8_bit_counter_impl1_par.dir/5_1.udb ...
+
+
+-----------------------------------------------------------------
+INFO - par: ASE feature is off due to non timing-driven settings.  
+-----------------------------------------------------------------
+
+
+Start NBR router at 16:40:50 02/17/26
+
+*****************************************************************
+Info: NBR allows conflicts(one node used by more than one signal)
+      in the earlier iterations. In each iteration, it tries to  
+      solve the conflicts while keeping the critical connections 
+      routed as short as possible. The routing process is said to
+      be completed when no conflicts exist and all connections   
+      are routed.                                                
+Note: NBR uses a different method to calculate timing slacks. The
+      worst slack and total negative slack may not be the same as
+      that in timing report. You should always run the timing    
+      tool to verify your design.                                
+*****************************************************************
+
+Starting routing resource preassignment
+Preassignment Summary:
+--------------------------------------------------------------------------------
+8 connections routed with dedicated routing resources
+1 global clock signals routed
+17 connections routed (of 56 total) (30.36%)
+---------------------------------------------------------
+Clock routing summary:
+Primary clocks (2 used out of 32 available):
+    Signal "clk_c" (0, 16)
+       Clock   loads: 5     out of     5 routed (100.00%)
+---------------------------------------------------------
+--------------------------------------------------------------------------------
+Completed routing resource preassignment
+
+Start NBR section for initial routing at 16:40:54 02/17/26
+Level 4, iteration 1
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Routing in Serial Mode ......
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+1(0.00%) conflict; 0(0.00%) untouched conn; 0 (nbr) score; real time: 5 secs 
+
+Info: Initial congestion level at 75.00% usage is 0
+Info: Initial congestion area  at 75.00% usage is 0 (0.00%)
+
+Start NBR section for normal routing at 16:40:54 02/17/26
+Level 4, iteration 1
+1(0.00%) conflict; 0(0.00%) untouched conn; 0 (nbr) score; real time: 5 secs 
+Level 4, iteration 2
+0(0.00%) conflict; 0(0.00%) untouched conn; 0 (nbr) score; real time: 5 secs 
+
+Start NBR section for post-routing at 16:40:54 02/17/26
+
+End NBR router with 0 unrouted connection(s)
+
+Checksum -- route: eec7f0e81e1b5f0a625d55a973d879e95b9665d9
+
+Total Router CPU time 3 secs , REAL time: 5 secs 
+Completely routed.
+End of route.  56 routed (100.00%); 0 unrouted.
+
+Writing design to file 8_bit_counter_impl1_par.dir/5_1.udb ...
+
+
+All signals are completely routed.
+
+
+PAR_SUMMARY::Run status = Completed
+PAR_SUMMARY::Number of unrouted conns = 0
+PAR_SUMMARY::Estimated worst slack<setup/<ns>> = <n/a>
+PAR_SUMMARY::Timing score<setup/<ns>> = <n/a>
+PAR_SUMMARY::Estimated worst slack<hold/<ns>> = <n/a>
+PAR_SUMMARY::Timing score<hold/<ns>> = <n/a>
+PAR_SUMMARY::Number of errors = 0
+
+Note: user must run 'timing' for timing closure signoff.
+
+Total CPU  Time: 13 secs 
+Total REAL Time: 20 secs 
+Peak Memory Usage: 588.76 MB
+
+
+par done!
+
+Copyright (c) 1991-1994 by NeoCAD Inc. All rights reserved.
+Copyright (c) 1995 AT&T Corp.   All rights reserved.
+Copyright (c) 1995-2001 Lucent Technologies Inc.  All rights reserved.
+Copyright (c) 2001 Agere Systems   All rights reserved.
+Copyright (c) 2002-2025 Lattice Semiconductor Corporation,  All rights reserved.

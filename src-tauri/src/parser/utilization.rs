@@ -1,12 +1,134 @@
 use crate::backend::BackendResult;
 use crate::types::*;
+use regex::Regex;
 
 /// Parse Diamond .mrp utilization report
 pub fn parse_diamond_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
-    let _ = content; // TODO: implement regex-based parsing
+    // Diamond and Radiant share similar .mrp format
+    parse_lattice_mrp(content, device)
+}
+
+/// Parse Radiant .mrp utilization report
+pub fn parse_radiant_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
+    parse_lattice_mrp(content, device)
+}
+
+/// Shared parser for Lattice .mrp files (Diamond and Radiant use same format)
+fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceReport> {
+    let resource_re = Regex::new(
+        r"Number of (\w[\w\s/()-]*?):\s+(\d+)\s+out of\s+(\d+)"
+    ).unwrap();
+
+    let mut logic_items = vec![];
+    let mut io_items = vec![];
+    let mut memory_items = vec![];
+    let mut dsp_items = vec![];
+    let mut clock_items = vec![];
+    let mut other_items = vec![];
+
+    for cap in resource_re.captures_iter(content) {
+        let name = cap[1].trim().to_string();
+        let used: u64 = cap[2].parse().unwrap_or(0);
+        let total: u64 = cap[3].parse().unwrap_or(0);
+
+        let item = ResourceItem {
+            resource: name.clone(),
+            used,
+            total,
+            detail: None,
+        };
+
+        let name_lower = name.to_lowercase();
+        if name_lower.contains("register")
+            || name_lower.contains("lut")
+            || name_lower.contains("slice")
+        {
+            logic_items.push(item);
+        } else if name_lower.contains("pio")
+            || name_lower.contains("io")
+            || name_lower.contains("ddr")
+        {
+            io_items.push(item);
+        } else if name_lower.contains("ram") {
+            memory_items.push(item);
+        } else if name_lower.contains("dsp")
+            || name_lower.contains("mult")
+            || name_lower.contains("add")
+            || name_lower.contains("acc")
+        {
+            dsp_items.push(item);
+        } else if name_lower.contains("pll")
+            || name_lower.contains("dll")
+            || name_lower.contains("dcc")
+            || name_lower.contains("clk")
+            || name_lower.contains("osc")
+        {
+            clock_items.push(item);
+        } else {
+            other_items.push(item);
+        }
+    }
+
+    // Also parse the SLICE utilization from .par report format if present
+    let slice_re = Regex::new(r"SLICE\s+(\d+)/(\d+)").unwrap();
+    if let Some(cap) = slice_re.captures(content) {
+        let used: u64 = cap[1].parse().unwrap_or(0);
+        let total: u64 = cap[2].parse().unwrap_or(0);
+        // Only add if not already captured
+        if !logic_items.iter().any(|i| i.resource.contains("SLICE")) {
+            logic_items.insert(
+                0,
+                ResourceItem {
+                    resource: "SLICEs".into(),
+                    used,
+                    total,
+                    detail: None,
+                },
+            );
+        }
+    }
+
+    let mut categories = vec![];
+    if !logic_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "Logic".into(),
+            items: logic_items,
+        });
+    }
+    if !io_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "I/O".into(),
+            items: io_items,
+        });
+    }
+    if !memory_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "Memory".into(),
+            items: memory_items,
+        });
+    }
+    if !dsp_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "DSP".into(),
+            items: dsp_items,
+        });
+    }
+    if !clock_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "Clocking".into(),
+            items: clock_items,
+        });
+    }
+    if !other_items.is_empty() {
+        categories.push(ResourceCategory {
+            name: "Other".into(),
+            items: other_items,
+        });
+    }
+
     Ok(ResourceReport {
         device: device.to_string(),
-        categories: vec![],
+        categories,
         by_module: vec![],
     })
 }
