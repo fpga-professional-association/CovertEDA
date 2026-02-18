@@ -4,7 +4,7 @@
  */
 
 // Check if we're running inside Tauri
-const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /**
  * Invoke a Tauri command. Returns mock data when running outside Tauri.
