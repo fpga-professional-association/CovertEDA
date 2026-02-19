@@ -27,6 +27,7 @@ const DOC_SECTIONS: DocSection[] = [
   { id: "backend-support", title: "Backend Support", icon: "\u2756", color: "purple" },
   { id: "settings", title: "Settings", icon: "\u2699", color: "accent" },
   { id: "project-config", title: "Project Configuration", icon: "\u2692", color: "orange" },
+  { id: "about", title: "About", icon: "\u2139", color: "cyan" },
 ];
 
 // ── Reusable sub-components ──
@@ -890,6 +891,97 @@ impl1/
   );
 }
 
+function AboutSection() {
+  const { C, MONO } = useTheme();
+  return (
+    <div>
+      <SectionHeader title="About" icon={"\u2139"} color={C.cyan} />
+
+      <SubHeading>FPGA Professional Association</SubHeading>
+      <Para>
+        CovertEDA is developed and maintained by the{" "}
+        <strong style={{ color: C.accent }}>FPGA Professional Association</strong>, a community organization
+        dedicated to advancing the FPGA engineering profession through open-source tooling, education, and
+        professional development.
+      </Para>
+      <Para>
+        We believe FPGA engineers deserve modern, open-source tools that match the quality and usability
+        standards of the broader software development ecosystem. CovertEDA is our flagship project -- a direct
+        response to the frustration that every FPGA engineer experiences with vendor toolchains.
+      </Para>
+
+      <SubHeading>Why We Built This</SubHeading>
+      <Para>
+        Vendor GUIs are slow, crash-prone, and stuck in the past. Quartus takes 30+ seconds to open. Vivado's
+        GUI lags on basic operations. Radiant hangs during IP generation. These tools were built a decade ago
+        on frameworks that show their age. Every FPGA engineer has lost work to an unrecoverable vendor GUI crash.
+      </Para>
+      <Para>
+        Rather than waiting for vendors to modernize their GUIs (which they have little incentive to do), we're
+        building the tool we want to use ourselves. CovertEDA wraps the vendor CLIs behind a fast, reliable,
+        unified interface -- and it's open source so the community can shape its direction.
+      </Para>
+
+      <SubHeading>Our Goals</SubHeading>
+      <div style={{ paddingLeft: 16, marginBottom: 10 }}>
+        <Para>
+          <strong style={{ color: C.t1 }}>Open-source FPGA tooling</strong> that rivals proprietary vendor GUIs in
+          usability and exceeds them in reliability.<br />
+          <strong style={{ color: C.t1 }}>Community-driven development</strong> where practicing FPGA engineers
+          shape the tool's direction.<br />
+          <strong style={{ color: C.t1 }}>Education and professional development</strong> resources for FPGA
+          engineers at all levels.<br />
+          <strong style={{ color: C.t1 }}>Vendor-neutral advocacy</strong> for better tool interoperability and
+          open standards.
+        </Para>
+      </div>
+
+      <SubHeading>Connect With Us</SubHeading>
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14,
+      }}>
+        <div style={{
+          padding: "12px 14px", borderRadius: 5, background: C.s2,
+          border: `1px solid ${C.b1}`, borderTop: `2px solid ${C.accent}`,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.accent, marginBottom: 4 }}>GitHub</div>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all" }}>
+            github.com/fpga-professional-association
+          </div>
+        </div>
+        <div style={{
+          padding: "12px 14px", borderRadius: 5, background: C.s2,
+          border: `1px solid ${C.b1}`, borderTop: `2px solid ${C.cyan}`,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.cyan, marginBottom: 4 }}>LinkedIn</div>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all" }}>
+            linkedin.com/company/fpga-professional-association
+          </div>
+        </div>
+      </div>
+
+      <SubHeading>Contributing</SubHeading>
+      <Para>
+        We welcome contributions from the FPGA community. Whether it's bug reports, feature requests, pull
+        requests, new backend implementations, or report parser fixtures -- there are many ways to get involved.
+        Visit the GitHub repository for contribution guidelines.
+      </Para>
+
+      <SubHeading>Status</SubHeading>
+      <Para>
+        CovertEDA is currently in <Badge color={C.accent}>Beta</Badge> with core features implemented.
+        Supported backends include Lattice Radiant, Lattice Diamond, Intel Quartus, AMD Vivado, and the
+        OSS CAD Suite (Yosys/nextpnr). Microchip Libero SoC support is planned for a future release.
+      </Para>
+
+      <InfoBox variant="info">
+        CovertEDA does not include or redistribute any vendor tools, IP, libraries, or binaries. Users must
+        have their own licensed installations of the vendor toolchains they wish to use.
+      </InfoBox>
+    </div>
+  );
+}
+
 // ── Section content map ──
 
 const SECTION_COMPONENTS: Record<string, () => JSX.Element> = {
@@ -908,6 +1000,7 @@ const SECTION_COMPONENTS: Record<string, () => JSX.Element> = {
   "backend-support": BackendSupportSection,
   "settings": SettingsSection,
   "project-config": ProjectConfigSection,
+  "about": AboutSection,
 };
 
 // ── Main Documentation component ──
@@ -988,7 +1081,8 @@ export default function Documentation() {
           padding: "8px 16px", borderTop: `1px solid ${C.b1}`,
           fontSize: 7, fontFamily: MONO, color: C.t3, lineHeight: 1.6,
         }}>
-          CovertEDA v0.1.0<br />
+          CovertEDA v0.1.0 Beta<br />
+          FPGA Professional Association<br />
           Last updated: 2026-02-19
         </div>
       </div>
