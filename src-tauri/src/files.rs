@@ -11,9 +11,11 @@ pub fn scan_directory(project_dir: &Path) -> Result<Vec<FileEntry>, std::io::Err
         .into_iter()
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
-            // Skip hidden dirs, build outputs, node_modules
-            !name.starts_with('.')
-                && name != "node_modules"
+            // Skip truly hidden dirs/files (but allow .coverteda* project files)
+            if name.starts_with('.') {
+                return name.starts_with(".coverteda");
+            }
+            name != "node_modules"
                 && name != "target"
                 && name != "__pycache__"
         })

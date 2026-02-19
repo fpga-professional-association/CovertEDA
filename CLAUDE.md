@@ -100,6 +100,10 @@ Custom regex-based parsers convert vendor-specific text reports into unified str
 
 **TCL Generation Pattern:** Backends generate TCL/shell scripts which are spawned as subprocesses. CovertEDA never evaluates TCL directly.
 
+## Documentation
+
+When adding or modifying features, **update the in-app documentation** in `src/components/Documentation.tsx` to reflect the change. The documentation serves as the user guide and must stay in sync with the app. Also update `README.md` if the change affects high-level features or setup instructions.
+
 ## Platform Conventions
 
 - Always use `PathBuf` / `Path::join()` for paths, never string concatenation

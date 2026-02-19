@@ -126,6 +126,7 @@ export function NavBtn({
   onClick,
   accent,
   badge,
+  tooltip,
 }: {
   icon: ReactNode;
   label: string;
@@ -133,6 +134,7 @@ export function NavBtn({
   onClick?: () => void;
   accent?: string;
   badge?: boolean;
+  tooltip?: string;
 }) {
   const { C, MONO } = useTheme();
   const [h, setH] = useState(false);
@@ -141,7 +143,7 @@ export function NavBtn({
       onClick={onClick}
       onMouseEnter={() => setH(true)}
       onMouseLeave={() => setH(false)}
-      title={label}
+      title={tooltip ?? label}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -298,7 +300,7 @@ export function Select({
             right: 0,
             minWidth: "100%",
             width: "max-content",
-            maxHeight: 200,
+            maxHeight: 300,
             overflowY: "auto",
             background: C.s1,
             border: `1px solid ${C.b1}`,

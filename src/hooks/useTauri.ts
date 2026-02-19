@@ -554,6 +554,30 @@ export function mapTimingReport(r: RustTimingReport, backendName: string): Timin
   };
 }
 
+// ── Build History persistence ──
+
+import type { BuildRecord } from "../components/BuildHistory";
+
+/**
+ * Append a build record to the project's .coverteda_history.json.
+ * Creates the file if it doesn't exist. Keeps the last 100 records.
+ */
+export async function saveBuildRecord(projectDir: string, record: BuildRecord): Promise<void> {
+  const historyPath = `${projectDir}/.coverteda_history.json`;
+  let records: BuildRecord[] = [];
+  try {
+    const fc = await readFile(historyPath);
+    const parsed = JSON.parse(fc.content);
+    if (Array.isArray(parsed)) records = parsed;
+  } catch {
+    /* file doesn't exist yet — start fresh */
+  }
+  records.push(record);
+  // Keep last 100 builds
+  if (records.length > 100) records = records.slice(-100);
+  await writeTextFile(historyPath, JSON.stringify(records, null, 2));
+}
+
 export function mapUtilizationReport(r: RustResourceReport): UtilizationReportData {
   return {
     title: "Utilization Report",

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, ReactNode } from "react";
+import { useState, useCallback, useEffect, useMemo, ReactNode } from "react";
 import {
   ReportTab,
   TimingReportData,
@@ -62,44 +62,6 @@ function Collapsible({ title, icon, defaultOpen = false, children }: {
   );
 }
 
-/** Raw log viewer — loads content on mount, full-height scrollable */
-function RawLogViewer({ projectDir, reportType }: { projectDir: string; reportType: string }) {
-  const { C, MONO } = useTheme();
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    setContent(null);
-    getRawReport(projectDir, reportType)
-      .then(setContent)
-      .catch((e) => setContent(`Error loading report: ${e}`))
-      .finally(() => setLoading(false));
-  }, [projectDir, reportType]);
-
-  if (loading) {
-    return <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>Loading report...</div>;
-  }
-
-  if (!content || content.startsWith("Error")) {
-    return (
-      <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>
-        {content || "No report file found."}
-      </div>
-    );
-  }
-
-  return (
-    <pre style={{
-      fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.6,
-      margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
-      padding: "12px 14px",
-    }}>
-      {content}
-    </pre>
-  );
-}
-
 /** Raw log drawer — collapsible, lazy-loads content on expand */
 function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportType: string }) {
   const { C, MONO } = useTheme();
@@ -120,7 +82,7 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
 
   return (
     <div style={{
-      marginTop: 12, background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, overflow: "hidden",
+      background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, overflow: "hidden",
     }}>
       <div
         onClick={handleOpen}
@@ -154,6 +116,141 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Stage log panel with filter buttons, counts, and AI send */
+function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportType: string }) {
+  const { C, MONO } = useTheme();
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "error" | "warning" | "info">("all");
+
+  useEffect(() => {
+    setLoading(true);
+    setContent(null);
+    getRawReport(projectDir, reportType)
+      .then(setContent)
+      .catch((e) => setContent(`Error loading report: ${e}`))
+      .finally(() => setLoading(false));
+  }, [projectDir, reportType]);
+
+  const filteredLines = useMemo(() => {
+    if (!content || filter === "all") return content;
+    const lines = content.split("\n");
+    return lines.filter((line) => {
+      const lower = line.toLowerCase();
+      if (filter === "error") return lower.includes("error") || lower.includes("fatal") || lower.includes("fail");
+      if (filter === "warning") return lower.includes("warning") || lower.includes("warn");
+      if (filter === "info") return lower.includes("info") || lower.includes("note");
+      return true;
+    }).join("\n");
+  }, [content, filter]);
+
+  const counts = useMemo(() => {
+    if (!content) return { errors: 0, warnings: 0, info: 0 };
+    const lines = content.split("\n");
+    return {
+      errors: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("error") || ll.includes("fatal") || ll.includes("fail"); }).length,
+      warnings: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("warning") || ll.includes("warn"); }).length,
+      info: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("info") || ll.includes("note"); }).length,
+    };
+  }, [content]);
+
+  const stageNames: Record<string, string> = {
+    synth: "Synthesis Report", map: "Map Report", par: "Place & Route Report", bitstream: "Bitstream Report",
+  };
+
+  const panel: React.CSSProperties = {
+    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden",
+  };
+
+  return (
+    <div style={{ ...panel, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{
+        padding: "10px 14px", borderBottom: `1px solid ${C.b1}`,
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap",
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>
+          {stageNames[reportType] ?? reportType}
+        </span>
+        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+          Raw vendor output from impl1/
+        </span>
+        <div style={{ flex: 1 }} />
+        {/* Filter buttons */}
+        {content && (
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {([
+              { id: "all", label: "All", color: C.t2, count: null },
+              { id: "error", label: "Errors", color: C.err, count: counts.errors },
+              { id: "warning", label: "Warnings", color: C.warn, count: counts.warnings },
+              { id: "info", label: "Info", color: C.accent, count: counts.info },
+            ] as const).map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
+                  padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                  border: filter === f.id ? `1px solid ${f.color}` : `1px solid ${C.b1}`,
+                  background: filter === f.id ? `${f.color}18` : "transparent",
+                  color: filter === f.id ? f.color : C.t3,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 3,
+                }}
+              >
+                {f.label}
+                {f.count !== null && f.count > 0 && (
+                  <span style={{
+                    fontSize: 7, padding: "0 3px", borderRadius: 2,
+                    background: `${f.color}25`, color: f.color,
+                  }}>
+                    {f.count}
+                  </span>
+                )}
+              </button>
+            ))}
+            <button
+              onClick={() => {
+                if (content) {
+                  navigator.clipboard.writeText(
+                    `Please analyze this ${stageNames[reportType] ?? reportType} from an FPGA build:\n\n${content}`
+                  );
+                }
+              }}
+              title="Copy report to clipboard for AI analysis"
+              style={{
+                padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                border: `1px solid ${C.pink}40`, background: `${C.pink}10`, color: C.pink,
+                cursor: "pointer", marginLeft: 4,
+              }}
+            >
+              Send to AI
+            </button>
+          </div>
+        )}
+      </div>
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        scrollbarWidth: "thin", scrollbarColor: `${C.b2} ${C.bg}`,
+      }}>
+        {loading ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>Loading report...</div>
+        ) : !content || content.startsWith("Error") ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>
+            {content || "No report file found."}
+          </div>
+        ) : (
+          <pre style={{
+            fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.6,
+            margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
+            padding: "12px 14px",
+          }}>
+            {filteredLines}
+          </pre>
+        )}
+      </div>
     </div>
   );
 }
@@ -573,28 +670,30 @@ export default function ReportViewer({
                 ))}
               </div>
 
-              <Collapsible title="Utilization by Module" defaultOpen={false}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
-                  <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
-                </div>
-                {u.byModule.map((m, i) => {
-                  const pct = parseFloat(m.pct);
-                  return (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
-                      <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.module}</span>
-                      <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
+              {/* Both panels side by side at bottom */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Collapsible title="Utilization by Module" defaultOpen={false}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
+                    <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
+                  </div>
+                  {u.byModule.map((m, i) => {
+                    const pct = parseFloat(m.pct);
+                    return (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
+                        <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.module}</span>
+                        <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
+                        </div>
+                        <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
+                        <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
+                        <span style={{ color: C.t3 }}>{m.ebr}</span>
+                        <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
                       </div>
-                      <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
-                      <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
-                      <span style={{ color: C.t3 }}>{m.ebr}</span>
-                      <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
-                    </div>
-                  );
-                })}
-              </Collapsible>
-
-              <RawLogDrawer projectDir={projectDir} reportType="map" />
+                    );
+                  })}
+                </Collapsible>
+                <RawLogDrawer projectDir={projectDir} reportType="map" />
+              </div>
             </>
           );
         })()}
@@ -640,14 +739,18 @@ export default function ReportViewer({
                   </div>
                 ))}
               </div>
-              <Collapsible title="Power by Rail" defaultOpen={false}>
-                {pw.byRail.map((r, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                    <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
-                    <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
-                  </div>
-                ))}
-              </Collapsible>
+              {/* Both panels side by side at bottom */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Collapsible title="Power by Rail" defaultOpen={false}>
+                  {pw.byRail.map((r, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                      <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
+                      <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
+                    </div>
+                  ))}
+                </Collapsible>
+                <RawLogDrawer projectDir={projectDir} reportType="power" />
+              </div>
             </>
           );
         })()}
@@ -658,40 +761,53 @@ export default function ReportViewer({
           const d = REPORTS.drc!;
           return (
             <>
-              <div style={{ display: "flex", gap: 10 }}>
-                {[
-                  { l: "Errors", v: d.summary.errors, c: C.err },
-                  { l: "Critical Warnings", v: d.summary.critWarns, c: C.warn },
-                  { l: "Warnings", v: d.summary.warnings, c: C.orange },
-                  { l: "Info", v: d.summary.info, c: C.accent },
-                  { l: "Waived", v: d.summary.waived, c: C.t3 },
-                ].map((m, i) => (
-                  <div key={i} style={{ flex: 1, padding: 10, background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${m.c}`, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 700, color: m.v > 0 ? m.c : C.t3 }}>{m.v}</div>
-                    <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2 }}>{m.l}</div>
-                  </div>
-                ))}
+              {/* Summary cards panel */}
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Warn />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Design Rule Checks</span>
+                  <Badge color={d.summary.errors > 0 ? C.err : d.summary.critWarns > 0 ? C.warn : C.ok}>
+                    {d.summary.errors > 0 ? "FAIL" : d.summary.critWarns > 0 ? "WARNINGS" : "PASS"}
+                  </Badge>
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[
+                    { l: "Errors", v: d.summary.errors, c: C.err },
+                    { l: "Critical Warnings", v: d.summary.critWarns, c: C.warn },
+                    { l: "Warnings", v: d.summary.warnings, c: C.orange },
+                    { l: "Info", v: d.summary.info, c: C.accent },
+                    { l: "Waived", v: d.summary.waived, c: C.t3 },
+                  ].map((m, i) => (
+                    <div key={i} style={{ flex: 1, padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${m.c}`, textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 700, color: m.v > 0 ? m.c : C.t3 }}>{m.v}</div>
+                      <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2 }}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {d.items.map((item, i) => {
-                const sevColors: Record<string, string> = { crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
-                const sevLabels: Record<string, string> = { crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
-                return (
-                  <div key={i} style={{ padding: "10px 12px", background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${sevColors[item.sev] || C.t3}`, display: "flex", gap: 10 }}>
-                    <Badge color={sevColors[item.sev] || C.t3} style={{ flexShrink: 0, alignSelf: "flex-start" }}>
-                      {sevLabels[item.sev] || item.sev}
-                    </Badge>
-                    <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
-                      <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
-                        <span style={{ color: sevColors[item.sev] || C.t3 }}>[{item.code}]</span> {item.msg}
-                      </div>
-                      <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
-                        {item.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {item.loc}</span>}
-                        <span>{"\u2192"} {item.action}</span>
+              {/* DRC items list */}
+              <Collapsible title={<>DRC Items <Badge color={C.t3}>{d.items.length} item(s)</Badge></>} icon={<Warn />} defaultOpen={d.items.length > 0}>
+                {d.items.map((item, i) => {
+                  const sevColors: Record<string, string> = { crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
+                  const sevLabels: Record<string, string> = { crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
+                  return (
+                    <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${sevColors[item.sev] || C.t3}`, display: "flex", gap: 10 }}>
+                      <Badge color={sevColors[item.sev] || C.t3} style={{ flexShrink: 0, alignSelf: "flex-start" }}>
+                        {sevLabels[item.sev] || item.sev}
+                      </Badge>
+                      <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
+                        <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
+                          <span style={{ color: sevColors[item.sev] || C.t3 }}>[{item.code}]</span> {item.msg}
+                        </div>
+                        <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
+                          {item.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {item.loc}</span>}
+                          <span>{"\u2192"} {item.action}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </Collapsible>
             </>
           );
         })()}
@@ -741,38 +857,7 @@ export default function ReportViewer({
 
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
-          <div style={{
-            ...panel,
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            minHeight: 0,
-          }}>
-            <div style={{
-              padding: "10px 14px",
-              borderBottom: `1px solid ${C.b1}`,
-              display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>
-                {rptTab === "synth" ? "Synthesis Report" :
-                 rptTab === "map" ? "Map Report" :
-                 rptTab === "par" ? "Place & Route Report" :
-                 "Bitstream Report"}
-              </span>
-              <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-                Raw vendor output from impl1/
-              </span>
-            </div>
-            <div style={{
-              flex: 1,
-              overflowY: "auto",
-              overflowX: "hidden",
-              scrollbarWidth: "thin",
-              scrollbarColor: `${C.b2} ${C.bg}`,
-            }}>
-              <RawLogViewer projectDir={projectDir} reportType={rptTab} />
-            </div>
-          </div>
+          <StageLogPanel projectDir={projectDir} reportType={rptTab} />
         )}
       </div>
     </div>

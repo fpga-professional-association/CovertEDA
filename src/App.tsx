@@ -23,6 +23,8 @@ import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
 import AiAssistant from "./components/AiAssistant";
 import ConstraintEditor from "./components/ConstraintEditor";
 import BuildHistory from "./components/BuildHistory";
+import type { BuildRecord } from "./components/BuildHistory";
+import Documentation from "./components/Documentation";
 import KeyboardShortcuts from "./components/KeyboardShortcuts";
 import {
   startBuild as tauriStartBuild,
@@ -48,6 +50,7 @@ import {
   gitCommit,
   getGitStatus,
   executeIpGenerate,
+  saveBuildRecord,
 } from "./hooks/useTauri";
 import type { RustGitStatus } from "./hooks/useTauri";
 
@@ -601,6 +604,8 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsRef = useRef<LogEntry[]>([]);
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const navHistory = useRef<Section[]>([]);
+  const buildStartTime = useRef<number>(0);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -920,6 +925,7 @@ export default function App() {
 
   const doRunBuild = useCallback(async () => {
     setBuilding(true);
+    buildStartTime.current = Date.now();
     setBStep(0);
     setLogs([]);
     logsRef.current = [];
@@ -964,15 +970,56 @@ export default function App() {
             m: data.message,
           },
         ]);
+        // Save build record to history
+        const record: BuildRecord = {
+          id: `b-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          duration: buildStartTime.current > 0 ? Math.round((Date.now() - buildStartTime.current) / 1000) : 0,
+          status: data.status as "success" | "failed" | "cancelled",
+          backend: B.short,
+          device: project?.device ?? B.defaultDev,
+          stages: B.pipeline.map((s) => s.id),
+          warnings: 0,
+          errors: data.status === "success" ? 0 : 1,
+          commitHash: gitState?.commit?.slice(0, 7),
+          commitMsg: gitState?.commitMsg,
+        };
+
         if (data.status === "success") {
           setBuildDone(true);
           getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
-          getTimingReport(bid, projectDir)
-            .then((r) => setRealTimingReport(mapTimingReport(r, B.name)))
-            .catch(() => {});
-          getUtilizationReport(bid, projectDir)
-            .then((r) => setRealUtilReport(mapUtilizationReport(r)))
-            .catch(() => {});
+          // Fetch reports and save build record with data
+          Promise.all([
+            getTimingReport(bid, projectDir).then((r) => mapTimingReport(r, B.name)).catch(() => null),
+            getUtilizationReport(bid, projectDir).then((r) => mapUtilizationReport(r)).catch(() => null),
+          ]).then(([timingR, utilR]) => {
+            if (timingR) setRealTimingReport(timingR);
+            if (utilR) setRealUtilReport(utilR);
+            // Enrich build record with report data
+            const enriched: BuildRecord = { ...record };
+            if (timingR) {
+              const fmax = parseFloat(timingR.summary.fmax);
+              if (!isNaN(fmax)) enriched.fmaxMhz = fmax;
+            }
+            if (utilR) {
+              for (const cat of utilR.summary) {
+                for (const item of cat.items) {
+                  if (item.r.toUpperCase().includes("LUT") || item.r.toUpperCase().includes("SLICE")) {
+                    enriched.lutUsed = item.used;
+                    enriched.lutTotal = item.total;
+                  }
+                  if (item.r.toUpperCase().includes("FF") || item.r.toUpperCase().includes("REGISTER")) {
+                    enriched.ffUsed = item.used;
+                    enriched.ffTotal = item.total;
+                  }
+                }
+              }
+            }
+            if (projectDir) saveBuildRecord(projectDir, enriched).catch(() => {});
+          });
+        } else {
+          // Save failed build record immediately
+          if (projectDir) saveBuildRecord(projectDir, record).catch(() => {});
         }
         // Refresh git status (build may have created new files)
         if (projectDir) {
@@ -1120,7 +1167,10 @@ export default function App() {
   }, []);
 
   const navClick = useCallback((s: Section) => {
-    setSec(s);
+    setSec((prev) => {
+      navHistory.current.push(prev);
+      return s;
+    });
     setViewingFile(null);
   }, []);
 
@@ -1160,6 +1210,22 @@ export default function App() {
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [view, scaleFactor, building, runBuild, setScaleFactor]);
+
+  // Mouse back button navigation
+  useEffect(() => {
+    const handleMouseBack = (e: MouseEvent) => {
+      if (e.button === 3) { // Mouse back button
+        e.preventDefault();
+        if (navHistory.current.length > 0) {
+          const prev = navHistory.current.pop()!;
+          setSec(prev);
+          setViewingFile(null);
+        }
+      }
+    };
+    window.addEventListener("mousedown", handleMouseBack);
+    return () => window.removeEventListener("mousedown", handleMouseBack);
+  }, []);
 
   // Load license info when license section opens
   useEffect(() => {
@@ -1384,19 +1450,20 @@ export default function App() {
               {B.short.toUpperCase()}
             </span>
           </div>
-          <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} />
-          <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} />
-          <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} />
-          <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} />
-          <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} />
-          <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} />
-          <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} />
-          <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} />
-          <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} />
-          <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} />
+          <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
+          <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
+          <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
+          <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
+          <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
+          <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
+          <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
+          <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
+          <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} tooltip="Resources — utilization overview with bar charts" />
+          <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
           <div style={{ flex: 1 }} />
-          <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} />
-          <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} />
+          <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
+          <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} tooltip="License — FlexLM license status and feature listing" />
+          <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} tooltip="Settings — tool paths, theme, zoom configuration" />
           <div
             onClick={handleCloseProject}
             title="Close Project"
@@ -1885,8 +1952,11 @@ export default function App() {
             )}
 
             {/* Build History */}
-            {sec === "history" && !viewingFile && <BuildHistory />}
+            {sec === "history" && !viewingFile && <BuildHistory projectDir={projectDir} onViewReport={() => { setSec("reports"); }} />}
 
+
+            {/* Documentation */}
+            {sec === "docs" && !viewingFile && <Documentation />}
 
             {/* Register Map */}
             {sec === "regmap" && !viewingFile && (

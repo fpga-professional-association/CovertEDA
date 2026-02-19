@@ -475,7 +475,7 @@ impl FpgaBackend for RadiantBackend {
     ) -> BackendResult<(String, String)> {
         let ip_dir = project_dir.join("ip_cores").join(instance_name);
         let ip_dir_tcl = to_tcl_path(&ip_dir);
-        let _project_tcl = to_tcl_path(project_dir);
+        let project_dir_tcl = to_tcl_path(project_dir);
 
         // Determine the device family from the device string
         let family = if device.starts_with("LIFCL") {
@@ -496,6 +496,17 @@ impl FpgaBackend for RadiantBackend {
 
 # Ensure output directory exists
 file mkdir "{ip_dir_tcl}"
+
+# Open an existing Radiant project, or create a temporary one.
+# SBP commands require a project context to be loaded first.
+set rdf_files [glob -nocomplain "{project_dir_tcl}/*.rdf"]
+if {{[llength $rdf_files] > 0}} {{
+    puts "CovertEDA: Opening existing project: [lindex $rdf_files 0]"
+    prj_open [lindex $rdf_files 0]
+}} else {{
+    puts "CovertEDA: No .rdf project found — creating temporary project for IP generation"
+    prj_create -name "coverteda_ipgen" -impl "impl1" -dev {device} -synthesis "lse" -path "{project_dir_tcl}"
+}}
 
 # Open the IP design in Clarity Designer
 sbp_design new -name "{instance_name}" -path "{ip_dir_tcl}" -family "{family}" -device "{device}" -part "{device}"
@@ -523,6 +534,7 @@ sbp_generate -lang "verilog"
 # Save and close
 sbp_save
 sbp_close_design
+prj_close
 
 puts "CovertEDA: IP generation complete for {instance_name}"
 puts "CovertEDA: Output directory: {ip_dir_tcl}"

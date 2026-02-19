@@ -519,6 +519,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   const [newTiming, setNewTiming] = useState<TimingConstraint>({
     type: "clock", name: "", target: "", value: "", enabled: true,
   });
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // ── File save/load state ──
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -625,13 +626,24 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   }, []);
 
   const addPin = useCallback(() => {
-    if (newPin.net && newPin.pin) {
-      setPins((prev) => [...prev, { ...newPin }]);
-      setNewPin({ net: "", pin: "", dir: "input", ioStandard: "LVCMOS33", pull: "None", slew: "Slow", locked: false });
-      setShowAdd(false);
-      setDirty(true);
+    if (!newPin.net.trim()) {
+      setValidationError("Net name is required");
+      return;
     }
-  }, [newPin]);
+    if (!newPin.pin.trim()) {
+      setValidationError("Pin location is required");
+      return;
+    }
+    if (pins.some((p) => p.net === newPin.net.trim())) {
+      setValidationError(`Net "${newPin.net}" already exists`);
+      return;
+    }
+    setValidationError(null);
+    setPins((prev) => [...prev, { ...newPin, net: newPin.net.trim(), pin: newPin.pin.trim() }]);
+    setNewPin({ net: "", pin: "", dir: "input", ioStandard: "LVCMOS33", pull: "None", slew: "Slow", locked: false });
+    setShowAdd(false);
+    setDirty(true);
+  }, [newPin, pins]);
 
   const updateTiming = useCallback((idx: number, field: keyof TimingConstraint, value: string | boolean) => {
     setTiming((prev) => prev.map((t, i) => i === idx ? { ...t, [field]: value } : t));
@@ -644,12 +656,19 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   }, []);
 
   const addTiming = useCallback(() => {
-    if (newTiming.name && newTiming.target) {
-      setTiming((prev) => [...prev, { ...newTiming }]);
-      setNewTiming({ type: "clock", name: "", target: "", value: "", enabled: true });
-      setShowAddTiming(false);
-      setDirty(true);
+    if (!newTiming.name.trim()) {
+      setValidationError("Constraint name is required");
+      return;
     }
+    if (!newTiming.target.trim()) {
+      setValidationError("Target is required");
+      return;
+    }
+    setValidationError(null);
+    setTiming((prev) => [...prev, { ...newTiming }]);
+    setNewTiming({ type: "clock", name: "", target: "", value: "", enabled: true });
+    setShowAddTiming(false);
+    setDirty(true);
   }, [newTiming]);
 
   // Generate constraints text per backend
@@ -904,18 +923,39 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
           {/* Add Pin Form */}
           {showAdd && (
             <div style={{
-              display: "flex", gap: 6, padding: "8px 10px", marginBottom: 8,
+              display: "grid", gridTemplateColumns: "1fr 80px 80px 140px auto auto",
+              gap: 6, padding: "10px 10px", marginBottom: 8,
               background: C.bg, borderRadius: 4, border: `1px solid ${C.accent}30`,
-              alignItems: "center", flexWrap: "wrap",
+              alignItems: "end",
             }}>
-              {cellInput(newPin.net, (v) => setNewPin((p) => ({ ...p, net: v })), C, MONO, 90)}
-              {cellInput(newPin.pin, (v) => setNewPin((p) => ({ ...p, pin: v })), C, MONO, 40)}
-              <Select compact value={newPin.dir} onChange={(v) => setNewPin((p) => ({ ...p, dir: v as PinAssignment["dir"] }))}
-                options={[{ value: "input", label: "Input" }, { value: "output", label: "Output" }, { value: "inout", label: "Inout" }]} />
-              <Select compact value={newPin.ioStandard} onChange={(v) => setNewPin((p) => ({ ...p, ioStandard: v }))}
-                options={standards.map((s) => ({ value: s, label: s }))} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>NET NAME</span>
+                {cellInput(newPin.net, (v) => { setNewPin((p) => ({ ...p, net: v })); setValidationError(null); }, C, MONO)}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>PIN</span>
+                {cellInput(newPin.pin, (v) => { setNewPin((p) => ({ ...p, pin: v })); setValidationError(null); }, C, MONO)}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>DIRECTION</span>
+                <Select compact value={newPin.dir} onChange={(v) => setNewPin((p) => ({ ...p, dir: v as PinAssignment["dir"] }))}
+                  options={[{ value: "input", label: "Input" }, { value: "output", label: "Output" }, { value: "inout", label: "Inout" }]} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>I/O STANDARD</span>
+                <Select compact value={newPin.ioStandard} onChange={(v) => setNewPin((p) => ({ ...p, ioStandard: v }))}
+                  options={standards.map((s) => ({ value: s, label: s }))} />
+              </div>
               <Btn small primary onClick={addPin}>Add</Btn>
-              <Btn small onClick={() => setShowAdd(false)}>Cancel</Btn>
+              <Btn small onClick={() => { setShowAdd(false); setValidationError(null); }}>Cancel</Btn>
+            </div>
+          )}
+          {validationError && tab === "pins" && (
+            <div style={{
+              padding: "4px 10px", fontSize: 8, fontFamily: MONO, fontWeight: 600,
+              color: C.err, background: `${C.err}10`, borderRadius: 3, marginBottom: 6,
+            }}>
+              {validationError}
             </div>
           )}
 
@@ -1194,7 +1234,15 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                 </>
               )}
               <Btn small primary onClick={addTiming}>Add</Btn>
-              <Btn small onClick={() => setShowAddTiming(false)}>Cancel</Btn>
+              <Btn small onClick={() => { setShowAddTiming(false); setValidationError(null); }}>Cancel</Btn>
+            </div>
+          )}
+          {validationError && tab === "timing" && (
+            <div style={{
+              padding: "4px 10px", fontSize: 8, fontFamily: MONO, fontWeight: 600,
+              color: C.err, background: `${C.err}10`, borderRadius: 3, marginBottom: 6,
+            }}>
+              {validationError}
             </div>
           )}
 

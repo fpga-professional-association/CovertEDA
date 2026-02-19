@@ -273,7 +273,8 @@ export type Section =
   | "resources"
   | "console"
   | "license"
-  | "history";
+  | "history"
+  | "docs";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream";
 

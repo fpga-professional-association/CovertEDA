@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 import { Zap, Check } from "./Icons";
+import { readFile } from "../hooks/useTauri";
 
 export interface BuildRecord {
   id: string;
@@ -22,39 +23,10 @@ export interface BuildRecord {
   commitMsg?: string;
 }
 
-// Demo data — in production this would be loaded from a JSON file in the project
-const DEMO_HISTORY: BuildRecord[] = [
-  {
-    id: "b1", timestamp: "2026-02-17T10:30:00Z", duration: 98, status: "success",
-    backend: "Radiant", device: "LIFCL-40-7BG400I", stages: ["synth", "map", "par", "bitgen"],
-    fmaxMhz: 125.3, lutUsed: 48, lutTotal: 39600, ffUsed: 8, ffTotal: 39744, warnings: 2, errors: 0,
-    commitHash: "a3b1c2d", commitMsg: "Initial counter design",
-  },
-  {
-    id: "b2", timestamp: "2026-02-17T11:15:00Z", duration: 102, status: "success",
-    backend: "Radiant", device: "LIFCL-40-7BG400I", stages: ["synth", "map", "par", "bitgen"],
-    fmaxMhz: 131.7, lutUsed: 52, lutTotal: 39600, ffUsed: 8, ffTotal: 39744, warnings: 1, errors: 0,
-    commitHash: "e5f6a7b", commitMsg: "Add reset synchronizer",
-  },
-  {
-    id: "b3", timestamp: "2026-02-17T14:00:00Z", duration: 45, status: "failed",
-    backend: "Radiant", device: "LIFCL-40-7BG400I", stages: ["synth"],
-    warnings: 3, errors: 2,
-    commitHash: "c8d9e0f", commitMsg: "Broken syntax fix attempt",
-  },
-  {
-    id: "b4", timestamp: "2026-02-17T14:20:00Z", duration: 105, status: "success",
-    backend: "Radiant", device: "LIFCL-40-7BG400I", stages: ["synth", "map", "par", "bitgen"],
-    fmaxMhz: 142.1, lutUsed: 55, lutTotal: 39600, ffUsed: 10, ffTotal: 39744, warnings: 0, errors: 0,
-    commitHash: "1a2b3c4", commitMsg: "Fix syntax + add output reg",
-  },
-  {
-    id: "b5", timestamp: "2026-02-17T16:45:00Z", duration: 110, status: "success",
-    backend: "Radiant", device: "LIFCL-40-7BG400I", stages: ["synth", "map", "par", "bitgen"],
-    fmaxMhz: 145.8, lutUsed: 58, lutTotal: 39600, ffUsed: 12, ffTotal: 39744, warnings: 0, errors: 0,
-    commitHash: "5d6e7f8", commitMsg: "Pre-build: 8_bit_counter 2026-02-17",
-  },
-];
+interface BuildHistoryProps {
+  projectDir: string;
+  onViewReport?: (buildId: string) => void;
+}
 
 function formatDuration(secs: number): string {
   const m = Math.floor(secs / 60);
@@ -80,10 +52,45 @@ function formatDate(iso: string): string {
   }
 }
 
-export default function BuildHistory() {
+export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryProps) {
   const { C, MONO } = useTheme();
-  const [history] = useState<BuildRecord[]>(DEMO_HISTORY);
+  const [history, setHistory] = useState<BuildRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Load build history from .coverteda_history.json in the project directory
+  useEffect(() => {
+    if (!projectDir) {
+      setHistory([]);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const historyPath = `${projectDir}/.coverteda_history.json`;
+    setLoading(true);
+    setError(null);
+    readFile(historyPath)
+      .then((fc) => {
+        if (cancelled) return;
+        try {
+          const records: BuildRecord[] = JSON.parse(fc.content);
+          setHistory(Array.isArray(records) ? records : []);
+        } catch {
+          setHistory([]);
+          setError("Failed to parse build history file.");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // File doesn't exist yet — that's fine, no builds recorded
+        setHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [projectDir]);
 
   const selected = useMemo(() => history.find((h) => h.id === selectedId), [history, selectedId]);
 
@@ -99,6 +106,30 @@ export default function BuildHistory() {
   const panelP: React.CSSProperties = {
     background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{ ...panelP, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
+        <span style={{ fontSize: 10, fontFamily: MONO, color: C.t3 }}>Loading build history...</span>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (history.length === 0) {
+    return (
+      <div style={{ ...panelP, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 160, gap: 8 }}>
+        <Zap />
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.t2 }}>No build history yet</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: C.t3, textAlign: "center", maxWidth: 300 }}>
+          {error
+            ? error
+            : "Build records will appear here after your first build. History is stored in .coverteda_history.json in your project directory."}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -163,6 +194,9 @@ export default function BuildHistory() {
         <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
           <Zap />
           Build History
+          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginLeft: "auto" }}>
+            .coverteda_history.json
+          </span>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -248,8 +282,27 @@ export default function BuildHistory() {
       {/* Selected Build Details */}
       {selected && (
         <div style={panelP}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
             Build Details
+            {onViewReport && selected.status === "success" && (
+              <button
+                onClick={() => onViewReport(selected.id)}
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 8,
+                  fontFamily: MONO,
+                  fontWeight: 600,
+                  color: C.accent,
+                  background: `${C.accent}15`,
+                  border: `1px solid ${C.accent}40`,
+                  borderRadius: 4,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                View Report
+              </button>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "4px 12px", fontSize: 9, fontFamily: MONO }}>
             <span style={{ color: C.t3 }}>Backend:</span>
@@ -257,7 +310,7 @@ export default function BuildHistory() {
             <span style={{ color: C.t3 }}>Device:</span>
             <span style={{ color: C.t1 }}>{selected.device}</span>
             <span style={{ color: C.t3 }}>Stages:</span>
-            <span style={{ color: C.t1 }}>{selected.stages.join(" → ")}</span>
+            <span style={{ color: C.t1 }}>{selected.stages.join(" \u2192 ")}</span>
             <span style={{ color: C.t3 }}>Duration:</span>
             <span style={{ color: C.t1 }}>{formatDuration(selected.duration)}</span>
             {selected.commitHash && (
