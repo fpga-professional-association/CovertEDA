@@ -630,6 +630,19 @@ export default function App() {
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
 
+  // Find constraint file in file tree matching the backend's extension
+  const constraintFilePath = useMemo(() => {
+    if (!realFiles) return undefined;
+    const ext = B.constrExt || (
+      bid === "radiant" || bid === "diamond" ? ".pdc" :
+      bid === "quartus" ? ".qsf" : bid === "vivado" ? ".xdc" : ".pcf"
+    );
+    const match = realFiles.find(
+      (f) => f.ty === "constr" && f.path && f.n.endsWith(ext)
+    );
+    return match?.path;
+  }, [realFiles, bid, B.constrExt]);
+
   // Load backends and config on mount
   useEffect(() => {
     getRuntimeBackends().then(setBackends);
@@ -1242,7 +1255,6 @@ export default function App() {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        zoom: scaleFactor !== 1 ? scaleFactor : undefined,
       }}
     >
       {/* Git Status Bar */}
@@ -1723,7 +1735,7 @@ export default function App() {
               <ConstraintEditor
                 backendId={bid}
                 device={project?.device ?? B.defaultDev}
-                projectDir={projectDir}
+                constraintFile={constraintFilePath}
               />
             )}
 
@@ -1751,11 +1763,33 @@ export default function App() {
                 )}
                 {licenseResult && (
                   <>
-                    <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginBottom: 10 }}>
-                      {licenseResult.licenseFile
-                        ? `License file: ${licenseResult.licenseFile}`
-                        : "No license file found"}
-                    </div>
+                    {/* License files found */}
+                    {licenseResult.licenseFiles.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
+                        {licenseResult.licenseFiles.map((lf, i) => (
+                          <div key={i} style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "4px 8px", borderRadius: 4, background: C.bg,
+                            fontSize: 9, fontFamily: MONO,
+                          }}>
+                            <span style={{
+                              fontSize: 7, fontWeight: 700, padding: "1px 5px", borderRadius: 2,
+                              background: `${C.accent}15`, color: C.accent, textTransform: "uppercase",
+                            }}>
+                              {lf.backend}
+                            </span>
+                            <span style={{ color: C.t3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {lf.path}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginBottom: 12 }}>
+                        No license files found
+                      </div>
+                    )}
+                    {/* Features table */}
                     {licenseResult.features.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         {licenseResult.features.map((f, i) => (
@@ -1777,7 +1811,7 @@ export default function App() {
                             <span style={{ color: C.t3 }}>{f.expires}</span>
                             <span
                               style={{
-                                color: f.status === "active" ? C.ok : C.err,
+                                color: f.status === "active" ? C.ok : f.status === "warning" ? C.warn : C.err,
                                 fontWeight: 600,
                                 textAlign: "right",
                               }}
@@ -1792,7 +1826,7 @@ export default function App() {
                         No license features found.
                       </div>
                     )}
-                    <div style={{ marginTop: 10 }}>
+                    <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
                       <Btn
                         small
                         onClick={() => {

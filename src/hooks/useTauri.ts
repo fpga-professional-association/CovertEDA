@@ -333,10 +333,15 @@ export async function detectTools(): Promise<DetectedTool[]> {
 export async function checkLicenses(): Promise<LicenseCheckResult> {
   if (!isTauri) {
     return {
-      licenseFile: "/mnt/c/Users/tcove/license.dat",
+      licenseFiles: [
+        { backend: "radiant", path: "/mnt/c/Users/tcove/license.dat" },
+        { backend: "quartus", path: "/mnt/c/intelFPGA_pro/23.1/licenses/license.dat" },
+      ],
       features: [
         { feature: "LSC_RADIANT", vendor: "lattice", expires: "26-dec-2026", hostId: "9c6b00c1a932", status: "active" },
         { feature: "LSC_SYNPLIFYPRO1", vendor: "lattice", expires: "26-dec-2026", hostId: "9c6b00c1a932", status: "active" },
+        { feature: "quartus_pro", vendor: "intel", expires: "permanent", hostId: "ANY", status: "active" },
+        { feature: "ip_base", vendor: "intel", expires: "permanent", hostId: "ANY", status: "active" },
       ],
     };
   }
@@ -392,6 +397,22 @@ export async function pickFile(filters?: { name: string; extensions: string[] }[
   const selected = await open({
     directory: false,
     multiple: false,
+    filters: filters ?? [],
+  });
+  return selected as string | null;
+}
+
+export async function writeTextFile(path: string, content: string): Promise<void> {
+  if (!isTauri) { console.log("Mock write:", path); return; }
+  return invoke<void>("write_text_file", { path, content });
+}
+
+export async function pickSaveFile(filters?: { name: string; extensions: string[] }[]): Promise<string | null> {
+  if (!isTauri) {
+    return window.prompt("Enter save file path:") || null;
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const selected = await save({
     filters: filters ?? [],
   });
   return selected as string | null;

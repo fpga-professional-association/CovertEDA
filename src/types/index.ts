@@ -364,7 +364,12 @@ export interface LicenseFeature {
   status: string;
 }
 
+export interface LicenseFileInfo {
+  backend: string;
+  path: string;
+}
+
 export interface LicenseCheckResult {
-  licenseFile: string | null;
+  licenseFiles: LicenseFileInfo[];
   features: LicenseFeature[];
 }

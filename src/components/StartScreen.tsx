@@ -308,9 +308,9 @@ export default function StartScreen({
                       <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>exp {f.expires}</span>
                     </div>
                   ))}
-                  {licenseResult.licenseFile && (
+                  {licenseResult.licenseFiles.length > 0 && (
                     <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 4, opacity: 0.7 }}>
-                      {licenseResult.licenseFile}
+                      {licenseResult.licenseFiles.map(lf => lf.path).join(", ")}
                     </div>
                   )}
                 </div>

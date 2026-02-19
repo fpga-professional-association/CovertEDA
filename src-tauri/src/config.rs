@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,8 +10,12 @@ pub struct AppConfig {
     pub theme: String,
     #[serde(default = "default_scale")]
     pub scale_factor: f64,
+    /// Legacy single license file path (kept for backward compat on load)
     #[serde(default)]
     pub license_file: Option<String>,
+    /// Cached license file paths keyed by vendor id (e.g. "radiant", "quartus")
+    #[serde(default)]
+    pub license_files: HashMap<String, String>,
     #[serde(default)]
     pub ai_api_key: Option<String>,
     #[serde(default)]
@@ -53,6 +58,7 @@ impl Default for AppConfig {
             theme: "dark".to_string(),
             scale_factor: 1.2,
             license_file: None,
+            license_files: HashMap::new(),
             ai_api_key: None,
             ai_model: None,
         }

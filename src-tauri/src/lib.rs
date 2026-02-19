@@ -57,6 +57,7 @@ pub fn run() {
             commands::get_raw_report,
             commands::generate_ip_script,
             commands::execute_ip_generate,
+            commands::write_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

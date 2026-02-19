@@ -1046,8 +1046,15 @@ pub struct LicenseFeature {
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct LicenseFileInfo {
+    pub backend: String,
+    pub path: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LicenseCheckResult {
-    pub license_file: Option<String>,
+    pub license_files: Vec<LicenseFileInfo>,
     pub features: Vec<LicenseFeature>,
 }
 
@@ -1087,19 +1094,91 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
 
 #[tauri::command]
 pub fn check_licenses() -> Result<LicenseCheckResult, String> {
-    let radiant = crate::backend::radiant::RadiantBackend::new();
-    let license_path = radiant.find_license();
+    let mut config = crate::config::AppConfig::load();
+    let mut license_files: Vec<LicenseFileInfo> = vec![];
+    let mut all_features: Vec<LicenseFeature> = vec![];
+    let mut config_changed = false;
 
-    let features = if let Some(ref path) = license_path {
-        parse_license_file(path)
-    } else {
-        vec![]
-    };
+    // ── Radiant ──
+    let radiant_path = resolve_cached_license(&config, "radiant", || {
+        let radiant = crate::backend::radiant::RadiantBackend::new();
+        radiant.find_license()
+    });
+    if let Some(ref path) = radiant_path {
+        license_files.push(LicenseFileInfo {
+            backend: "radiant".into(),
+            path: path.display().to_string(),
+        });
+        all_features.extend(parse_license_file(path));
+        let path_str = path.display().to_string();
+        if config.license_files.get("radiant").map(|s| s.as_str()) != Some(&path_str) {
+            config.license_files.insert("radiant".into(), path_str);
+            config_changed = true;
+        }
+    }
+
+    // ── Quartus ──
+    let quartus_path = resolve_cached_license(&config, "quartus", || {
+        let quartus = crate::backend::quartus::QuartusBackend::new();
+        quartus.find_license()
+    });
+    if let Some(ref path) = quartus_path {
+        license_files.push(LicenseFileInfo {
+            backend: "quartus".into(),
+            path: path.display().to_string(),
+        });
+        // Only add features not already present (in case both use the same file)
+        let existing_names: std::collections::HashSet<String> =
+            all_features.iter().map(|f| f.feature.clone()).collect();
+        for feat in parse_license_file(path) {
+            if !existing_names.contains(&feat.feature) {
+                all_features.push(feat);
+            }
+        }
+        let path_str = path.display().to_string();
+        if config.license_files.get("quartus").map(|s| s.as_str()) != Some(&path_str) {
+            config.license_files.insert("quartus".into(), path_str);
+            config_changed = true;
+        }
+    }
+
+    // Save updated cache if any new paths were discovered
+    if config_changed {
+        let _ = config.save();
+    }
 
     Ok(LicenseCheckResult {
-        license_file: license_path.map(|p| p.display().to_string()),
-        features,
+        license_files,
+        features: all_features,
     })
+}
+
+/// Check the cached license path for a vendor. If the cached file still exists,
+/// return it immediately. Otherwise, run the scan function to find a new one.
+fn resolve_cached_license<F>(
+    config: &crate::config::AppConfig,
+    vendor: &str,
+    scan: F,
+) -> Option<PathBuf>
+where
+    F: FnOnce() -> Option<PathBuf>,
+{
+    // Check cached path first
+    if let Some(cached) = config.license_files.get(vendor) {
+        let p = PathBuf::from(cached);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // Fall back to legacy single license_file field (migration)
+    if let Some(ref legacy) = config.license_file {
+        let p = PathBuf::from(legacy);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // Full scan
+    scan()
 }
 
 fn parse_license_file(path: &std::path::Path) -> Vec<LicenseFeature> {
@@ -1342,6 +1421,11 @@ pub fn delete_directory(path: String, state: State<'_, AppState>) -> Result<(), 
 
     std::fs::remove_dir_all(&dir_path)
         .map_err(|e| format!("Failed to delete {}: {}", path, e))
+}
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

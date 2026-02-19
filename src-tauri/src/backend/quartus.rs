@@ -100,6 +100,95 @@ impl QuartusBackend {
         self.install_dir.as_deref()
     }
 
+    /// Search for a Quartus/Intel FlexLM license file.
+    pub fn find_license(&self) -> Option<PathBuf> {
+        // 1. Check QUARTUS_LICENSE_FILE env var first (Intel-specific)
+        if let Ok(lic_path) = std::env::var("QUARTUS_LICENSE_FILE") {
+            let p = PathBuf::from(&lic_path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+
+        // 2. Check LM_LICENSE_FILE env var
+        if let Ok(lic_path) = std::env::var("LM_LICENSE_FILE") {
+            let p = PathBuf::from(&lic_path);
+            if p.exists() {
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    if Self::looks_like_quartus_license(&content) {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+
+        // 3. Check inside the Quartus installation directory
+        if let Some(install) = &self.install_dir {
+            let lic_dir = install.join("licenses");
+            if lic_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&lic_dir) {
+                    for entry in entries.filter_map(|e| e.ok()) {
+                        let path = entry.path();
+                        if path.extension().map(|e| e == "dat" || e == "lic").unwrap_or(false) {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                if Self::looks_like_quartus_license(&content) {
+                                    return Some(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Common license file locations
+        let candidates: Vec<Option<PathBuf>> = if cfg!(target_os = "windows") {
+            vec![
+                dirs::home_dir().map(|h| h.join("license.dat")),
+                Some(PathBuf::from(r"C:\license.dat")),
+                Some(PathBuf::from(r"C:\flexlm\license.dat")),
+            ]
+        } else {
+            vec![
+                // WSL: Windows user home
+                Some(PathBuf::from("/mnt/c/Users"))
+                    .and_then(|p| {
+                        std::fs::read_dir(&p)
+                            .ok()?
+                            .filter_map(|e| e.ok())
+                            .find(|e| {
+                                e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                                    && e.file_name() != "Public"
+                                    && e.file_name() != "Default"
+                                    && e.file_name() != "Default User"
+                                    && e.file_name() != "All Users"
+                            })
+                            .map(|e| e.path().join("license.dat"))
+                    }),
+                dirs::home_dir().map(|h| h.join("license.dat")),
+                Some(PathBuf::from("/opt/flexlm/license.dat")),
+            ]
+        };
+
+        for candidate in candidates.into_iter().flatten() {
+            if candidate.exists() {
+                if let Ok(content) = std::fs::read_to_string(&candidate) {
+                    if Self::looks_like_quartus_license(&content) {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Check if a license file content looks like it contains Quartus/Intel features.
+    fn looks_like_quartus_license(content: &str) -> bool {
+        let lower = content.to_lowercase();
+        lower.contains("quartus") || lower.contains("altera") || lower.contains("intel")
+    }
+
     /// Find the .qpf (Quartus Project File) in a directory.
     pub fn find_qpf_file(project_dir: &Path, top_module: &str) -> Option<PathBuf> {
         // Try exact match first
