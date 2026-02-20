@@ -48,5 +48,21 @@
     ],
     "warnings": 0,
     "errors": 1
+  },
+  {
+    "id": "b-1771611464713",
+    "timestamp": "2026-02-20T18:17:44.713Z",
+    "duration": 12,
+    "status": "failed",
+    "backend": "Radiant",
+    "device": "LIFCL-40-7BG400I",
+    "stages": [
+      "synth",
+      "map",
+      "par",
+      "bitgen"
+    ],
+    "warnings": 0,
+    "errors": 1
   }
 ]

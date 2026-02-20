@@ -943,6 +943,12 @@ export default function App() {
   }, []);
 
   const doRunBuild = useCallback(async () => {
+    // Clean up any stale listeners from previous builds
+    if (buildCleanup.current) {
+      buildCleanup.current();
+      buildCleanup.current = null;
+    }
+
     setBuilding(true);
     buildStartTime.current = Date.now();
     setBStep(0);
@@ -980,6 +986,11 @@ export default function App() {
     const unlistenFinished = await listen<{ build_id: string; stage_idx: number; status: string; message: string }>(
       "build:finished",
       (data) => {
+        // Clean up all listeners now that build is done
+        if (buildCleanup.current) {
+          buildCleanup.current();
+          buildCleanup.current = null;
+        }
         stopLogFlush();
         setBuilding(false);
         setLogs((p) => [
@@ -1050,7 +1061,6 @@ export default function App() {
     );
 
     buildCleanup.current = () => {
-      stopLogFlush();
       unlistenStdout();
       unlistenStage();
       unlistenFinished();
@@ -1063,8 +1073,11 @@ export default function App() {
       console.log("Build started:", newBuildId);
     } catch (err) {
       // Clean up listeners on error
-      buildCleanup.current();
-      buildCleanup.current = null;
+      stopLogFlush();
+      if (buildCleanup.current) {
+        buildCleanup.current();
+        buildCleanup.current = null;
+      }
       setBuilding(false);
       setLogs((p) => [...p, { t: "err" as const, m: `Build error: ${err}` }]);
     }
