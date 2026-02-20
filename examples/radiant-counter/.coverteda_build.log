@@ -1,0 +1,14 @@
+--- Lattice Radiant Software (64-bit) 2025.2.0.48.0
+--- Copyright (C) 1992-2025 Lattice Semiconductor Corporation.
+--- All Rights Reserved.
+--- Lattice Radiant Software install path: C:/lscc/radiant/2025.2
+--- Date    : 12:45:27 02/20/26
+--- UserName: tcove
+--- HostName: tcovert
+--- RunDir  : \\wsl.localhost\Ubuntu-24.04\home\tcovert\projects\CovertEDA\src-tauri
+--- PID     : 19572
+--- TclFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.tcl.19572
+--- LogFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.log.19572
+--------------------------------------------------------------------------------
+
+WARNING: Strategy option "SYN_Tool" does not exist. It's ignored.

@@ -15,9 +15,10 @@
   "backendConfig": {},
   "buildStages": [],
   "buildOptions": {
-    "syn_infer_dsp": "false",
-    "synth_engine": "Synplify Pro"
+    "synth_engine": "",
+    "syn_optimization": "",
+    "syn_infer_dsp": "false"
   },
   "createdAt": "2025-06-01T00:00:00Z",
-  "updatedAt": "2026-02-20T18:28:01.816088264+00:00"
+  "updatedAt": "2026-02-20T18:45:52.801169625+00:00"
 }

@@ -1397,15 +1397,24 @@ mod tests {
     fn test_wsl_to_windows_path_native_linux() {
         let p = std::path::Path::new("/home/user/project");
         let result = wsl_to_windows_path(p);
-        assert_eq!(result, "/home/user/project");
+        if std::env::var("WSL_DISTRO_NAME").is_ok() {
+            assert!(result.starts_with("\\\\wsl.localhost\\"));
+            assert!(result.ends_with("\\home\\user\\project"));
+        } else {
+            assert_eq!(result, "/home/user/project");
+        }
     }
 
     #[test]
     fn test_wsl_to_windows_path_short() {
         let p = std::path::Path::new("/mnt/");
         let result = wsl_to_windows_path(p);
-        // Too short to be a valid WSL path — passes through
-        assert_eq!(result, "/mnt/");
+        // Too short for /mnt/X/ conversion — falls through to UNC or passthrough
+        if std::env::var("WSL_DISTRO_NAME").is_ok() {
+            assert!(result.starts_with("\\\\wsl.localhost\\"));
+        } else {
+            assert_eq!(result, "/mnt/");
+        }
     }
 
     // ── UUID generation ──
