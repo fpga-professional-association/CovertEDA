@@ -14,7 +14,6 @@ import BuildPipeline from "./components/BuildPipeline";
 import ReportViewer from "./components/ReportViewer";
 import Console from "./components/Console";
 import CommandPalette from "./components/CommandPalette";
-import BackendSwitcher from "./components/BackendSwitcher";
 import StartScreen from "./components/StartScreen";
 import FileViewer from "./components/FileViewer";
 import BuildArtifacts from "./components/BuildArtifacts";
@@ -608,7 +607,6 @@ export default function App() {
   const navHistory = useRef<Section[]>([]);
   const buildStartTime = useRef<number>(0);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [devOpen, setDevOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
@@ -795,20 +793,11 @@ export default function App() {
     setProject(null);
     setProjectDir("");
     setCmdOpen(false);
-    setDevOpen(false);
     setRealFiles(null);
     setViewingFile(null);
     setRealTimingReport(null);
     setRealUtilReport(null);
     setBuildDone(false);
-    setActiveStage(null);
-  }, []);
-
-  const switchBackend = useCallback((id: string) => {
-    setBid(id);
-    setBStep(-1);
-    setLogs([]);
-    setBuilding(false);
     setActiveStage(null);
   }, []);
 
@@ -1235,7 +1224,6 @@ export default function App() {
       }
       if (e.key === "Escape") {
         setCmdOpen(false);
-        setDevOpen(false);
         setShortcutsOpen(false);
       }
     };
@@ -1378,10 +1366,6 @@ export default function App() {
     { label: "Zoom 100%", category: "Zoom", action: () => setScaleFactor(1.0) },
     { label: "Zoom 150%", category: "Zoom", action: () => setScaleFactor(1.5) },
     { label: "Zoom 200%", category: "Zoom", action: () => setScaleFactor(2.0) },
-    // Backend switching
-    ...backends.filter((b) => b.available).map((b) => ({
-      label: `Switch: ${b.name}`, category: "Backend", desc: `${b.version || ""}`, action: () => switchBackend(b.id),
-    })),
     // Project
     { label: "Settings", category: "Project", desc: "Tool paths, theme, zoom", action: () => setSettingsOpen(true) },
     { label: "Toggle File Tree", category: "Project", desc: showFiles ? "Hide files" : "Show files", action: () => setShowFiles((p) => !p) },
@@ -1419,15 +1403,6 @@ export default function App() {
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}
         commands={commands}
-      />
-
-      {/* Backend Switcher */}
-      <BackendSwitcher
-        open={devOpen}
-        onClose={() => setDevOpen(false)}
-        backends={backends}
-        activeId={bid}
-        onSwitch={switchBackend}
       />
 
       {/* Settings Panel */}
@@ -1503,10 +1478,8 @@ export default function App() {
           }}
         >
           <div
-            onClick={() => setDevOpen((p) => !p)}
             style={{
               padding: "6px 0 8px",
-              cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",

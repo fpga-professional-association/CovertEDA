@@ -313,7 +313,7 @@ impl FpgaBackend for RadiantBackend {
             };
 
             script.push_str(&format!(
-                "prj_create -name \"{project_name}\" -impl \"impl1\" -dev {device} -performance \"7_High-Performance_1.0V\" -synthesis \"lse\" -path \"{project_dir_tcl}\"\n",
+                "prj_create -name \"{project_name}\" -impl \"impl1\" -dev {device} -performance \"7_High-Performance_1.0V\" -synthesis \"lse\" -dir \"{project_dir_tcl}\"\n",
             ));
 
             // Add source files
@@ -605,7 +605,7 @@ if {{[llength $rdf_files] > 0}} {{
     prj_open [lindex $rdf_files 0]
 }} else {{
     puts "CovertEDA: No .rdf project found — creating temporary project for IP generation"
-    prj_create -name "coverteda_ipgen" -impl "impl1" -dev {device} -synthesis "lse" -path "{project_dir_tcl}"
+    prj_create -name "coverteda_ipgen" -impl "impl1" -dev {device} -synthesis "lse" -dir "{project_dir_tcl}"
 }}
 
 # Open the IP design in Clarity Designer
@@ -652,9 +652,18 @@ puts "CovertEDA: Output directory: {ip_dir_tcl}"
 fn to_tcl_path(path: &Path) -> String {
     let s = path.display().to_string();
     if s.starts_with("/mnt/") && s.len() > 6 {
+        // /mnt/c/Users/... → C:/Users/...
         let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
-        let rest = &s[6..]; // already has forward slashes from Linux
+        let rest = &s[6..];
         format!("{}:{}", drive, rest)
+    } else if s.starts_with('/') {
+        // WSL-native path → UNC path for Windows tool access
+        // e.g. /home/user/proj → //wsl.localhost/Ubuntu-24.04/home/user/proj
+        if let Ok(distro) = std::env::var("WSL_DISTRO_NAME") {
+            format!("//wsl.localhost/{}{}", distro, s)
+        } else {
+            s
+        }
     } else {
         s.replace('\\', "/")
     }
@@ -794,6 +803,12 @@ mod tests {
     fn test_radiant_to_tcl_path_native() {
         let path = Path::new("/home/user/project/test.rdf");
         let result = to_tcl_path(path);
-        assert_eq!(result, "/home/user/project/test.rdf");
+        // In WSL, native paths get converted to UNC; outside WSL they stay as-is
+        if std::env::var("WSL_DISTRO_NAME").is_ok() {
+            assert!(result.starts_with("//wsl.localhost/"));
+            assert!(result.ends_with("/home/user/project/test.rdf"));
+        } else {
+            assert_eq!(result, "/home/user/project/test.rdf");
+        }
     }
 }
