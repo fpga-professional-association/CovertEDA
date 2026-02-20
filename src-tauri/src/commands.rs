@@ -304,16 +304,6 @@ pub fn start_build(
         .ok_or("No project is open")?;
     drop(current);
 
-    // Stage to Windows filesystem if needed (Radiant lowercases UNC paths,
-    // which breaks case-sensitive WSL-native paths)
-    let staging = if backend_id == "radiant" && needs_wsl_staging(&project_path) {
-        let staging_dir = create_wsl_staging(&project_path, &config.top_module)?;
-        Some(staging_dir)
-    } else {
-        None
-    };
-    let effective_dir = staging.as_deref().unwrap_or(&project_path);
-
     // Generate the build script via the backend
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     let backend = registry
@@ -321,13 +311,13 @@ pub fn start_build(
         .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
 
     let script = backend
-        .generate_build_script(effective_dir, &config.device, &config.top_module, &stages, &options)
+        .generate_build_script(&project_path, &config.device, &config.top_module, &stages, &options)
         .map_err(|e| e.to_string())?;
     let cli_tool = backend.cli_tool().to_string();
     drop(registry);
 
-    // Write the build script to a temp file in the build directory
-    let script_path = effective_dir.join(".coverteda_build.tcl");
+    // Write the build script to a temp file in the project directory
+    let script_path = project_path.join(".coverteda_build.tcl");
     std::fs::write(&script_path, &script)
         .map_err(|e| format!("Failed to write build script: {}", e))?;
 
@@ -367,8 +357,6 @@ pub fn start_build(
     // Spawn the build in a background thread
     let build_id_clone = build_id.clone();
     let log_path = project_path.join(".coverteda_build.log");
-    let original_project_path = project_path.clone();
-    let staging_dir_for_thread = staging.clone();
     std::thread::spawn(move || {
         use std::io::BufRead;
         use std::process::{Command, Stdio};
@@ -395,10 +383,6 @@ pub fn start_build(
         emit_info(&format!("═══ CovertEDA Build ═══"));
         emit_info(&format!("Backend: {} ({})", backend_id, &executable));
         emit_info(&format!("Project: {}", project_dir));
-        if let Some(ref sd) = staging_dir_for_thread {
-            emit_info(&format!("WSL project \u{2192} temp build dir: {}", sd.display()));
-            emit_info("(Radiant requires Windows-native paths; outputs copied back after build)");
-        }
         for (key, val) in &env_vars {
             emit_info(&format!("ENV: {}={}", key, val));
         }
@@ -715,16 +699,6 @@ pub fn start_build(
 
                 // Clean up the temp script
                 let _ = std::fs::remove_file(&script_path);
-
-                // If we staged to Windows filesystem, copy results back
-                if let Some(ref staging) = staging_dir_for_thread {
-                    if let Err(e) = copy_staging_results(staging, &original_project_path) {
-                        let _ = app_handle.emit("build:stdout", serde_json::json!({
-                            "buildId": &build_id_clone,
-                            "line": format!("Warning: failed to copy staging results: {}", e),
-                        }));
-                    }
-                }
             }
             Err(e) => {
                 let msg = format!("Failed to spawn {}: {}", executable, e);
@@ -735,10 +709,6 @@ pub fn start_build(
                     status: BuildStatus::Failed,
                     message: msg,
                 });
-                // Clean up staging on failure too
-                if let Some(ref staging) = staging_dir_for_thread {
-                    let _ = std::fs::remove_dir_all(staging);
-                }
             }
         }
     });
@@ -1373,176 +1343,24 @@ fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
 }
 
 /// Convert a WSL path to a Windows path for use by Windows executables.
-/// e.g., /mnt/c/Users/foo/project → C:/Users/foo/project
-/// Non-WSL paths are returned as-is.
+/// /mnt/c/Users/foo → C:\Users\foo
+/// /home/user/proj  → \\wsl.localhost\<distro>\home\user\proj
 fn wsl_to_windows_path(path: &std::path::Path) -> String {
     let s = path.display().to_string();
     if s.starts_with("/mnt/") && s.len() > 6 {
         let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
         let rest = &s[6..];
         format!("{}:{}", drive, rest.replace('/', "\\"))
+    } else if s.starts_with('/') {
+        // WSL-native path → UNC path
+        if let Ok(distro) = std::env::var("WSL_DISTRO_NAME") {
+            format!("\\\\wsl.localhost\\{}{}", distro, s.replace('/', "\\"))
+        } else {
+            s
+        }
     } else {
         s
     }
-}
-
-/// Check if a project directory lives on the WSL-native filesystem (not /mnt/).
-/// Windows tools can't reliably access these paths because Radiant lowercases UNC paths.
-fn needs_wsl_staging(project_dir: &Path) -> bool {
-    let s = project_dir.display().to_string();
-    s.starts_with('/') && !s.starts_with("/mnt/")
-}
-
-/// Find the Windows %TEMP% directory from WSL.
-fn find_windows_temp() -> Option<PathBuf> {
-    // Try running cmd.exe to get %TEMP%
-    if let Ok(output) = std::process::Command::new("cmd.exe")
-        .args(["/c", "echo", "%TEMP%"])
-        .output()
-    {
-        let temp_win = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        // Convert Windows path (C:\Users\...) to WSL path (/mnt/c/Users/...)
-        if temp_win.len() > 3 && temp_win.chars().nth(1) == Some(':') {
-            let drive = temp_win.chars().next().unwrap().to_lowercase().to_string();
-            let rest = temp_win[2..].replace('\\', "/");
-            let wsl_path = PathBuf::from(format!("/mnt/{}{}", drive, rest));
-            if wsl_path.is_dir() {
-                return Some(wsl_path);
-            }
-        }
-    }
-    // Fall back: scan /mnt/c/Users/*/AppData/Local/Temp
-    if let Ok(entries) = std::fs::read_dir("/mnt/c/Users") {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let temp = entry.path().join("AppData/Local/Temp");
-            if temp.is_dir() {
-                return Some(temp);
-            }
-        }
-    }
-    None
-}
-
-/// Create a temporary staging directory on the Windows filesystem for building.
-/// Radiant lowercases UNC paths to WSL, breaking case-sensitive Linux paths.
-/// The staging dir lives in Windows %TEMP% and is cleaned up after the build.
-fn create_wsl_staging(project_dir: &Path, project_name: &str) -> Result<PathBuf, String> {
-    // Find Windows temp dir: try cmd.exe, fall back to known path
-    let win_temp = find_windows_temp()
-        .unwrap_or_else(|| PathBuf::from("/mnt/c/Users/tcove/AppData/Local/Temp"));
-
-    let uid = uuid_v4();
-    let staging_dir = win_temp.join(format!("coverteda_{}", &uid[..12]));
-
-    // Clean and recreate
-    if staging_dir.exists() {
-        let _ = std::fs::remove_dir_all(&staging_dir);
-    }
-    std::fs::create_dir_all(&staging_dir)
-        .map_err(|e| format!("Failed to create staging dir {}: {}", staging_dir.display(), e))?;
-
-    // Copy source and constraint files (preserving subdirectory structure)
-    copy_project_sources(project_dir, &staging_dir)?;
-
-    Ok(staging_dir)
-}
-
-/// Copy HDL sources, constraints, and existing .rdf from project to staging dir.
-fn copy_project_sources(src: &Path, dst: &Path) -> Result<(), String> {
-    copy_dir_filtered(src, dst, 0).map_err(|e| format!("Staging copy failed: {}", e))
-}
-
-fn copy_dir_filtered(src: &Path, dst: &Path, depth: u32) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        let ty = entry.file_type()?;
-
-        if ty.is_dir() {
-            // Skip build artifacts, VCS, and irrelevant dirs
-            if name.starts_with("impl")
-                || name.starts_with('.')
-                || name == "node_modules"
-                || name == "target"
-                || name == "src-tauri"
-            {
-                continue;
-            }
-            // Only recurse a couple levels deep
-            if depth < 3 {
-                copy_dir_filtered(&entry.path(), &dst.join(&name), depth + 1)?;
-            }
-        } else {
-            let ext = Path::new(&name)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            // Copy HDL sources, constraints, and Radiant project files
-            let is_hdl = matches!(ext, "v" | "sv" | "vhd" | "vhdl");
-            let is_support = matches!(
-                ext,
-                "pdc" | "sdc" | "lpf"
-                    | "tcl"
-                    | "mem" | "hex" | "mif"
-            );
-            if is_hdl {
-                // Skip testbench files
-                let stem = Path::new(&name)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if stem.ends_with("_tb")
-                    || stem.ends_with("_test")
-                    || stem.ends_with("_testbench")
-                    || stem.starts_with("tb_")
-                    || stem.starts_with("test_")
-                    || stem == "testbench"
-                {
-                    continue;
-                }
-                std::fs::copy(entry.path(), dst.join(&name))?;
-            } else if is_support {
-                std::fs::copy(entry.path(), dst.join(&name))?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// After a staged build, copy output artifacts back to the original project dir.
-fn copy_staging_results(staging_dir: &Path, project_dir: &Path) -> Result<(), String> {
-    // Copy impl1/ directory (contains reports, bitstreams, etc.)
-    let impl1_src = staging_dir.join("impl1");
-    if impl1_src.exists() {
-        let impl1_dst = project_dir.join("impl1");
-        copy_dir_all(&impl1_src, &impl1_dst)
-            .map_err(|e| format!("Failed to copy impl1 back: {}", e))?;
-    }
-
-    // Don't copy .rdf back — it contains Windows-specific staging paths
-    // and would cause issues if reused on the WSL-native project dir
-
-    // Clean up staging dir
-    let _ = std::fs::remove_dir_all(staging_dir);
-
-    Ok(())
-}
-
-/// Recursively copy a directory and all its contents.
-fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let dst_path = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_all(&entry.path(), &dst_path)?;
-        } else {
-            std::fs::copy(entry.path(), &dst_path)?;
-        }
-    }
-    Ok(())
 }
 
 fn uuid_v4() -> String {
