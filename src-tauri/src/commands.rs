@@ -1454,7 +1454,7 @@ fn copy_dir_filtered(src: &Path, dst: &Path, depth: u32) -> std::io::Result<()> 
             let is_support = matches!(
                 ext,
                 "pdc" | "sdc" | "lpf"
-                    | "rdf" | "tcl"
+                    | "tcl"
                     | "mem" | "hex" | "mif"
             );
             if is_hdl {
@@ -1492,15 +1492,8 @@ fn copy_staging_results(staging_dir: &Path, project_dir: &Path) -> Result<(), St
             .map_err(|e| format!("Failed to copy impl1 back: {}", e))?;
     }
 
-    // Copy .rdf project file
-    for entry in std::fs::read_dir(staging_dir).map_err(|e| e.to_string())? {
-        if let Ok(entry) = entry {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.ends_with(".rdf") {
-                let _ = std::fs::copy(entry.path(), project_dir.join(&name));
-            }
-        }
-    }
+    // Don't copy .rdf back — it contains Windows-specific staging paths
+    // and would cause issues if reused on the WSL-native project dir
 
     // Clean up staging dir
     let _ = std::fs::remove_dir_all(staging_dir);

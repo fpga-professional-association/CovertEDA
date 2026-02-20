@@ -100,5 +100,21 @@
     "errors": 1,
     "commitHash": "207af27",
     "commitMsg": "Pre-build: 8-Bit Counter 2026-02-20"
+  },
+  {
+    "id": "b-1771612305596",
+    "timestamp": "2026-02-20T18:31:45.596Z",
+    "duration": 5,
+    "status": "failed",
+    "backend": "Radiant",
+    "device": "LIFCL-40-7BG400I",
+    "stages": [
+      "synth",
+      "map",
+      "par",
+      "bitgen"
+    ],
+    "warnings": 0,
+    "errors": 1
   }
 ]
