@@ -1,0 +1,20 @@
+{
+  "name": "8-Bit Counter",
+  "description": null,
+  "backendId": "radiant",
+  "device": "LIFCL-40-7BG400I",
+  "topModule": "counter",
+  "sourcePatterns": [
+    "source/**/*.v",
+    "source/**/*.sv",
+    "source/**/*.vhd"
+  ],
+  "constraintFiles": [
+    "source/*.pdc",
+    "source/*.sdc"
+  ],
+  "implDir": "impl1",
+  "backendConfig": {},
+  "createdAt": "2026-02-20T17:15:21.556282404+00:00",
+  "updatedAt": "2026-02-20T17:15:21.556298810+00:00"
+}

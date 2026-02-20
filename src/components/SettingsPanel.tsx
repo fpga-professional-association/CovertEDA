@@ -21,6 +21,80 @@ const THEME_OPTIONS: { id: ThemeId; label: string; desc: string }[] = [
   { id: "colorblind", label: "Colorblind", desc: "Deuteranopia-safe" },
 ];
 
+const AI_SETTINGS_PROVIDERS: {
+  id: string;
+  name: string;
+  models: { id: string; label: string }[];
+  keyPlaceholder: string;
+  keyHelp: string;
+}[] = [
+  {
+    id: "anthropic", name: "Anthropic",
+    models: [
+      { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+      { id: "claude-opus-4-6", label: "Opus 4.6" },
+      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+    ],
+    keyPlaceholder: "sk-ant-api03-...",
+    keyHelp: "Get your key at console.anthropic.com",
+  },
+  {
+    id: "openai", name: "OpenAI",
+    models: [
+      { id: "gpt-4o", label: "GPT-4o" },
+      { id: "gpt-4o-mini", label: "GPT-4o mini" },
+      { id: "o3-mini", label: "o3-mini" },
+      { id: "o1", label: "o1" },
+    ],
+    keyPlaceholder: "sk-...",
+    keyHelp: "Get your key at platform.openai.com",
+  },
+  {
+    id: "google", name: "Gemini",
+    models: [
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    ],
+    keyPlaceholder: "AI...",
+    keyHelp: "Get your key at aistudio.google.com",
+  },
+  {
+    id: "mistral", name: "Mistral",
+    models: [
+      { id: "mistral-large-latest", label: "Mistral Large" },
+      { id: "codestral-latest", label: "Codestral" },
+      { id: "mistral-small-latest", label: "Mistral Small" },
+    ],
+    keyPlaceholder: "API key",
+    keyHelp: "Get your key at console.mistral.ai",
+  },
+  {
+    id: "xai", name: "xAI",
+    models: [
+      { id: "grok-3", label: "Grok 3" },
+      { id: "grok-3-mini", label: "Grok 3 mini" },
+    ],
+    keyPlaceholder: "xai-...",
+    keyHelp: "Get your key at console.x.ai",
+  },
+  {
+    id: "deepseek", name: "DeepSeek",
+    models: [
+      { id: "deepseek-chat", label: "DeepSeek Chat" },
+      { id: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+    ],
+    keyPlaceholder: "sk-...",
+    keyHelp: "Get your key at platform.deepseek.com",
+  },
+  {
+    id: "ollama", name: "Ollama",
+    models: [],
+    keyPlaceholder: "",
+    keyHelp: "Run Ollama locally",
+  },
+];
+
 const TOOL_FIELDS: { key: keyof AppConfig["tool_paths"]; label: string }[] = [
   { key: "diamond", label: "Lattice Diamond" },
   { key: "radiant", label: "Lattice Radiant" },
@@ -281,44 +355,25 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           AI Assistant
         </div>
 
+        {/* Provider selector */}
         <div style={{ marginBottom: 12 }}>
-          <span style={label}>CLAUDE API KEY</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Input
-              value={config?.ai_api_key ?? ""}
-              onChange={(v) => {
-                setConfig((prev) => {
-                  if (!prev) return prev;
-                  const updated = { ...prev, ai_api_key: v || null };
-                  save(updated);
-                  return updated;
-                });
-              }}
-              placeholder="sk-ant-api03-..."
-              style={{ flex: 1 }}
-            />
-          </div>
-          <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
-            Get your key at console.anthropic.com. Stored locally only.
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <span style={label}>AI MODEL</span>
+          <span style={label}>PROVIDER</span>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[
-              { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-              { id: "claude-opus-4-6", label: "Opus 4.6" },
-              { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-            ].map((m) => {
-              const selected = (config?.ai_model ?? "claude-sonnet-4-6") === m.id;
+            {AI_SETTINGS_PROVIDERS.map((p) => {
+              const selected = (config?.ai_provider ?? "anthropic") === p.id;
               return (
                 <div
-                  key={m.id}
+                  key={p.id}
                   onClick={() => {
                     setConfig((prev) => {
                       if (!prev) return prev;
-                      const updated = { ...prev, ai_model: m.id };
+                      const defaultModel = p.models.length > 0 ? p.models[0].id : (prev.ai_model ?? "llama3.1");
+                      const updated = {
+                        ...prev,
+                        ai_provider: p.id,
+                        ai_model: defaultModel,
+                        ai_api_key: p.id === (prev.ai_provider ?? "anthropic") ? prev.ai_api_key : null,
+                      };
                       save(updated);
                       return updated;
                     });
@@ -335,12 +390,120 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     color: selected ? C.accent : C.t2,
                   }}
                 >
-                  {m.label}
+                  {p.name}
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* API key (hidden for Ollama) */}
+        {(() => {
+          const prov = AI_SETTINGS_PROVIDERS.find((p) => p.id === (config?.ai_provider ?? "anthropic"));
+          const isOllama = prov?.id === "ollama";
+          return (
+            <>
+              {!isOllama && (
+                <div style={{ marginBottom: 12 }}>
+                  <span style={label}>API KEY</span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Input
+                      value={config?.ai_api_key ?? ""}
+                      onChange={(v) => {
+                        setConfig((prev) => {
+                          if (!prev) return prev;
+                          const updated = { ...prev, ai_api_key: v || null };
+                          save(updated);
+                          return updated;
+                        });
+                      }}
+                      placeholder={prov?.keyPlaceholder ?? "API key"}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
+                    {prov?.keyHelp ?? "Enter your API key"}. Stored locally only.
+                  </div>
+                </div>
+              )}
+
+              {/* Ollama base URL */}
+              {isOllama && (
+                <div style={{ marginBottom: 12 }}>
+                  <span style={label}>OLLAMA URL</span>
+                  <Input
+                    value={config?.ai_base_url ?? ""}
+                    onChange={(v) => {
+                      setConfig((prev) => {
+                        if (!prev) return prev;
+                        const updated = { ...prev, ai_base_url: v || null };
+                        save(updated);
+                        return updated;
+                      });
+                    }}
+                    placeholder="http://localhost:11434"
+                    style={{ width: "100%" }}
+                  />
+                  <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
+                    Leave blank for default localhost:11434. No API key needed.
+                  </div>
+                </div>
+              )}
+
+              {/* Model selector */}
+              <div style={{ marginBottom: 20 }}>
+                <span style={label}>MODEL</span>
+                {prov && prov.models.length > 0 ? (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {prov.models.map((m) => {
+                      const selected = (config?.ai_model ?? prov.models[0]?.id) === m.id;
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => {
+                            setConfig((prev) => {
+                              if (!prev) return prev;
+                              const updated = { ...prev, ai_model: m.id };
+                              save(updated);
+                              return updated;
+                            });
+                          }}
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 4,
+                            border: `1px solid ${selected ? C.accent : C.b1}`,
+                            background: selected ? `${C.accent}18` : C.bg,
+                            cursor: "pointer",
+                            fontSize: 8,
+                            fontFamily: MONO,
+                            fontWeight: 600,
+                            color: selected ? C.accent : C.t2,
+                          }}
+                        >
+                          {m.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Input
+                    value={config?.ai_model ?? ""}
+                    onChange={(v) => {
+                      setConfig((prev) => {
+                        if (!prev) return prev;
+                        const updated = { ...prev, ai_model: v || null };
+                        save(updated);
+                        return updated;
+                      });
+                    }}
+                    placeholder="llama3.1, codellama, mistral, etc."
+                    style={{ width: "100%" }}
+                  />
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

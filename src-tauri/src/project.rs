@@ -11,6 +11,8 @@ const RECENT_FILE: &str = "recent.json";
 #[serde(rename_all = "camelCase")]
 pub struct ProjectConfig {
     pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
     pub backend_id: String,
     pub device: String,
     pub top_module: String,
@@ -70,6 +72,7 @@ impl ProjectConfig {
 
         Self {
             name: name.to_string(),
+            description: None,
             backend_id: backend_id.to_string(),
             device: device.to_string(),
             top_module: top_module.to_string(),
@@ -174,5 +177,104 @@ impl RecentProjectsList {
 
     pub fn prune(&mut self) {
         self.projects.retain(|p| Path::new(&p.path).exists());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_project_config_new_with_defaults_diamond() {
+        let c = ProjectConfig::new_with_defaults("test", "diamond", "LCMXO3", "top");
+        assert_eq!(c.impl_dir, "impl1");
+        assert!(c.source_patterns.iter().any(|p| p.contains("*.v")));
+        assert!(c.constraint_files.iter().any(|p| p.contains("*.lpf")));
+    }
+
+    #[test]
+    fn test_project_config_new_with_defaults_quartus() {
+        let c = ProjectConfig::new_with_defaults("test", "quartus", "10CX220", "top");
+        assert_eq!(c.impl_dir, "output_files");
+        assert!(c.constraint_files.iter().any(|p| p.contains("*.sdc")));
+    }
+
+    #[test]
+    fn test_project_config_new_with_defaults_radiant() {
+        let c = ProjectConfig::new_with_defaults("test", "radiant", "LIFCL-40", "top");
+        assert_eq!(c.impl_dir, "impl1");
+        assert!(c.source_patterns.iter().any(|p| p.contains("source/")));
+    }
+
+    #[test]
+    fn test_project_config_new_with_defaults_vivado() {
+        let c = ProjectConfig::new_with_defaults("test", "vivado", "xc7a100t", "top");
+        assert_eq!(c.impl_dir, "runs");
+        assert!(c.constraint_files.iter().any(|p| p.contains("*.xdc")));
+    }
+
+    #[test]
+    fn test_project_config_new_with_defaults_oss() {
+        let c = ProjectConfig::new_with_defaults("test", "opensource", "LFE5U-85F", "top");
+        assert_eq!(c.impl_dir, "build");
+    }
+
+    #[test]
+    fn test_project_config_save_and_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut config = ProjectConfig::new_with_defaults("test_proj", "radiant", "LIFCL-40", "counter");
+        config.save(tmp.path()).unwrap();
+        let loaded = ProjectConfig::load(tmp.path()).unwrap();
+        assert_eq!(loaded.name, "test_proj");
+        assert_eq!(loaded.backend_id, "radiant");
+        assert_eq!(loaded.device, "LIFCL-40");
+        assert_eq!(loaded.top_module, "counter");
+    }
+
+    #[test]
+    fn test_project_config_exists_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join(".coverteda"), "{}").unwrap();
+        assert!(ProjectConfig::exists(tmp.path()));
+    }
+
+    #[test]
+    fn test_project_config_exists_false() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!ProjectConfig::exists(tmp.path()));
+    }
+
+    #[test]
+    fn test_recent_projects_add_and_truncate() {
+        let mut list = RecentProjectsList::default();
+        for i in 0..25 {
+            let tmp = tempfile::tempdir().unwrap();
+            let config = ProjectConfig::new_with_defaults(
+                &format!("proj_{}", i), "diamond", "dev", "top",
+            );
+            list.add(tmp.path(), &config);
+        }
+        assert_eq!(list.projects.len(), 20);
+    }
+
+    #[test]
+    fn test_recent_projects_dedup() {
+        let mut list = RecentProjectsList::default();
+        let tmp = tempfile::tempdir().unwrap();
+        let config = ProjectConfig::new_with_defaults("proj", "diamond", "dev", "top");
+        list.add(tmp.path(), &config);
+        list.add(tmp.path(), &config);
+        assert_eq!(list.projects.len(), 1);
+    }
+
+    #[test]
+    fn test_recent_projects_remove() {
+        let mut list = RecentProjectsList::default();
+        let tmp = tempfile::tempdir().unwrap();
+        let config = ProjectConfig::new_with_defaults("proj", "diamond", "dev", "top");
+        list.add(tmp.path(), &config);
+        assert_eq!(list.projects.len(), 1);
+        list.remove(&tmp.path().to_string_lossy());
+        assert_eq!(list.projects.len(), 0);
     }
 }

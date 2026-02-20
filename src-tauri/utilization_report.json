@@ -1,0 +1,326 @@
+{
+  "title": "Utilization Report",
+  "generated": "2026-02-18T16:40:00.051Z",
+  "device": "LIFCL-40-7BG400I",
+  "summary": [
+    {
+      "cat": "Logic",
+      "items": [
+        {
+          "r": "registers",
+          "used": 8,
+          "total": 32811,
+          "detail": ""
+        },
+        {
+          "r": "SLICE         registers",
+          "used": 8,
+          "total": 32256,
+          "detail": ""
+        },
+        {
+          "r": "PIO Input     registers",
+          "used": 0,
+          "total": 185,
+          "detail": ""
+        },
+        {
+          "r": "PIO Output    registers",
+          "used": 0,
+          "total": 185,
+          "detail": ""
+        },
+        {
+          "r": "PIO Tri-State registers",
+          "used": 0,
+          "total": 185,
+          "detail": ""
+        },
+        {
+          "r": "LUT4s",
+          "used": 11,
+          "total": 32256,
+          "detail": ""
+        },
+        {
+          "r": "18-bit Registers",
+          "used": 0,
+          "total": 112,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "cat": "I/O",
+      "items": [
+        {
+          "r": "PIOs used/reserved",
+          "used": 17,
+          "total": 185,
+          "detail": ""
+        },
+        {
+          "r": "Dedicated IO used for ADC/PCIE/DPHY",
+          "used": 0,
+          "total": 32,
+          "detail": ""
+        },
+        {
+          "r": "IDDR/ODDR/TDDR functions used",
+          "used": 0,
+          "total": 444,
+          "detail": ""
+        },
+        {
+          "r": "DDRDLLs",
+          "used": 0,
+          "total": 2,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "cat": "Memory",
+      "items": [
+        {
+          "r": "Block RAMs",
+          "used": 0,
+          "total": 84,
+          "detail": ""
+        },
+        {
+          "r": "Large RAMs",
+          "used": 0,
+          "total": 2,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "cat": "DSP",
+      "items": [
+        {
+          "r": "Multipliers (18x18)",
+          "used": 0,
+          "total": 56,
+          "detail": ""
+        },
+        {
+          "r": "54-bit Accumulators",
+          "used": 0,
+          "total": 28,
+          "detail": ""
+        },
+        {
+          "r": "PREADD9",
+          "used": 0,
+          "total": 112,
+          "detail": ""
+        },
+        {
+          "r": "MULT9",
+          "used": 0,
+          "total": 112,
+          "detail": ""
+        },
+        {
+          "r": "MULT18",
+          "used": 0,
+          "total": 56,
+          "detail": ""
+        },
+        {
+          "r": "MULT18X36",
+          "used": 0,
+          "total": 28,
+          "detail": ""
+        },
+        {
+          "r": "MULT36",
+          "used": 0,
+          "total": 14,
+          "detail": ""
+        },
+        {
+          "r": "ACC54",
+          "used": 0,
+          "total": 28,
+          "detail": ""
+        },
+        {
+          "r": "Config MULTIBOOT",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "cat": "Clocking",
+      "items": [
+        {
+          "r": "PLLs",
+          "used": 0,
+          "total": 3,
+          "detail": ""
+        },
+        {
+          "r": "DLLDELs",
+          "used": 0,
+          "total": 10,
+          "detail": ""
+        },
+        {
+          "r": "DCCs",
+          "used": 0,
+          "total": 62,
+          "detail": ""
+        },
+        {
+          "r": "PCLKDIVs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "ECLKDIVs",
+          "used": 0,
+          "total": 12,
+          "detail": ""
+        },
+        {
+          "r": "ECLKSYNCs",
+          "used": 0,
+          "total": 12,
+          "detail": ""
+        },
+        {
+          "r": "Oscillator",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "cat": "Other",
+      "items": [
+        {
+          "r": "REG18",
+          "used": 0,
+          "total": 112,
+          "detail": ""
+        },
+        {
+          "r": "ALUREGs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "DQSs",
+          "used": 0,
+          "total": 4,
+          "detail": ""
+        },
+        {
+          "r": "DCSs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "ADC Blocks",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "SGMIICDRs",
+          "used": 0,
+          "total": 2,
+          "detail": ""
+        },
+        {
+          "r": "PMUs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "BNKREF18s",
+          "used": 0,
+          "total": 3,
+          "detail": ""
+        },
+        {
+          "r": "BNKREF33s",
+          "used": 0,
+          "total": 5,
+          "detail": ""
+        },
+        {
+          "r": "I2CFIFOs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "DPHYs",
+          "used": 0,
+          "total": 2,
+          "detail": ""
+        },
+        {
+          "r": "GSR",
+          "used": 1,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "Cryptographic Block",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "Config IP",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "JTAG",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "Config LMMI",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "SED",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "Config WDT",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        },
+        {
+          "r": "PCIEs",
+          "used": 0,
+          "total": 1,
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "byModule": []
+}

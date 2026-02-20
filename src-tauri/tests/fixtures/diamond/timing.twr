@@ -1,0 +1,25 @@
+
+Performance Summary
+*******************
+
+
+Design:  top_level
+Package: CSBGA256
+Performance Grade: 5
+
+Maximum   Frequency: 132.50MHz (SLICE    CIB_R10C10:DPCE0.CLK)
+
+Worst negative slack (setup):    2.350ns
+Worst hold slack:                0.180ns
+Total negative slack (setup):    0.000ns
+Total negative slack (hold):     0.000ns
+Number of failing paths:         0
+
+Clock Domains Analysis
+**********************
+
+Clock Domain:   clk_i
+   Maximum frequency:  132.50MHz
+   Worst negative slack: 2.350ns
+   Total negative slack: 0.000ns
+   Number of failing paths: 0

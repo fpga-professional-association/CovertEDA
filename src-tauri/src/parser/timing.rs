@@ -211,3 +211,144 @@ fn extract_float(content: &str, pattern: &str) -> Option<f64> {
         .parse()
         .ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_float_basic() {
+        let content = "Maximum frequency: 125.50 MHz";
+        let result = extract_float(content, r"frequency:\s*([\d.]+)\s*MHz");
+        assert_eq!(result, Some(125.50));
+    }
+
+    #[test]
+    fn test_extract_float_no_match() {
+        let result = extract_float("no data here", r"frequency:\s*([\d.]+)");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_float_empty_input() {
+        let result = extract_float("", r"frequency:\s*([\d.]+)");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_diamond_timing_with_data() {
+        let content = r#"
+Maximum frequency for clock domain clk: 132.50 MHz
+Worst negative slack: 2.350 ns
+Worst hold slack: 0.150 ns
+"#;
+        let report = parse_diamond_timing(content).unwrap();
+        assert!((report.fmax_mhz - 132.50).abs() < 0.01);
+        assert!((report.wns_ns - 2.35).abs() < 0.01);
+        assert!((report.whs_ns - 0.15).abs() < 0.01);
+        assert_eq!(report.failing_paths, 0);
+    }
+
+    #[test]
+    fn test_parse_diamond_timing_empty() {
+        let report = parse_diamond_timing("").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+        assert_eq!(report.wns_ns, 0.0);
+        assert_eq!(report.whs_ns, 0.0);
+    }
+
+    #[test]
+    fn test_parse_quartus_timing_with_data() {
+        let content = "Fmax Summary: 200.50 MHz\nSetup Slack: 1.200 ns";
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 200.50).abs() < 0.01);
+        assert_eq!(report.failing_paths, 0);
+    }
+
+    #[test]
+    fn test_parse_quartus_timing_empty() {
+        let report = parse_quartus_timing("").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+    }
+
+    #[test]
+    fn test_parse_vivado_timing_with_data() {
+        let content = r#"
+WNS(ns)      : 2.500
+TNS(ns)      : 0.000
+WHS(ns)      : 0.100
+THS(ns)      : 0.000
+Target Period : 10.000
+"#;
+        let report = parse_vivado_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+        assert!((report.wns_ns - 2.5).abs() < 0.01);
+        assert!((report.tns_ns - 0.0).abs() < 0.01);
+        assert!((report.whs_ns - 0.1).abs() < 0.01);
+        // Fmax = 1000 / (10.0 - 2.5) = 133.33
+        assert!((report.fmax_mhz - 133.333).abs() < 0.1);
+        assert_eq!(report.failing_paths, 0);
+    }
+
+    #[test]
+    fn test_parse_vivado_timing_empty() {
+        let report = parse_vivado_timing("").unwrap();
+        // With default 10.0 period and 0.0 WNS: fmax = 1000/10 = 100
+        assert!((report.fmax_mhz - 100.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_nextpnr_timing_valid_json() {
+        let content = r#"{"fmax": {"clk": {"achieved": 155.25, "constraint": 125.0}}}"#;
+        let report = parse_nextpnr_timing(content).unwrap();
+        assert!((report.fmax_mhz - 155.25).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_nextpnr_timing_invalid_json() {
+        let result = parse_nextpnr_timing("not json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_radiant_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/radiant/timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        // The fixture should parse without errors
+        // Verify we get some meaningful data
+        assert!(report.fmax_mhz >= 0.0);
+    }
+
+    #[test]
+    fn test_parse_radiant_timing_empty() {
+        let report = parse_radiant_timing("").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+        assert_eq!(report.failing_paths, 0);
+        assert!(report.clock_domains.is_empty());
+    }
+
+    // ── Fixture-based tests for Diamond, Quartus, Vivado ──
+
+    #[test]
+    fn test_parse_diamond_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/diamond/timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 130.0, "fmax={}", report.fmax_mhz);
+        assert!(report.wns_ns > 0.0, "wns={}", report.wns_ns);
+    }
+
+    #[test]
+    fn test_parse_quartus_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/quartus/timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!(report.fmax_mhz > 199.0, "fmax={}", report.fmax_mhz);
+    }
+
+    #[test]
+    fn test_parse_vivado_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/vivado/timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!(report.wns_ns > 0.0, "wns={}", report.wns_ns);
+        assert!(report.fmax_mhz > 0.0, "fmax={}", report.fmax_mhz);
+    }
+}

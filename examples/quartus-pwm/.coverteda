@@ -1,0 +1,13 @@
+{
+  "name": "PWM Generator",
+  "description": "Counter-based PWM with adjustable duty cycle input. Beginner combinational + sequential logic for Intel Cyclone V.",
+  "backendId": "quartus",
+  "device": "5CSEMA5F31C6",
+  "topModule": "pwm_gen",
+  "sourcePatterns": ["source/**/*.v"],
+  "constraintFiles": ["*.sdc"],
+  "implDir": "output_files",
+  "backendConfig": {},
+  "createdAt": "2025-06-01T00:00:00Z",
+  "updatedAt": "2025-06-01T00:00:00Z"
+}

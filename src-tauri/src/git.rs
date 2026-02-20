@@ -177,3 +177,39 @@ fn format_time_ago(epoch_secs: i64) -> String {
         format!("{}d ago", diff / 86400)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn now_secs() -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+    }
+
+    #[test]
+    fn test_format_time_ago_just_now() {
+        let result = format_time_ago(now_secs() - 10);
+        assert_eq!(result, "just now");
+    }
+
+    #[test]
+    fn test_format_time_ago_minutes() {
+        let result = format_time_ago(now_secs() - 120);
+        assert_eq!(result, "2m ago");
+    }
+
+    #[test]
+    fn test_format_time_ago_hours() {
+        let result = format_time_ago(now_secs() - 7200);
+        assert_eq!(result, "2h ago");
+    }
+
+    #[test]
+    fn test_format_time_ago_days() {
+        let result = format_time_ago(now_secs() - 172800);
+        assert_eq!(result, "2d ago");
+    }
+}

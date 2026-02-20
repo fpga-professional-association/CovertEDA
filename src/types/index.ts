@@ -281,6 +281,7 @@ export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "
 // ── Project Config (.coverteda) ──
 export interface ProjectConfig {
   name: string;
+  description?: string;
   backendId: string;
   device: string;
   topModule: string;

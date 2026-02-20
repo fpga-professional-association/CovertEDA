@@ -1,0 +1,14 @@
+Copyright 1986-2024 Xilinx, Inc. All Rights Reserved.
+
+Design Timing Summary
+---------------------
+
+WNS(ns) : 2.500
+TNS(ns) : 0.000
+WHS(ns) : 0.050
+THS(ns) : 0.000
+
+Target Period : 10.000
+
+Number of Failing Endpoints: 0
+Total Endpoints: 128

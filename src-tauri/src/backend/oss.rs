@@ -171,3 +171,47 @@ echo "=== Done ==="
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_oss_id_and_name() {
+        let b = OssBackend::new();
+        assert_eq!(b.id(), "opensource");
+        assert_eq!(b.name(), "OSS CAD Suite");
+    }
+
+    #[test]
+    fn test_oss_pipeline_has_three_stages() {
+        let b = OssBackend::new();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 3);
+        assert_eq!(stages[0].id, "synth");
+        assert_eq!(stages[1].id, "pnr");
+        assert_eq!(stages[2].id, "pack");
+    }
+
+    #[test]
+    fn test_oss_build_script_is_bash() {
+        let b = OssBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5U-85F", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.starts_with("#!/bin/bash"));
+    }
+
+    #[test]
+    fn test_oss_build_script_contains_yosys() {
+        let b = OssBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5U-85F", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("yosys"));
+        assert!(script.contains("nextpnr"));
+        assert!(script.contains("ecppack"));
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "8-Bit Counter",
+  "description": "Simple 8-bit counter with async reset and LED outputs. Beginner sequential logic example targeting Lattice CertusPro-NX.",
+  "backendId": "radiant",
+  "device": "LIFCL-40-7BG400I",
+  "topModule": "counter",
+  "sourcePatterns": ["source/**/*.v"],
+  "constraintFiles": ["source/*.pdc", "source/*.sdc"],
+  "implDir": "impl1",
+  "backendConfig": {},
+  "createdAt": "2025-06-01T00:00:00Z",
+  "updatedAt": "2025-06-01T00:00:00Z"
+}

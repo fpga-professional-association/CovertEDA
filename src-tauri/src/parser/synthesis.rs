@@ -17,7 +17,7 @@ pub fn parse_radiant_synthesis(content: &str) -> BackendResult<SynthesisReport> 
     let lut_count = extract_u64(r"(?i)(?:Number of|Total)\s+LUT4s?\s*[:=]\s*(\d+)");
     let reg_count = extract_u64(r"(?i)(?:Number of|Total)\s+(?:registers?|FFs?|DFFs?)\s*[:=]\s*(\d+)");
     let ram_count = extract_u64(r"(?i)(?:Number of|Total)\s+(?:block\s*RAMs?|EBRs?)\s*[:=]\s*(\d+)");
-    let dsp_count = extract_u64(r"(?i)(?:Number of|Total)\s+(?:DSPs?|MULT18X18)\s*[:=]\s*(\d+)");
+    let dsp_count = extract_u64(r"(?i)(?:Number of|Total)\s+(?:DSP\s*(?:blocks?|slices?)?|DSPs?|MULT18X18)\s*[:=]\s*(\d+)");
 
     // Count errors and warnings
     let error_re = Regex::new(r"(?i)^.*\berror\b").unwrap();
@@ -51,4 +51,51 @@ pub fn parse_radiant_synthesis(content: &str) -> BackendResult<SynthesisReport> 
         errors,
         warnings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_radiant_synthesis_with_data() {
+        let content = r#"
+Number of LUT4s: 120
+Number of registers: 80
+Number of block RAMs: 2
+Number of DSP blocks: 1
+Estimated frequency: 150.0 MHz
+Total CPU Time: 5.2 secs
+WARNING: some warning
+WARNING: another warning
+"#;
+        let report = parse_radiant_synthesis(content).unwrap();
+        assert_eq!(report.lut_count, 120);
+        assert_eq!(report.reg_count, 80);
+        assert_eq!(report.ram_count, 2);
+        assert_eq!(report.dsp_count, 1);
+        assert!((report.fmax_estimate_mhz - 150.0).abs() < 0.01);
+        assert!((report.cpu_time_secs - 5.2).abs() < 0.01);
+        assert_eq!(report.warnings, 2);
+        assert_eq!(report.errors, 0);
+    }
+
+    #[test]
+    fn test_parse_radiant_synthesis_empty() {
+        let report = parse_radiant_synthesis("").unwrap();
+        assert_eq!(report.lut_count, 0);
+        assert_eq!(report.reg_count, 0);
+        assert_eq!(report.ram_count, 0);
+        assert_eq!(report.dsp_count, 0);
+        assert_eq!(report.fmax_estimate_mhz, 0.0);
+        assert_eq!(report.errors, 0);
+        assert_eq!(report.warnings, 0);
+    }
+
+    #[test]
+    fn test_parse_radiant_synthesis_counts_errors() {
+        let content = "ERROR: synthesis failed\nERROR: another error\n";
+        let report = parse_radiant_synthesis(content).unwrap();
+        assert_eq!(report.errors, 2);
+    }
 }

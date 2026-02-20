@@ -168,3 +168,44 @@ close_project
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vivado_id_and_name() {
+        let b = VivadoBackend::new();
+        assert_eq!(b.id(), "vivado");
+        assert_eq!(b.name(), "AMD Vivado");
+    }
+
+    #[test]
+    fn test_vivado_pipeline_has_six_stages() {
+        let b = VivadoBackend::new();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 6);
+        assert_eq!(stages[0].id, "synth");
+        assert_eq!(stages[5].id, "bitgen");
+    }
+
+    #[test]
+    fn test_vivado_build_script_contains_synth_design() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design -top top"));
+    }
+
+    #[test]
+    fn test_vivado_build_script_contains_bitstream() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("write_bitstream"));
+    }
+}

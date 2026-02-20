@@ -1,0 +1,13 @@
+{
+  "name": "SPI Master",
+  "description": "SPI Mode 0 master controller with configurable clock divider and full-duplex shift register. Intermediate protocol design.",
+  "backendId": "quartus",
+  "device": "5CSEMA5F31C6",
+  "topModule": "spi_master",
+  "sourcePatterns": ["source/**/*.v"],
+  "constraintFiles": ["*.sdc"],
+  "implDir": "output_files",
+  "backendConfig": {},
+  "createdAt": "2025-06-01T00:00:00Z",
+  "updatedAt": "2025-06-01T00:00:00Z"
+}

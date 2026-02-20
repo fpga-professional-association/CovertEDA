@@ -1311,6 +1311,215 @@ fn uuid_v4() -> String {
     format!("{:x}", t)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Datelike;
+
+    // ── WSL path conversion ──
+
+    #[test]
+    fn test_wsl_to_windows_path_mnt_c() {
+        let p = std::path::Path::new("/mnt/c/Users/foo/project");
+        let result = wsl_to_windows_path(p);
+        assert_eq!(result, r"C:\Users\foo\project");
+    }
+
+    #[test]
+    fn test_wsl_to_windows_path_mnt_d() {
+        let p = std::path::Path::new("/mnt/d/work/design.tcl");
+        let result = wsl_to_windows_path(p);
+        assert_eq!(result, r"D:\work\design.tcl");
+    }
+
+    #[test]
+    fn test_wsl_to_windows_path_native_linux() {
+        let p = std::path::Path::new("/home/user/project");
+        let result = wsl_to_windows_path(p);
+        assert_eq!(result, "/home/user/project");
+    }
+
+    #[test]
+    fn test_wsl_to_windows_path_short() {
+        let p = std::path::Path::new("/mnt/");
+        let result = wsl_to_windows_path(p);
+        // Too short to be a valid WSL path — passes through
+        assert_eq!(result, "/mnt/");
+    }
+
+    // ── UUID generation ──
+
+    #[test]
+    fn test_uuid_v4_nonempty() {
+        let id = uuid_v4();
+        assert!(!id.is_empty());
+    }
+
+    #[test]
+    fn test_uuid_v4_uniqueness() {
+        let a = uuid_v4();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let b = uuid_v4();
+        assert_ne!(a, b);
+    }
+
+    // ── License date parsing ──
+
+    #[test]
+    fn test_parse_license_date_valid() {
+        let d = parse_license_date("26-dec-2026");
+        assert!(d.is_some());
+        let d = d.unwrap();
+        assert_eq!(d.year(), 2026);
+        assert_eq!(d.month(), 12);
+        assert_eq!(d.day(), 26);
+    }
+
+    #[test]
+    fn test_parse_license_date_invalid() {
+        assert!(parse_license_date("not-a-date").is_none());
+    }
+
+    #[test]
+    fn test_parse_license_date_partial() {
+        assert!(parse_license_date("26-dec").is_none());
+    }
+
+    // ── License file parsing ──
+
+    #[test]
+    fn test_parse_license_file_feature_line() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "FEATURE LSC_RADIANT lattice 1.0 26-dec-2099 uncounted ABCD1234 HOSTID=ANY\n").unwrap();
+        let features = parse_license_file(tmp.path());
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0].feature, "LSC_RADIANT");
+        assert_eq!(features[0].vendor, "lattice");
+        assert_eq!(features[0].expires, "26-dec-2099");
+        assert_eq!(features[0].status, "active");
+    }
+
+    #[test]
+    fn test_parse_license_file_permanent_status() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "FEATURE LSC_FREE lattice 1.0 permanent uncounted ABCD1234\n").unwrap();
+        let features = parse_license_file(tmp.path());
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0].status, "active");
+    }
+
+    #[test]
+    fn test_parse_license_file_increment_line() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "INCREMENT quartus_pro intel 24.0 31-jan-2099 10 KEY123\n").unwrap();
+        let features = parse_license_file(tmp.path());
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0].feature, "quartus_pro");
+        assert_eq!(features[0].vendor, "intel");
+    }
+
+    #[test]
+    fn test_parse_license_file_continuation_lines() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "FEATURE long_feature vendor 1.0 \\\n26-dec-2099 uncounted KEY123\n").unwrap();
+        let features = parse_license_file(tmp.path());
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0].feature, "long_feature");
+    }
+}
+
+// ── Bundled Example Projects ──
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BundledExample {
+    pub name: String,
+    pub description: String,
+    pub backend_id: String,
+    pub device: String,
+    pub top_module: String,
+    pub path: String,
+}
+
+/// Find the examples/ directory. In dev mode it's relative to CWD;
+/// in production it's bundled as a Tauri resource.
+fn find_examples_dir() -> Option<PathBuf> {
+    // Dev mode: CWD/examples
+    let cwd = std::env::current_dir().ok()?;
+    let dev_path = cwd.join("examples");
+    if dev_path.is_dir() {
+        return Some(dev_path);
+    }
+
+    // Production: relative to executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            // Linux/macOS: alongside binary
+            let prod_path = exe_dir.join("examples");
+            if prod_path.is_dir() {
+                return Some(prod_path);
+            }
+            // Tauri resource dir (one level up from bin)
+            let resource_path = exe_dir.join("../examples");
+            if resource_path.is_dir() {
+                return Some(resource_path);
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+pub fn list_bundled_examples() -> Result<Vec<BundledExample>, String> {
+    let examples_dir = match find_examples_dir() {
+        Some(d) => d,
+        None => return Ok(vec![]),
+    };
+
+    let mut results = Vec::new();
+
+    let entries = std::fs::read_dir(&examples_dir)
+        .map_err(|e| format!("Cannot read examples dir: {}", e))?;
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let config_path = path.join(".coverteda");
+        if !config_path.exists() {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&config_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let config: crate::project::ProjectConfig = match serde_json::from_str(&content) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let abs_path = match path.canonicalize() {
+            Ok(p) => p.display().to_string(),
+            Err(_) => path.display().to_string(),
+        };
+
+        results.push(BundledExample {
+            name: config.name,
+            description: config.description.unwrap_or_default(),
+            backend_id: config.backend_id,
+            device: config.device,
+            top_module: config.top_module,
+            path: abs_path,
+        });
+    }
+
+    // Sort by name for consistent ordering
+    results.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(results)
+}
+
 // ── Raw report file reading ──
 
 #[tauri::command]

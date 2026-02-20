@@ -20,6 +20,10 @@ pub struct AppConfig {
     pub ai_api_key: Option<String>,
     #[serde(default)]
     pub ai_model: Option<String>,
+    #[serde(default)]
+    pub ai_provider: Option<String>,
+    #[serde(default)]
+    pub ai_base_url: Option<String>,
 }
 
 fn default_scale() -> f64 {
@@ -61,6 +65,8 @@ impl Default for AppConfig {
             license_files: HashMap::new(),
             ai_api_key: None,
             ai_model: None,
+            ai_provider: None,
+            ai_base_url: None,
         }
     }
 }
@@ -91,5 +97,30 @@ impl AppConfig {
         let content = toml::to_string_pretty(self)?;
         std::fs::write(&path, content)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_config_default() {
+        let config = AppConfig::default();
+        assert_eq!(config.theme, "dark");
+        assert_eq!(config.default_backend, "diamond");
+        assert_eq!(config.scale_factor, 1.2);
+        assert!(config.license_file.is_none());
+        assert!(config.ai_api_key.is_none());
+    }
+
+    #[test]
+    fn test_app_config_serialization_roundtrip() {
+        let config = AppConfig::default();
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let loaded: AppConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(loaded.theme, config.theme);
+        assert_eq!(loaded.default_backend, config.default_backend);
+        assert_eq!(loaded.scale_factor, config.scale_factor);
     }
 }

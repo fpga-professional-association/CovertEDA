@@ -182,3 +182,77 @@ impl Default for BackendRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_registry_new_has_five_backends() {
+        let reg = BackendRegistry::new();
+        assert_eq!(reg.list().len(), 5);
+    }
+
+    #[test]
+    fn test_registry_default_active_is_diamond() {
+        let reg = BackendRegistry::new();
+        assert_eq!(reg.active_id(), "diamond");
+    }
+
+    #[test]
+    fn test_registry_switch_to_radiant() {
+        let mut reg = BackendRegistry::new();
+        assert!(reg.switch("radiant"));
+        assert_eq!(reg.active_id(), "radiant");
+    }
+
+    #[test]
+    fn test_registry_switch_to_quartus() {
+        let mut reg = BackendRegistry::new();
+        assert!(reg.switch("quartus"));
+        assert_eq!(reg.active_id(), "quartus");
+    }
+
+    #[test]
+    fn test_registry_switch_invalid() {
+        let mut reg = BackendRegistry::new();
+        assert!(!reg.switch("nonexistent"));
+        assert_eq!(reg.active_id(), "diamond");
+    }
+
+    #[test]
+    fn test_registry_get_known_backend() {
+        let reg = BackendRegistry::new();
+        assert!(reg.get("vivado").is_some());
+        assert_eq!(reg.get("vivado").unwrap().id(), "vivado");
+    }
+
+    #[test]
+    fn test_registry_get_unknown_backend() {
+        let reg = BackendRegistry::new();
+        assert!(reg.get("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_registry_list_contains_all_ids() {
+        let reg = BackendRegistry::new();
+        let ids: Vec<String> = reg.list().iter().map(|b| b.id.clone()).collect();
+        assert!(ids.contains(&"diamond".to_string()));
+        assert!(ids.contains(&"radiant".to_string()));
+        assert!(ids.contains(&"quartus".to_string()));
+        assert!(ids.contains(&"vivado".to_string()));
+        assert!(ids.contains(&"opensource".to_string()));
+    }
+
+    #[test]
+    fn test_backend_info_fields_nonempty() {
+        let reg = BackendRegistry::new();
+        for info in reg.list() {
+            assert!(!info.id.is_empty(), "id empty for {}", info.name);
+            assert!(!info.name.is_empty(), "name empty for {}", info.id);
+            assert!(!info.short.is_empty(), "short empty for {}", info.id);
+            assert!(!info.cli.is_empty(), "cli empty for {}", info.id);
+            assert!(!info.pipeline.is_empty(), "pipeline empty for {}", info.id);
+        }
+    }
+}

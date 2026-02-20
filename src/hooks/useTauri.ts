@@ -213,9 +213,9 @@ export async function getRuntimeBackends(): Promise<RuntimeBackend[]> {
 import type {
   ProjectConfig, RecentProject, DetectedTool, LicenseCheckResult,
   FileContent, ProjectFile, TimingReportData, UtilizationReportData,
-  RuntimeBackend, PipelineStage,
+  RuntimeBackend, PipelineStage, ExampleProject,
 } from "../types";
-import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META } from "../data/mockData";
+import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META, EXAMPLE_PROJECTS } from "../data/mockData";
 
 // ── Rust type interfaces (snake_case from serde) ──
 
@@ -279,6 +279,11 @@ interface RustResourceReport {
     ebr: number;
     percentage: number;
   }[];
+}
+
+export async function getBundledExamples(): Promise<ExampleProject[]> {
+  if (!isTauri) return EXAMPLE_PROJECTS;
+  return invoke<ExampleProject[]>("list_bundled_examples");
 }
 
 export async function getRecentProjects(): Promise<RecentProject[]> {
@@ -366,6 +371,8 @@ export interface AppConfig {
   license_file: string | null;
   ai_api_key: string | null;
   ai_model: string | null;
+  ai_provider: string | null;
+  ai_base_url: string | null;
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
@@ -379,6 +386,8 @@ export async function getAppConfig(): Promise<AppConfig> {
       license_file: null,
       ai_api_key: null,
       ai_model: null,
+      ai_provider: null,
+      ai_base_url: null,
     };
   }
   return invoke<AppConfig>("get_app_config");

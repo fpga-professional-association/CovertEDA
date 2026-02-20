@@ -1,0 +1,11 @@
+Quartus Prime Timing Analyzer Summary
+--------------------------------------
+
+Fmax Summary:
+  Fmax: 200.50 MHz (clk)
+  Restricted Fmax: 200.50 MHz
+
+Setup Summary:
+  Setup Slack: 1.200 ns
+  Total Negative Slack: 0.000 ns
+  Number of Failing Paths: 0

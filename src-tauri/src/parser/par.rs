@@ -78,3 +78,53 @@ pub fn parse_radiant_par(content: &str) -> BackendResult<ParReport> {
         run_status,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_radiant_par_with_fixture() {
+        let content = include_str!("../../tests/fixtures/radiant/par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Fixture should parse without errors
+        assert!(report.routing_pct >= 0.0);
+    }
+
+    #[test]
+    fn test_parse_radiant_par_routing_percentage() {
+        let content = "56 routed (100.00%); 0 unrouted.";
+        let report = parse_radiant_par(content).unwrap();
+        assert!((report.routing_pct - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_radiant_par_slice_usage() {
+        let content = "SLICE              6/16128        <1% used";
+        let report = parse_radiant_par(content).unwrap();
+        assert_eq!(report.slice_used, 6);
+        assert_eq!(report.slice_total, 16128);
+    }
+
+    #[test]
+    fn test_parse_radiant_par_peak_memory() {
+        let content = "Peak Memory Usage: 588.76 MB";
+        let report = parse_radiant_par(content).unwrap();
+        assert!((report.peak_memory_mb - 588.76).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_radiant_par_run_status() {
+        let content = "PAR_SUMMARY::Run status = completed";
+        let report = parse_radiant_par(content).unwrap();
+        assert_eq!(report.run_status, "completed");
+    }
+
+    #[test]
+    fn test_parse_radiant_par_empty() {
+        let report = parse_radiant_par("").unwrap();
+        assert_eq!(report.routing_pct, 0.0);
+        assert_eq!(report.slice_used, 0);
+        assert_eq!(report.run_status, "Unknown");
+    }
+}

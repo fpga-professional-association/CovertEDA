@@ -139,3 +139,135 @@ pub fn write_pcf(constraints: &[PinConstraint]) -> String {
     }
     lines.join("\n") + "\n"
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── LPF ──
+
+    #[test]
+    fn test_parse_lpf_locate_comp() {
+        let input = r#"LOCATE COMP "clk" SITE "A10";"#;
+        let result = parse_lpf(input).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].pin, "A10");
+        assert_eq!(result[0].net, "clk");
+    }
+
+    #[test]
+    fn test_parse_lpf_with_iobuf() {
+        let input = r#"LOCATE COMP "led" SITE "B5";
+IOBUF PORT "led" IO_TYPE=LVCMOS25;"#;
+        let result = parse_lpf(input).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].io_standard, "LVCMOS25");
+    }
+
+    #[test]
+    fn test_parse_lpf_empty() {
+        let result = parse_lpf("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_write_lpf_roundtrip() {
+        let constraints = vec![PinConstraint {
+            pin: "A10".into(),
+            net: "clk".into(),
+            direction: String::new(),
+            io_standard: "LVCMOS33".into(),
+            bank: String::new(),
+            locked: true,
+            extra: vec![],
+        }];
+        let written = write_lpf(&constraints);
+        let parsed = parse_lpf(&written).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].pin, "A10");
+        assert_eq!(parsed[0].net, "clk");
+        assert_eq!(parsed[0].io_standard, "LVCMOS33");
+    }
+
+    // ── XDC ──
+
+    #[test]
+    fn test_parse_xdc_package_pin() {
+        let input = "set_property PACKAGE_PIN E3 [get_ports {clk}]";
+        let result = parse_xdc(input).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].pin, "E3");
+        assert_eq!(result[0].net, "clk");
+    }
+
+    #[test]
+    fn test_parse_xdc_empty() {
+        let result = parse_xdc("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_write_xdc_format() {
+        let constraints = vec![PinConstraint {
+            pin: "E3".into(),
+            net: "clk".into(),
+            direction: String::new(),
+            io_standard: "LVCMOS33".into(),
+            bank: String::new(),
+            locked: true,
+            extra: vec![],
+        }];
+        let output = write_xdc(&constraints);
+        assert!(output.contains("set_property PACKAGE_PIN E3 [get_ports {clk}]"));
+        assert!(output.contains("set_property IOSTANDARD LVCMOS33 [get_ports {clk}]"));
+    }
+
+    // ── PCF ──
+
+    #[test]
+    fn test_parse_pcf_set_io() {
+        let input = "set_io clk A10";
+        let result = parse_pcf(input).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].pin, "A10");
+        assert_eq!(result[0].net, "clk");
+    }
+
+    #[test]
+    fn test_parse_pcf_empty() {
+        let result = parse_pcf("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_write_pcf_format() {
+        let constraints = vec![PinConstraint {
+            pin: "A10".into(),
+            net: "clk".into(),
+            direction: String::new(),
+            io_standard: "LVCMOS33".into(),
+            bank: String::new(),
+            locked: true,
+            extra: vec![],
+        }];
+        let output = write_pcf(&constraints);
+        assert!(output.contains("set_io clk A10"));
+    }
+
+    // ── SDC ──
+
+    #[test]
+    fn test_write_sdc_format() {
+        let constraints = vec![PinConstraint {
+            pin: "PIN_A10".into(),
+            net: "clk".into(),
+            direction: String::new(),
+            io_standard: "LVCMOS33".into(),
+            bank: String::new(),
+            locked: true,
+            extra: vec![],
+        }];
+        let output = write_sdc(&constraints);
+        assert!(output.contains("set_location_assignment PIN_A10 -to clk"));
+    }
+}

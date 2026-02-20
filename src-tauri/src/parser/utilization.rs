@@ -162,3 +162,76 @@ pub fn parse_nextpnr_utilization(content: &str, device: &str) -> BackendResult<R
         by_module: vec![],
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_lattice_mrp_with_fixture() {
+        let content = include_str!("../../tests/fixtures/radiant/utilization.mrp");
+        let report = parse_radiant_utilization(content, "LIFCL-40-7BG400I").unwrap();
+        assert_eq!(report.device, "LIFCL-40-7BG400I");
+        // Should have at least some categories parsed
+        assert!(!report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_categorizes_registers_as_logic() {
+        let content = "Number of registers: 80 out of 38400\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some());
+        let items = &logic.unwrap().items;
+        assert!(items.iter().any(|i| i.resource.contains("register")));
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_categorizes_pio_as_io() {
+        let content = "Number of PIO sites: 18 out of 204\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some());
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_categorizes_ram_as_memory() {
+        let content = "Number of block RAM: 2 out of 108\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some());
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_categorizes_dsp() {
+        let content = "Number of DSP blocks: 1 out of 56\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some());
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_categorizes_pll_as_clocking() {
+        let content = "Number of PLL sites: 1 out of 4\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let clk = report.categories.iter().find(|c| c.name == "Clocking");
+        assert!(clk.is_some());
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_empty_input() {
+        let report = parse_lattice_mrp("", "test").unwrap();
+        assert!(report.categories.is_empty());
+        assert!(report.by_module.is_empty());
+    }
+
+    #[test]
+    fn test_parse_diamond_utilization_with_fixture() {
+        let content = include_str!("../../tests/fixtures/diamond/utilization.mrp");
+        let report = parse_diamond_utilization(content, "LCMXO3LF-6900C").unwrap();
+        assert!(!report.categories.is_empty(), "should have categories");
+        // Verify registers were found
+        let has_logic = report.categories.iter().any(|c| c.name == "Logic");
+        assert!(has_logic, "should have Logic category");
+    }
+}

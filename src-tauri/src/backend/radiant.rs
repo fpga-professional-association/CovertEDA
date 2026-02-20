@@ -559,3 +559,118 @@ fn to_tcl_path(path: &Path) -> String {
         s.replace('\\', "/")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    #[test]
+    fn test_radiant_id_and_name() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        assert_eq!(b.id(), "radiant");
+        assert_eq!(b.name(), "Lattice Radiant");
+        assert_eq!(b.short_name(), "Radiant");
+    }
+
+    #[test]
+    fn test_radiant_default_device() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        assert_eq!(b.default_device(), "LIFCL-40-7BG400I");
+    }
+
+    #[test]
+    fn test_radiant_pipeline_has_four_stages() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 4);
+        assert_eq!(stages[0].id, "synth");
+        assert_eq!(stages[1].id, "map");
+        assert_eq!(stages[2].id, "par");
+        assert_eq!(stages[3].id, "bitgen");
+    }
+
+    #[test]
+    fn test_radiant_constraint_ext() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        assert_eq!(b.constraint_ext(), ".pdc");
+    }
+
+    #[test]
+    fn test_radiant_build_script_opens_rdf() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "test", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_open"), "script should contain prj_open:\n{}", script);
+    }
+
+    #[test]
+    fn test_radiant_build_script_runs_all_stages() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run_synthesis"));
+        assert!(script.contains("prj_run_map"));
+        assert!(script.contains("prj_run_par"));
+        assert!(script.contains("prj_run_bitstream"));
+    }
+
+    #[test]
+    fn test_radiant_build_script_selective_stages() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let stages = vec!["synth".into(), "par".into()];
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "top", &stages, &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run_synthesis"));
+        assert!(!script.contains("prj_run_map"));
+        assert!(script.contains("prj_run_par"));
+        assert!(!script.contains("prj_run_bitstream"));
+    }
+
+    #[test]
+    fn test_radiant_build_script_synplify_engine() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let mut opts = HashMap::new();
+        opts.insert("synth_engine".into(), "synplify".into());
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "top", &[], &opts,
+        ).unwrap();
+        assert!(script.contains("SYN_Tool=SYNPLIFY_PRO"));
+    }
+
+    #[test]
+    fn test_radiant_build_script_no_rdf_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let result = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "top", &[], &HashMap::new(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_radiant_to_tcl_path_wsl() {
+        let path = Path::new("/mnt/c/Users/foo/project/test.rdf");
+        let result = to_tcl_path(path);
+        assert_eq!(result, "C:/Users/foo/project/test.rdf");
+    }
+
+    #[test]
+    fn test_radiant_to_tcl_path_native() {
+        let path = Path::new("/home/user/project/test.rdf");
+        let result = to_tcl_path(path);
+        assert_eq!(result, "/home/user/project/test.rdf");
+    }
+}

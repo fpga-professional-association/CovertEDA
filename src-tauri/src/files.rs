@@ -93,3 +93,82 @@ fn classify_file(name: &str, _path: &Path) -> FileType {
         FileType::Other
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_classify_verilog() {
+        assert_eq!(classify_file("counter.v", Path::new("counter.v")), FileType::Rtl);
+    }
+    #[test]
+    fn test_classify_systemverilog() {
+        assert_eq!(classify_file("alu.sv", Path::new("alu.sv")), FileType::Rtl);
+    }
+    #[test]
+    fn test_classify_vhdl() {
+        assert_eq!(classify_file("fir.vhd", Path::new("fir.vhd")), FileType::Rtl);
+    }
+    #[test]
+    fn test_classify_vhdl_long() {
+        assert_eq!(classify_file("fir.vhdl", Path::new("fir.vhdl")), FileType::Rtl);
+    }
+    #[test]
+    fn test_classify_testbench_prefix() {
+        assert_eq!(classify_file("tb_counter.v", Path::new("tb_counter.v")), FileType::Testbench);
+    }
+    #[test]
+    fn test_classify_testbench_suffix() {
+        assert_eq!(classify_file("counter_tb.v", Path::new("counter_tb.v")), FileType::Testbench);
+    }
+    #[test]
+    fn test_classify_lpf_constraint() {
+        assert_eq!(classify_file("pins.lpf", Path::new("pins.lpf")), FileType::Constraint);
+    }
+    #[test]
+    fn test_classify_sdc_constraint() {
+        assert_eq!(classify_file("timing.sdc", Path::new("timing.sdc")), FileType::Constraint);
+    }
+    #[test]
+    fn test_classify_xdc_constraint() {
+        assert_eq!(classify_file("io.xdc", Path::new("io.xdc")), FileType::Constraint);
+    }
+    #[test]
+    fn test_classify_pcf_constraint() {
+        assert_eq!(classify_file("pins.pcf", Path::new("pins.pcf")), FileType::Constraint);
+    }
+    #[test]
+    fn test_classify_pdc_constraint() {
+        assert_eq!(classify_file("pins.pdc", Path::new("pins.pdc")), FileType::Constraint);
+    }
+    #[test]
+    fn test_classify_bit_output() {
+        assert_eq!(classify_file("design.bit", Path::new("design.bit")), FileType::Output);
+    }
+    #[test]
+    fn test_classify_jed_output() {
+        assert_eq!(classify_file("top.jed", Path::new("top.jed")), FileType::Output);
+    }
+    #[test]
+    fn test_classify_twr_output() {
+        assert_eq!(classify_file("timing.twr", Path::new("timing.twr")), FileType::Output);
+    }
+    #[test]
+    fn test_classify_markdown_doc() {
+        assert_eq!(classify_file("README.md", Path::new("README.md")), FileType::Doc);
+    }
+    #[test]
+    fn test_classify_tcl_config() {
+        assert_eq!(classify_file("build.tcl", Path::new("build.tcl")), FileType::Config);
+    }
+    #[test]
+    fn test_classify_json_config() {
+        assert_eq!(classify_file("package.json", Path::new("package.json")), FileType::Config);
+    }
+    #[test]
+    fn test_classify_unknown() {
+        assert_eq!(classify_file("random.xyz", Path::new("random.xyz")), FileType::Other);
+    }
+}

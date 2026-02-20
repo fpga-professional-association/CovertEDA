@@ -1,0 +1,13 @@
+
+Mapper: version Diamond (64-bit) 3.13.0.56.2
+Mapped to: LCMXO3LF-6900C-5BG256C
+
+Design Summary
+**************
+
+Number of registers:     80 out of  6864 (1%)
+Number of SLICEs:        45 out of  3432 (1%)
+Number of LUT4s:         89 out of  6864 (1%)
+Number of PIO sites:     12 out of    76 (16%)
+Number of block RAMs:     2 out of    26 (8%)
+Number of GSRs:           1 out of     1 (100%)

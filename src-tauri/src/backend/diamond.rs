@@ -175,3 +175,43 @@ prj_project close
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_diamond_id_and_name() {
+        let b = DiamondBackend::new();
+        assert_eq!(b.id(), "diamond");
+        assert_eq!(b.name(), "Lattice Diamond");
+    }
+
+    #[test]
+    fn test_diamond_pipeline_has_six_stages() {
+        let b = DiamondBackend::new();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 6);
+        assert_eq!(stages[0].id, "synth");
+        assert_eq!(stages[5].id, "timing");
+    }
+
+    #[test]
+    fn test_diamond_constraint_ext() {
+        let b = DiamondBackend::new();
+        assert_eq!(b.constraint_ext(), ".lpf");
+    }
+
+    #[test]
+    fn test_diamond_build_script_contains_prj_run() {
+        let b = DiamondBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run Synthesis"));
+        assert!(script.contains("prj_run Map"));
+        assert!(script.contains("prj_run PAR"));
+        assert!(script.contains("prj_run Export"));
+    }
+}

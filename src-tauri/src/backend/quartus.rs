@@ -521,3 +521,73 @@ fn to_quartus_tcl_path(path: &Path) -> String {
         s.replace('\\', "/")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn make_backend() -> QuartusBackend {
+        QuartusBackend { version: "test".into(), install_dir: None }
+    }
+
+    #[test]
+    fn test_quartus_id_and_name() {
+        let b = make_backend();
+        assert_eq!(b.id(), "quartus");
+        assert_eq!(b.name(), "Intel Quartus Prime");
+    }
+
+    #[test]
+    fn test_quartus_pipeline_has_four_stages() {
+        let b = make_backend();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 4);
+        assert_eq!(stages[0].id, "synth");
+        assert_eq!(stages[1].id, "fit");
+        assert_eq!(stages[2].id, "sta");
+        assert_eq!(stages[3].id, "asm");
+    }
+
+    #[test]
+    fn test_quartus_build_script_sets_device() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "10CX220YF780I5G", "top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("set_global_assignment -name DEVICE 10CX220YF780I5G"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_selective_stages() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec!["synth".into(), "sta".into()];
+        let script = b.generate_build_script(
+            tmp.path(), "10CX220YF780I5G", "top", &stages, &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("execute_module -tool syn"));
+        assert!(!script.contains("execute_module -tool fit"));
+        assert!(script.contains("execute_module -tool sta"));
+        assert!(!script.contains("execute_module -tool asm"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_fit_effort() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = HashMap::new();
+        opts.insert("fit_effort".into(), "STANDARD FIT".into());
+        let script = b.generate_build_script(
+            tmp.path(), "10CX220YF780I5G", "top", &[], &opts,
+        ).unwrap();
+        assert!(script.contains("FITTER_EFFORT"));
+    }
+
+    #[test]
+    fn test_quartus_to_tcl_path_wsl() {
+        let result = to_quartus_tcl_path(Path::new("/mnt/c/intelFPGA/project"));
+        assert_eq!(result, "C:/intelFPGA/project");
+    }
+}
