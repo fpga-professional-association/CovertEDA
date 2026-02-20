@@ -189,7 +189,23 @@ impl RadiantBackend {
                     results.extend(Self::scan_sources(&path));
                 } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     match ext {
-                        "v" | "sv" | "vhd" | "vhdl" => results.push(path),
+                        "v" | "sv" | "vhd" | "vhdl" => {
+                            // Skip testbench files — they can't be synthesized
+                            let stem = path.file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_lowercase();
+                            if stem.ends_with("_tb")
+                                || stem.ends_with("_test")
+                                || stem.ends_with("_testbench")
+                                || stem.starts_with("tb_")
+                                || stem.starts_with("test_")
+                                || stem == "testbench"
+                            {
+                                continue;
+                            }
+                            results.push(path);
+                        }
                         _ => {}
                     }
                 }

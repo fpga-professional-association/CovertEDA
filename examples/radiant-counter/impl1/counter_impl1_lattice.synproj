@@ -40,14 +40,14 @@
 -use_io_insertion 1
 -force_gsr No
 -resolve_mixed_drivers 0
--sdc "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter.sdc"
--path "C:/lscc/radiant/2025.2/ispfpga/je5d00/data" "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/impl1" "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter" "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source"
+-sdc "C:/coverteda_builds/counter_e3e7c6c0/source/counter.sdc"
+-path "C:/lscc/radiant/2025.2/ispfpga/je5d00/data" "C:/coverteda_builds/counter_e3e7c6c0/impl1" "C:/coverteda_builds/counter_e3e7c6c0" "C:/coverteda_builds/counter_e3e7c6c0/source"
 -ver "C:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v"
 -lib pmi -vhd "C:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.vhd"
--ver "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter.v"
-"//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter_tb.v"
+-ver "C:/coverteda_builds/counter_e3e7c6c0/source/counter.v"
+"C:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v"
 
 
--path "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter"
+-path "C:/coverteda_builds/counter_e3e7c6c0"
 -output_hdl "counter_impl1.vm"
 

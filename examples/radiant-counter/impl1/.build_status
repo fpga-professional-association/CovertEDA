@@ -16,9 +16,9 @@
             <Task name="PARTrace" build_result="0" update_result="3" update_time="0"/>
             <Task name="IOTiming" build_result="0" update_result="3" update_time="0"/>
         </Milestone>
-        <Milestone name="Synthesis" build_result="1" build_time="1771611694">
-            <Task name="Lattice_Synthesis" build_result="1" update_result="2" update_time="1771611694"/>
-            <Task name="LSE_Compile" build_result="0" update_result="2" update_time="1771611694"/>
+        <Milestone name="Synthesis" build_result="1" build_time="1771612099">
+            <Task name="Lattice_Synthesis" build_result="1" update_result="2" update_time="1771612099"/>
+            <Task name="LSE_Compile" build_result="0" update_result="2" update_time="1771612099"/>
             <Task name="LSE_Lint" build_result="0" update_result="3" update_time="0"/>
             <Task name="SynTrace" build_result="0" update_result="3" update_time="0"/>
             <Task name="SynVerilogSimFile" build_result="0" update_result="3" update_time="0"/>

@@ -1450,14 +1450,31 @@ fn copy_dir_filtered(src: &Path, dst: &Path, depth: u32) -> std::io::Result<()> 
                 .and_then(|e| e.to_str())
                 .unwrap_or("");
             // Copy HDL sources, constraints, and Radiant project files
-            let dominated = matches!(
+            let is_hdl = matches!(ext, "v" | "sv" | "vhd" | "vhdl");
+            let is_support = matches!(
                 ext,
-                "v" | "sv" | "vhd" | "vhdl"
-                    | "pdc" | "sdc" | "lpf"
+                "pdc" | "sdc" | "lpf"
                     | "rdf" | "tcl"
                     | "mem" | "hex" | "mif"
             );
-            if dominated {
+            if is_hdl {
+                // Skip testbench files
+                let stem = Path::new(&name)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if stem.ends_with("_tb")
+                    || stem.ends_with("_test")
+                    || stem.ends_with("_testbench")
+                    || stem.starts_with("tb_")
+                    || stem.starts_with("test_")
+                    || stem == "testbench"
+                {
+                    continue;
+                }
+                std::fs::copy(entry.path(), dst.join(&name))?;
+            } else if is_support {
                 std::fs::copy(entry.path(), dst.join(&name))?;
             }
         }

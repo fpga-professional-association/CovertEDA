@@ -2,19 +2,20 @@
 --- Copyright (C) 1992-2025 Lattice Semiconductor Corporation.
 --- All Rights Reserved.
 --- Lattice Radiant Software install path: C:/lscc/radiant/2025.2
---- Date    : 12:21:27 02/20/26
+--- Date    : 12:28:12 02/20/26
 --- UserName: tcove
 --- HostName: tcovert
 --- RunDir  : \\wsl.localhost\Ubuntu-24.04\home\tcovert\projects\CovertEDA\src-tauri
---- PID     : 13420
---- TclFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.tcl.13420
---- LogFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.log.13420
+--- PID     : 17036
+--- TclFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.tcl.17036
+--- LogFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.log.17036
 --------------------------------------------------------------------------------
 
+WARNING: Strategy option "SYN_Tool" does not exist. It's ignored.
 
 "C:/lscc/radiant/2025.2/tcltk/windows/bin/tclsh" "counter_impl1_synthesize.tcl"
 
-synthesis -f //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/impl1/counter_impl1_lattice.synproj -logfile counter_impl1_lattice.srp
+synthesis -f C:/coverteda_builds/counter_e3e7c6c0/impl1/counter_impl1_lattice.synproj -logfile counter_impl1_lattice.srp
 synthesis:  version Radiant Software (64-bit) 2025.2.0.48.0
 
 Copyright (c) 1991-1994 by NeoCAD Inc. All rights reserved.
@@ -22,10 +23,10 @@ Copyright (c) 1995 AT&T Corp.   All rights reserved.
 Copyright (c) 1995-2001 Lucent Technologies Inc.  All rights reserved.
 Copyright (c) 2001 Agere Systems   All rights reserved.
 Copyright (c) 2002-2025 Lattice Semiconductor Corporation,  All rights reserved.
-Fri Feb 20 12:21:28 2026
+Fri Feb 20 12:28:12 2026
 
 
-Command Line:  C:\lscc\radiant\2025.2\ispfpga\bin\nt64\synthesis.exe -f //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/impl1/counter_impl1_lattice.synproj -logfile counter_impl1_lattice.srp -msgset //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/promote.xml 
+Command Line:  C:\lscc\radiant\2025.2\ispfpga\bin\nt64\synthesis.exe -f C:/coverteda_builds/counter_e3e7c6c0/impl1/counter_impl1_lattice.synproj -logfile counter_impl1_lattice.srp -msgset C:/coverteda_builds/counter_e3e7c6c0/promote.xml 
 
 Lattice Synthesis Engine launched.
 
@@ -134,16 +135,16 @@ The -syn option is FALSE.
 Hardtimer checking is enabled (default). The -dt option is not used.
 
 Output HDL filename: counter_impl1.vm
--sdc option: SDC file input is //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter.sdc.
--path //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter (searchpath added)
--path //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/impl1 (searchpath added)
--path //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source (searchpath added)
+-sdc option: SDC file input is C:/coverteda_builds/counter_e3e7c6c0/source/counter.sdc.
+-path C:/coverteda_builds/counter_e3e7c6c0 (searchpath added)
+-path C:/coverteda_builds/counter_e3e7c6c0/impl1 (searchpath added)
+-path C:/coverteda_builds/counter_e3e7c6c0/source (searchpath added)
 -path C:/lscc/radiant/2025.2/ispfpga/je5d00/data (searchpath added)
 Mixed language design
 CRITICAL <35001476> - synthesis: A top-level module has not been specified for the mixed language design.
 Verilog design file: C:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v
-Verilog design file: //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter.v
-Verilog design file: //wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter_tb.v
+Verilog design file: C:/coverteda_builds/counter_e3e7c6c0/source/counter.v
+Verilog design file: C:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v
 VHDL library: pmi
 VHDL design file: C:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.vhd
 Analyzing Verilog file C:/lscc/radiant/2025.2/ispfpga/../cae_library/synthesis/verilog/generic.v. VERI-1482
@@ -623,11 +624,68 @@ Analyzing VHDL file C:/lscc/radiant/2025.2/ispfpga/vhdl_packages/synattr.vhd. VH
 Analyzing VHDL file C:/lscc/radiant/2025.2/ispfpga/vhdl_packages/synattr.vhd
 
 INFO <35921014> - synthesis: C:/lscc/radiant/2025.2/ispfpga/vhdl_packages/synattr.vhd(50): analyzing package attributes. VHDL-1014
+Analyzing Verilog file c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v. VERI-1482
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(1): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_addsub.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_addsub.v(40): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/adder_subtractor/rtl/lscc_add_sub.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(2): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_add.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_add.v(50): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/adder/rtl/lscc_adder.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(3): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_complex_mult.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_complex_mult.v(52): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/complex_mult/rtl/lscc_complex_mult.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(4): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_counter.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_counter.v(39): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/counter/rtl/lscc_cntr.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(5): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_dpram.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_dpram.v(43): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/distributed_dpram/rtl/lscc_distributed_dpram.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(6): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_spram.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_spram.v(42): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/distributed_spram/rtl/lscc_distributed_spram.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(7): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_rom.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_rom.v(42): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/distributed_rom/rtl/lscc_distributed_rom.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(8): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_shift_reg.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_distributed_shift_reg.v(41): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_shift_reg/rtl/lscc_shift_register.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(9): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_fifo.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_fifo.v(44): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/fifo/rtl/lscc_fifo.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(10): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_fifo_dc.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_fifo_dc.v(47): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/fifo_dc/rtl/lscc_fifo_dc.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(11): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_mac.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_mac.v(52): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/mult_accumulate/rtl/lscc_mult_accumulate.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(12): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_multaddsubsum.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_multaddsubsum.v(53): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/mult_add_sub_sum/rtl/lscc_mult_add_sub_sum.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(13): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_multaddsub.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_multaddsub.v(52): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/mult_add_sub/rtl/lscc_mult_add_sub.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(14): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_mult.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_mult.v(51): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/multiplier/rtl/lscc_multiplier.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(15): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp.v(48): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_dp/rtl/lscc_ram_dp.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp.v(49): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../LFMXO4/ram_dp/rtl/lscc_lfmxo4_ram_dp.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(16): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_be.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_be.v(49): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_dp/rtl/lscc_ram_dp.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_be.v(50): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../LFMXO4/ram_dp/rtl/lscc_lfmxo4_ram_dp.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(17): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_true.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_true.v(49): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_dp_true/rtl/lscc_ram_dp_true.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dp_true.v(50): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../LFMXO4/ram_dp_true/rtl/lscc_lfmxo4_ram_dp_true.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(18): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq.v(45): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_dq/rtl/lscc_ram_dq.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq.v(46): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../LFMXO4/ram_dq/rtl/lscc_lfmxo4_ram_dq.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(19): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq_be.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq_be.v(45): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/ram_dq/rtl/lscc_ram_dq.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_ram_dq_be.v(46): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../LFMXO4/ram_dq/rtl/lscc_lfmxo4_ram_dq.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(20): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_rom.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_rom.v(45): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/rom/rtl/lscc_rom.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.v(21): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/pmi_sub.v. VERI-1328
+INFO <35901328> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_sub.v(50): analyzing included file c:/lscc/radiant/2025.2/ip/pmi/../common/subtractor/rtl/lscc_subtractor.v. VERI-1328
+Analyzing Verilog file c:/coverteda_builds/counter_e3e7c6c0/source/counter.v. VERI-1482
+Analyzing Verilog file c:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v. VERI-1482
+Analyzing VHDL file c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.vhd. VHDL-1481
+Analyzing VHDL file c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.vhd
 
-ERROR <1009990> - synthesis: cannot open Verilog file '//wsl.localhost/ubuntu-24.04/home/tcovert/projects/coverteda/examples/radiant-counter/source/counter.v'
+INFO <35921014> - synthesis: c:/lscc/radiant/2025.2/ip/pmi/pmi_lifcl.vhd(4): analyzing package components. VHDL-1014
+WARNING <35001200> - synthesis: Setting counter_tb as the top-level module. To specify the top-level module explicitly, go to View->Set Views->Hierarchy or Project->Active Implementation->Set Top-Level Unit.
+INFO <35921504> - synthesis: The default VHDL library search path is now "C:/coverteda_builds/counter_e3e7c6c0/impl1". VHDL-1504
+Top module language type = Verilog.
+Top module name (Verilog, mixed language): counter_tb
+INFO <35901018> - synthesis: c:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v(4): compiling module counter_tb. VERI-1018
+WARNING <35901142> - synthesis: c:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v(23): system task dumpfile ignored for synthesis. VERI-1142
+WARNING <35901142> - synthesis: c:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v(24): system task dumpvars ignored for synthesis. VERI-1142
 
+ERROR <35901279> - synthesis: c:/coverteda_builds/counter_e3e7c6c0/source/counter_tb.v(31): multiple event control statements not supported for synthesis. VERI-1279
 Thank you for using Radiant. Total CPU/Elapsed time: 0 secs /7 secs 
 ═══ BUILD FAILED ═══  exit status: 1 (0m 11s)
-m within
-[stderr] "prj_run_synthesis"
-[stderr]     (file "/home/tcovert/projects/CovertEDA/examples/radiant-counter/.coverteda_build.tcl" line 7)
