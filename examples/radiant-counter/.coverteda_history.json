@@ -148,5 +148,23 @@
     ],
     "warnings": 0,
     "errors": 1
+  },
+  {
+    "id": "b-1771613164896",
+    "timestamp": "2026-02-20T18:46:04.896Z",
+    "duration": 11,
+    "status": "failed",
+    "backend": "Radiant",
+    "device": "LIFCL-40-7BG400I",
+    "stages": [
+      "synth",
+      "map",
+      "par",
+      "bitgen"
+    ],
+    "warnings": 0,
+    "errors": 1,
+    "commitHash": "e46ab8c",
+    "commitMsg": "Pre-build: 8-Bit Counter 2026-02-20"
   }
 ]
