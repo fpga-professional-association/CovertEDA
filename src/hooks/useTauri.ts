@@ -317,6 +317,11 @@ export async function saveProject(dir: string, config: ProjectConfig): Promise<v
   return invoke<void>("save_project", { dir, config });
 }
 
+export async function getProjectConfigAtHead(dir: string): Promise<ProjectConfig | null> {
+  if (!isTauri) return null;
+  return invoke<ProjectConfig | null>("get_project_config_at_head", { dir });
+}
+
 export async function removeRecentProject(path: string): Promise<void> {
   if (!isTauri) return;
   return invoke<void>("remove_recent_project", { path });
@@ -330,6 +335,12 @@ export async function detectTools(): Promise<DetectedTool[]> {
       { backendId: "quartus", name: "Intel Quartus Prime", version: "23.1", installPath: null, available: false },
       { backendId: "vivado", name: "AMD Vivado", version: "2024.1", installPath: null, available: false },
       { backendId: "opensource", name: "OSS CAD Suite", version: "yosys 0.40", installPath: null, available: false },
+      { backendId: "libero", name: "Microchip Libero SoC", version: null, installPath: null, available: false },
+      { backendId: "ace", name: "Achronix ACE", version: null, installPath: null, available: false },
+      { backendId: "gowin", name: "GOWIN EDA", version: null, installPath: null, available: false },
+      { backendId: "efinity", name: "Efinix Efinity", version: null, installPath: null, available: false },
+      { backendId: "quicklogic", name: "QuickLogic Aurora", version: null, installPath: null, available: false },
+      { backendId: "flexlogix", name: "Flex Logix EFLX", version: null, installPath: null, available: false },
     ];
   }
   return invoke<DetectedTool[]>("detect_tools");

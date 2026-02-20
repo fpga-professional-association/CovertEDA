@@ -289,6 +289,8 @@ export interface ProjectConfig {
   constraintFiles: string[];
   implDir: string;
   backendConfig: Record<string, string>;
+  buildStages: string[];
+  buildOptions: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -353,7 +355,7 @@ export interface ProjectTemplate {
 export interface DetectedTool {
   backendId: string;
   name: string;
-  version: string;
+  version: string | null;
   installPath: string | null;
   available: boolean;
 }

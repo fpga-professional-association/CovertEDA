@@ -21,6 +21,10 @@ pub struct ProjectConfig {
     pub impl_dir: String,
     #[serde(default)]
     pub backend_config: HashMap<String, String>,
+    #[serde(default)]
+    pub build_stages: Vec<String>,
+    #[serde(default)]
+    pub build_options: HashMap<String, String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -80,6 +84,8 @@ impl ProjectConfig {
             constraint_files,
             impl_dir,
             backend_config: HashMap::new(),
+            build_stages: Vec::new(),
+            build_options: HashMap::new(),
             created_at: now.clone(),
             updated_at: now,
         }

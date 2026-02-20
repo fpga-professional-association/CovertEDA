@@ -1454,6 +1454,12 @@ export const BACKEND_META: BackendMeta[] = [
   { id: "quartus", name: "Intel Quartus Prime", short: "Quartus", color: "#0091ff", icon: "\u25C7", defaultDevice: "5CSEMA5F31C6" },
   { id: "vivado", name: "AMD Vivado", short: "Vivado", color: "#8cc63f", icon: "\u25B2", defaultDevice: "xc7a100tcsg324-1" },
   { id: "opensource", name: "OSS CAD Suite", short: "OSS CAD", color: "#fb923c", icon: "\u2726", defaultDevice: "LFE5U-85F-6BG381C" },
+  { id: "libero", name: "Microchip Libero SoC", short: "Libero", color: "#d61f33", icon: "\u25A0", defaultDevice: "MPF300TS-1FCG484I" },
+  { id: "ace", name: "Achronix ACE", short: "ACE", color: "#00b4d8", icon: "\u25C8", defaultDevice: "AC7t1500" },
+  { id: "gowin", name: "GOWIN EDA", short: "GOWIN", color: "#ff6b35", icon: "\u25A3", defaultDevice: "GW2A-LV18PG256C8" },
+  { id: "efinity", name: "Efinix Efinity", short: "Efinity", color: "#7b2d8e", icon: "\u25C9", defaultDevice: "Ti60F225" },
+  { id: "quicklogic", name: "QuickLogic Aurora", short: "QLogic", color: "#2ecc71", icon: "\u25CE", defaultDevice: "EOS-S3" },
+  { id: "flexlogix", name: "Flex Logix EFLX", short: "FlexLogix", color: "#3498db", icon: "\u25CA", defaultDevice: "EFLX4K" },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1500,6 +1506,8 @@ export const MOCK_PROJECT_CONFIG: ProjectConfig = {
   constraintFiles: ["constraints/*.lpf"],
   implDir: "impl1",
   backendConfig: {},
+  buildStages: [],
+  buildOptions: {},
   createdAt: "2025-01-15T10:00:00Z",
   updatedAt: new Date().toISOString(),
 };

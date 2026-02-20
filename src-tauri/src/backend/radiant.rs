@@ -173,6 +173,53 @@ impl RadiantBackend {
 
         None
     }
+
+    /// Recursively scan for HDL source files (.v, .sv, .vhd, .vhdl) under a directory.
+    fn scan_sources(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    // Skip build output and hidden directories
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.') || name == "impl1" || name == "build" {
+                        continue;
+                    }
+                    results.extend(Self::scan_sources(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    match ext {
+                        "v" | "sv" | "vhd" | "vhdl" => results.push(path),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        results
+    }
+
+    /// Scan for constraint files (.pdc, .sdc, .lpf) under a directory.
+    fn scan_constraints(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.') || name == "impl1" || name == "build" {
+                        continue;
+                    }
+                    results.extend(Self::scan_constraints(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    match ext {
+                        "pdc" | "sdc" | "lpf" => results.push(path),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        results
+    }
 }
 
 impl FpgaBackend for RadiantBackend {
@@ -235,13 +282,6 @@ impl FpgaBackend for RadiantBackend {
         stages: &[String],
         options: &HashMap<String, String>,
     ) -> BackendResult<String> {
-        let rdf = Self::find_rdf_file(project_dir, top_module)
-            .ok_or_else(|| BackendError::ConfigError(format!(
-                "No .rdf project file found in {}",
-                project_dir.display()
-            )))?;
-        let rdf_display = to_tcl_path(&rdf);
-
         // Determine which stages to run (empty = all)
         let all_ids = ["synth", "map", "par", "bitgen"];
         let run_stage = |id: &str| -> bool {
@@ -249,9 +289,66 @@ impl FpgaBackend for RadiantBackend {
         };
 
         let mut script = format!(
-            "# CovertEDA \u{2014} Radiant Build Script\n# Device: {device}\n# Top: {top_module}\n\nprj_open \"{rdf}\"\n",
-            rdf = rdf_display,
+            "# CovertEDA \u{2014} Radiant Build Script\n# Device: {device}\n# Top: {top_module}\n\n",
         );
+
+        // Open existing .rdf or create a new project from sources
+        if let Some(rdf) = Self::find_rdf_file(project_dir, top_module) {
+            let rdf_display = to_tcl_path(&rdf);
+            script.push_str(&format!("prj_open \"{}\"\n", rdf_display));
+        } else {
+            // No .rdf — create project from scratch, scan for sources
+            let project_dir_tcl = to_tcl_path(project_dir);
+            let project_name = top_module;
+
+            // Determine device family for prj_create
+            let family = if device.starts_with("LIFCL") {
+                "LIFCL"
+            } else if device.starts_with("LFD2NX") || device.starts_with("LCMXO5") {
+                "CrossLink-NX"
+            } else if device.starts_with("LFCPNX") {
+                "CertusPro-NX"
+            } else {
+                "LIFCL"
+            };
+
+            script.push_str(&format!(
+                "prj_create -name \"{project_name}\" -impl \"impl1\" -dev {device} -performance \"7_High-Performance_1.0V\" -synthesis \"lse\" -path \"{project_dir_tcl}\"\n",
+            ));
+
+            // Add source files
+            let sources = Self::scan_sources(project_dir);
+            if sources.is_empty() {
+                return Err(BackendError::ConfigError(format!(
+                    "No HDL source files (.v, .sv, .vhd) found in {}",
+                    project_dir.display()
+                )));
+            }
+            for src in &sources {
+                let src_tcl = to_tcl_path(src);
+                script.push_str(&format!("prj_add_source \"{}\"\n", src_tcl));
+            }
+
+            // Add constraint files
+            let constraints = Self::scan_constraints(project_dir);
+            for constr in &constraints {
+                let constr_tcl = to_tcl_path(constr);
+                let ext = constr.extension().and_then(|e| e.to_str()).unwrap_or("");
+                match ext {
+                    "pdc" => script.push_str(&format!("prj_add_source \"{}\" -exclude_from_synth\n", constr_tcl)),
+                    "sdc" => script.push_str(&format!("prj_add_source \"{}\"\n", constr_tcl)),
+                    "lpf" => script.push_str(&format!("prj_add_source \"{}\"\n", constr_tcl)),
+                    _ => {}
+                }
+            }
+
+            // Set top module
+            script.push_str(&format!(
+                "prj_set_impl_opt -impl \"impl1\" \"top\" \"{top_module}\"\n",
+            ));
+
+            let _ = family; // family is implicit in the device string for prj_create
+        }
 
         // Synthesis engine selection (LSE or Synplify Pro)
         if let Some(engine) = options.get("synth_engine") {
@@ -287,6 +384,9 @@ impl FpgaBackend for RadiantBackend {
                 "prj_set_strategy_value -strategy Strategy1 {{parPathBased={}}}\n", val
             ));
         }
+
+        // Save project before running stages
+        script.push_str("prj_save\n");
 
         // Emit only requested stage commands
         for id in &all_ids {
@@ -651,13 +751,36 @@ mod tests {
     }
 
     #[test]
-    fn test_radiant_build_script_no_rdf_errors() {
+    fn test_radiant_build_script_no_rdf_no_sources_errors() {
+        // No .rdf and no source files → should error
         let tmp = tempfile::tempdir().unwrap();
         let b = RadiantBackend { version: "test".into(), install_dir: None };
         let result = b.generate_build_script(
             tmp.path(), "LIFCL-40", "top", &[], &HashMap::new(),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_radiant_build_script_no_rdf_creates_project() {
+        // No .rdf but source files exist → should create project from scratch
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("source");
+        std::fs::create_dir(&src_dir).unwrap();
+        std::fs::write(src_dir.join("counter.v"), "module counter(); endmodule").unwrap();
+        std::fs::write(src_dir.join("counter.pdc"), "# constraints").unwrap();
+
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40-7BG400I", "counter", &[], &HashMap::new(),
+        ).unwrap();
+
+        assert!(script.contains("prj_create"), "script should create project:\n{}", script);
+        assert!(script.contains("prj_add_source"), "script should add sources:\n{}", script);
+        assert!(script.contains("counter.v"), "script should reference counter.v:\n{}", script);
+        assert!(script.contains("prj_run_synthesis"));
+        assert!(script.contains("prj_run_par"));
+        assert!(script.contains("prj_save"));
     }
 
     #[test]

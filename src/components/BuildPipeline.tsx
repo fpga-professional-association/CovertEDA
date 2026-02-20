@@ -180,6 +180,8 @@ interface BuildPipelineProps {
   onStagesChange: (stages: string[]) => void;
   buildOptions: Record<string, string>;
   onOptionsChange: (options: Record<string, string>) => void;
+  saveStatus?: "saved" | "saving" | "unsaved";
+  changedFromCommit?: string[];
 }
 
 function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; onChange: (v: string) => void }) {
@@ -485,6 +487,8 @@ export default memo(function BuildPipeline({
   onStagesChange,
   buildOptions,
   onOptionsChange,
+  saveStatus,
+  changedFromCommit,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
   const B = backend;
@@ -556,7 +560,54 @@ export default memo(function BuildPipeline({
           {selectedStages.length > 0 && selectedStages.length < B.pipeline.length && (
             <Badge color={C.warn}>{selectedStages.length}/{B.pipeline.length} stages</Badge>
           )}
+          <div style={{ flex: 1 }} />
+          {/* Save status indicator */}
+          {saveStatus && (
+            <span
+              style={{
+                fontSize: 7,
+                fontFamily: MONO,
+                fontWeight: 600,
+                padding: "1px 6px",
+                borderRadius: 3,
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+                color: saveStatus === "saved" ? C.ok : saveStatus === "saving" ? C.accent : C.warn,
+                background: saveStatus === "saved" ? `${C.ok}10` : saveStatus === "saving" ? `${C.accent}10` : `${C.warn}10`,
+              }}
+            >
+              {saveStatus === "unsaved" && (
+                <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: C.warn }} />
+              )}
+              {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Unsaved"}
+            </span>
+          )}
         </div>
+        {/* Changed from last commit */}
+        {changedFromCommit && changedFromCommit.length > 0 && (
+          <div style={{
+            display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8,
+            padding: "4px 6px", borderRadius: 4, background: `${C.cyan}08`,
+            border: `1px solid ${C.cyan}20`,
+          }}>
+            <span style={{ fontSize: 7, fontFamily: MONO, color: C.cyan, fontWeight: 600 }}>
+              Changed since commit:
+            </span>
+            {changedFromCommit.map((f) => (
+              <span
+                key={f}
+                style={{
+                  fontSize: 7, fontFamily: MONO, fontWeight: 600,
+                  padding: "0 4px", borderRadius: 2,
+                  background: `${C.cyan}15`, color: C.cyan,
+                }}
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
         {B.pipeline.map((s, i) => (
           <PStep
             key={s.id}

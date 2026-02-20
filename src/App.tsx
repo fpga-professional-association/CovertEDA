@@ -51,6 +51,7 @@ import {
   getGitStatus,
   executeIpGenerate,
   saveBuildRecord,
+  getProjectConfigAtHead,
 } from "./hooks/useTauri";
 import type { RustGitStatus } from "./hooks/useTauri";
 
@@ -632,6 +633,11 @@ export default function App() {
   const [deviceDraft, setDeviceDraft] = useState("");
   const [commitModal, setCommitModal] = useState<"checking" | "prompt" | null>(null);
 
+  // ── Build config auto-save state ──
+  const [buildSaveStatus, setBuildSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [headConfig, setHeadConfig] = useState<ProjectConfig | null>(null);
+  const buildSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Resolve current backend
   const B = backends.find((b) => b.id === bid) ?? FALLBACK_BACKEND;
 
@@ -648,14 +654,28 @@ export default function App() {
     return match?.path;
   }, [realFiles, bid, B.constrExt]);
 
-  // Load backends and config on mount
+  // Load backends and config on mount; restore project if page was reloaded
   useEffect(() => {
-    getRuntimeBackends().then(setBackends);
+    getRuntimeBackends().then((be) => {
+      setBackends(be);
+      // Restore project from sessionStorage on reload
+      const savedDir = sessionStorage.getItem("coverteda_projectDir");
+      if (savedDir && view === "start") {
+        openProject(savedDir)
+          .then((cfg) => {
+            handleOpenProject(savedDir, cfg);
+          })
+          .catch(() => {
+            sessionStorage.removeItem("coverteda_projectDir");
+          });
+      }
+    });
     getAppConfig().then((cfg) => {
       const tid = cfg.theme as "dark" | "light" | "colorblind";
       if (tid === "dark" || tid === "light" || tid === "colorblind") setThemeId(tid);
       if (cfg.scale_factor >= 0.5 && cfg.scale_factor <= 3.0) setScaleFactor(cfg.scale_factor);
     }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setThemeId, setScaleFactor]);
 
   // Flush log buffer periodically during builds for performance
@@ -682,6 +702,7 @@ export default function App() {
   }, []);
 
   const handleOpenProject = useCallback((dir: string, config: ProjectConfig) => {
+    sessionStorage.setItem("coverteda_projectDir", dir);
     setProjectDir(dir);
     setProject(config);
     const backendId = config.backendId;
@@ -698,6 +719,14 @@ export default function App() {
     setActiveStage(null);
     setGitState(null);
     setView("ide");
+
+    // Initialize build stages/options from project config
+    setBuildStages(config.buildStages ?? []);
+    setBuildOptions(config.buildOptions ?? {});
+    setBuildSaveStatus("saved");
+
+    // Load HEAD config for diff comparison
+    getProjectConfigAtHead(dir).then(setHeadConfig).catch(() => setHeadConfig(null));
 
     if (isTauri) {
       // Ensure the Rust backend registers this as the active project
@@ -761,6 +790,7 @@ export default function App() {
   }, [backends]);
 
   const handleCloseProject = useCallback(() => {
+    sessionStorage.removeItem("coverteda_projectDir");
     setView("start");
     setProject(null);
     setProjectDir("");
@@ -1058,10 +1088,11 @@ export default function App() {
       try {
         const hash = await gitCommit(projectDir, msg);
         setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
-        // Refresh git status after commit
+        // Refresh git status and HEAD config after commit
         getGitStatus(projectDir)
           .then((r) => setGitState(mapGitStatus(r)))
           .catch(() => {});
+        getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {});
       } catch (err) {
         setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}` }]);
       }
@@ -1137,10 +1168,11 @@ export default function App() {
     try {
       const hash = await gitCommit(projectDir, msg);
       setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}` }]);
-      // Refresh git status
+      // Refresh git status and HEAD config
       getGitStatus(projectDir)
         .then((r) => setGitState(mapGitStatus(r)))
         .catch(() => {});
+      getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {});
     } catch (err) {
       setLogs((p) => [...p, { t: "err" as const, m: `Commit failed: ${err}` }]);
     }
@@ -1227,6 +1259,54 @@ export default function App() {
     return () => window.removeEventListener("mousedown", handleMouseBack);
   }, []);
 
+  // ── Auto-save build stages & options (debounced 1s) ──
+  useEffect(() => {
+    if (!project || !projectDir) return;
+    // Skip if nothing has actually changed from the loaded config
+    const configStages = project.buildStages ?? [];
+    const configOptions = project.buildOptions ?? {};
+    const stagesSame = JSON.stringify(buildStages) === JSON.stringify(configStages);
+    const optionsSame = JSON.stringify(buildOptions) === JSON.stringify(configOptions);
+    if (stagesSame && optionsSame) {
+      setBuildSaveStatus("saved");
+      return;
+    }
+    setBuildSaveStatus("unsaved");
+    if (buildSaveTimer.current) clearTimeout(buildSaveTimer.current);
+    buildSaveTimer.current = setTimeout(() => {
+      const updated = { ...project, buildStages, buildOptions };
+      setBuildSaveStatus("saving");
+      saveProject(projectDir, updated)
+        .then(() => {
+          setProject(updated);
+          setBuildSaveStatus("saved");
+        })
+        .catch(() => setBuildSaveStatus("unsaved"));
+    }, 1000);
+    return () => {
+      if (buildSaveTimer.current) clearTimeout(buildSaveTimer.current);
+    };
+  }, [buildStages, buildOptions, project, projectDir]);
+
+  // ── Compute what changed from last git commit ──
+  const changedFromCommit = useMemo(() => {
+    if (!project || !headConfig) return [];
+    const changes: string[] = [];
+    if (project.device !== headConfig.device) changes.push("device");
+    if (project.topModule !== headConfig.topModule) changes.push("topModule");
+    if (JSON.stringify(project.buildStages ?? []) !== JSON.stringify(headConfig.buildStages ?? []))
+      changes.push("stages");
+    if (JSON.stringify(project.buildOptions ?? {}) !== JSON.stringify(headConfig.buildOptions ?? {}))
+      changes.push("options");
+    if (JSON.stringify(project.sourcePatterns) !== JSON.stringify(headConfig.sourcePatterns))
+      changes.push("sources");
+    if (JSON.stringify(project.constraintFiles) !== JSON.stringify(headConfig.constraintFiles))
+      changes.push("constraints");
+    if (project.implDir !== headConfig.implDir) changes.push("implDir");
+    if (project.backendId !== headConfig.backendId) changes.push("backend");
+    return changes;
+  }, [project, headConfig]);
+
   // Load license info when license section opens
   useEffect(() => {
     if (sec === "license" && !licenseResult && !licenseLoading) {
@@ -1241,6 +1321,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (buildCleanup.current) buildCleanup.current();
+      if (buildSaveTimer.current) clearTimeout(buildSaveTimer.current);
       stopLogFlush();
     };
   }, [stopLogFlush]);
@@ -1450,20 +1531,23 @@ export default function App() {
               {B.short.toUpperCase()}
             </span>
           </div>
-          <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
-          <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
-          <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
-          <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
-          <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
-          <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
-          <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
-          <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
-          <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} tooltip="Resources — utilization overview with bar charts" />
-          <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
-          <div style={{ flex: 1 }} />
-          <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
-          <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} tooltip="License — FlexLM license status and feature listing" />
-          <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} tooltip="Settings — tool paths, theme, zoom configuration" />
+          <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minHeight: 0 }}>
+            <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
+            <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
+            <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
+            <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
+            <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
+            <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
+            <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
+            <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
+            <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} tooltip="Resources — utilization overview with bar charts" />
+            <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
+          </div>
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+            <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
+            <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} tooltip="License — FlexLM license status and feature listing" />
+            <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} tooltip="Settings — tool paths, theme, zoom configuration" />
+          </div>
           <div
             onClick={handleCloseProject}
             title="Close Project"
@@ -1498,6 +1582,7 @@ export default function App() {
             onWidthChange={setFileTreeWidth}
             onRefresh={refreshAll}
             onToggleSynth={handleToggleSynth}
+            projectDir={projectDir}
             onFileContextMenu={(file, x, y) => {
               const isSynthable = file.ty === "rtl" || file.ty === "tb" || file.ty === "constr";
               const items: ContextMenuItem[] = file.ty === "folder"
@@ -1710,6 +1795,8 @@ export default function App() {
                   onStagesChange={setBuildStages}
                   buildOptions={buildOptions}
                   onOptionsChange={setBuildOptions}
+                  saveStatus={buildSaveStatus}
+                  changedFromCommit={changedFromCommit}
                 />
                 {buildDone && realFiles && (
                   <BuildArtifacts

@@ -1016,6 +1016,41 @@ pub fn save_project(
 }
 
 #[tauri::command]
+pub fn get_project_config_at_head(dir: String) -> Result<Option<ProjectConfig>, String> {
+    let project_dir = std::path::Path::new(&dir);
+    let repo = match git2::Repository::discover(project_dir) {
+        Ok(r) => r,
+        Err(_) => return Ok(None), // Not a git repo
+    };
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(_) => return Ok(None), // No commits yet
+    };
+    let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+    let tree = commit.tree().map_err(|e| e.to_string())?;
+
+    // Find .coverteda relative to repo root
+    let repo_root = repo.workdir().ok_or("Bare repo")?;
+    let relative = project_dir
+        .strip_prefix(repo_root)
+        .unwrap_or(std::path::Path::new(""));
+    let config_path = relative.join(".coverteda");
+
+    let entry = match tree.get_path(&config_path) {
+        Ok(e) => e,
+        Err(_) => return Ok(None), // File not in HEAD
+    };
+    let blob = repo
+        .find_blob(entry.id())
+        .map_err(|e| e.to_string())?;
+    let content = std::str::from_utf8(blob.content())
+        .map_err(|e| e.to_string())?;
+    let config: ProjectConfig =
+        serde_json::from_str(content).map_err(|e| e.to_string())?;
+    Ok(Some(config))
+}
+
+#[tauri::command]
 pub fn remove_recent_project(path: String) -> Result<(), String> {
     let mut list = RecentProjectsList::load();
     list.remove(&path);
@@ -1086,6 +1121,25 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
             }
         })
         .collect();
+
+    // Append placeholder vendors (not yet implemented)
+    let placeholders = [
+        ("libero", "Microchip Libero SoC"),
+        ("ace", "Achronix ACE"),
+        ("gowin", "GOWIN EDA"),
+        ("efinity", "Efinix Efinity"),
+        ("quicklogic", "QuickLogic Aurora"),
+        ("flexlogix", "Flex Logix EFLX"),
+    ];
+    for (id, name) in &placeholders {
+        tools.push(DetectedTool {
+            backend_id: id.to_string(),
+            name: name.to_string(),
+            version: String::new(),
+            install_path: None,
+            available: false,
+        });
+    }
 
     // Sort so available tools come first
     tools.sort_by(|a, b| b.available.cmp(&a.available));
@@ -1441,11 +1495,22 @@ pub struct BundledExample {
     pub path: String,
 }
 
-/// Find the examples/ directory. In dev mode it's relative to CWD;
-/// in production it's bundled as a Tauri resource.
+/// Find the examples/ directory containing bundled example projects.
+/// In Tauri dev mode CWD is typically src-tauri/, so we check ../examples first
+/// (the canonical project-root location). The src-tauri/examples/ created by
+/// Tauri resource bundling only has .coverteda stubs, not full source trees.
 fn find_examples_dir() -> Option<PathBuf> {
-    // Dev mode: CWD/examples
     let cwd = std::env::current_dir().ok()?;
+
+    // Prefer parent examples/ (project root) — this is the canonical location.
+    // In Tauri dev mode CWD=src-tauri/, so ../examples = project root examples/.
+    // In project-root CWD this is harmless (../ just goes up one level).
+    let parent_path = cwd.join("..").join("examples");
+    if parent_path.is_dir() {
+        return Some(parent_path.canonicalize().unwrap_or(parent_path));
+    }
+
+    // Fallback: CWD/examples (when CWD is already the project root)
     let dev_path = cwd.join("examples");
     if dev_path.is_dir() {
         return Some(dev_path);
@@ -1454,7 +1519,6 @@ fn find_examples_dir() -> Option<PathBuf> {
     // Production: relative to executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
-            // Linux/macOS: alongside binary
             let prod_path = exe_dir.join("examples");
             if prod_path.is_dir() {
                 return Some(prod_path);

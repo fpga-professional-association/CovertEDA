@@ -10,6 +10,7 @@ dist/
 # Tauri
 /src-tauri/WixTools/
 /src-tauri/gen/
+/src-tauri/examples/
 
 # OS
 .DS_Store

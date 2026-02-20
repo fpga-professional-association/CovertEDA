@@ -88,6 +88,7 @@ export default function StartScreen({
   const [templateFilter, setTemplateFilter] = useState<string>("All");
   const [showTemplates, setShowTemplates] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
+  const [showRecents, setShowRecents] = useState(true);
 
   useEffect(() => {
     getRecentProjects().then(setRecents).catch(() => {});
@@ -157,6 +158,9 @@ export default function StartScreen({
 
   const availableTools = tools.filter((t) => t.available);
   const hasLicense = licenseResult && licenseResult.features.length > 0;
+
+  // Placeholder backends not yet implemented — show as "IN DEVELOPMENT"
+  const PLACEHOLDER_IDS = new Set(["libero", "ace", "gowin", "efinity", "quicklogic", "flexlogix"]);
 
   return (
     <div
@@ -277,6 +281,7 @@ export default function StartScreen({
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {tools.map((t) => {
                   const bm = backendMeta(t.backendId);
+                  const isPlaceholder = PLACEHOLDER_IDS.has(t.backendId);
                   return (
                     <div
                       key={t.backendId}
@@ -288,6 +293,7 @@ export default function StartScreen({
                         borderRadius: 4,
                         background: t.available ? `${bm.color}08` : "transparent",
                         border: `1px solid ${t.available ? `${bm.color}30` : C.b1}`,
+                        opacity: isPlaceholder ? 0.6 : 1,
                       }}
                     >
                       <span style={{ color: bm.color, fontSize: 12 }}>{bm.icon}</span>
@@ -300,13 +306,16 @@ export default function StartScreen({
                       <div style={{ flex: 1 }} />
                       <span
                         style={{
-                          fontSize: 8,
+                          fontSize: 7,
                           fontFamily: MONO,
                           fontWeight: 600,
-                          color: t.available ? C.ok : C.t3,
+                          padding: "1px 5px",
+                          borderRadius: 2,
+                          color: t.available ? C.ok : isPlaceholder ? C.warn : C.t3,
+                          background: isPlaceholder ? `${C.warn}12` : "transparent",
                         }}
                       >
-                        {t.available ? "FOUND" : "NOT FOUND"}
+                        {t.available ? "FOUND" : isPlaceholder ? "IN DEVELOPMENT" : "NOT FOUND"}
                       </span>
                     </div>
                   );
@@ -488,6 +497,9 @@ export default function StartScreen({
             </div>
             {showExamples && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 2 }}>
+                  Location: <span style={{ color: C.t2 }}>CovertEDA/examples/</span>
+                </div>
                 {examples.map((ex) => {
                   const bm = backendMeta(ex.backendId);
                   return (
@@ -538,11 +550,23 @@ export default function StartScreen({
             )}
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO, marginBottom: 12 }}>
+          <div
+            onClick={() => setShowRecents((p) => !p)}
+            style={{
+              fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO,
+              marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 8, transition: "transform .15s", transform: showRecents ? "rotate(90deg)" : "rotate(0deg)" }}>
+              {"\u25B6"}
+            </span>
             RECENT PROJECTS
+            <span style={{ fontSize: 8, color: C.t3, fontWeight: 400 }}>
+              ({recents.length} project{recents.length !== 1 ? "s" : ""})
+            </span>
           </div>
 
-          {recents.length === 0 ? (
+          {!showRecents ? null : recents.length === 0 ? (
             <div
               style={{
                 flex: 1,

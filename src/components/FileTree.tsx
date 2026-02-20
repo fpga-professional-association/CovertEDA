@@ -321,9 +321,10 @@ interface FileTreeProps {
   onToggleSynth?: (file: ProjectFile) => void;
   width: number;
   onWidthChange: (w: number) => void;
+  projectDir?: string;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -515,6 +516,26 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
           <Badge color={C.err}>{unsavedFiles.length} unsaved</Badge>
         )}
       </div>
+
+      {/* Project directory path */}
+      {projectDir && (
+        <div
+          title={projectDir}
+          style={{
+            padding: "3px 10px",
+            borderBottom: `1px solid ${C.b1}`,
+            fontSize: 8,
+            fontFamily: MONO,
+            color: C.t3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            cursor: "default",
+          }}
+        >
+          {projectDir}
+        </div>
+      )}
 
       {/* Legend row */}
       <div
