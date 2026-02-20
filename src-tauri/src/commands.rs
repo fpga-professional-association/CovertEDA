@@ -395,8 +395,9 @@ pub fn start_build(
         emit_info(&format!("═══ CovertEDA Build ═══"));
         emit_info(&format!("Backend: {} ({})", backend_id, &executable));
         emit_info(&format!("Project: {}", project_dir));
-        if staging_dir_for_thread.is_some() {
-            emit_info(&format!("Staged to Windows filesystem (WSL-native project)"));
+        if let Some(ref sd) = staging_dir_for_thread {
+            emit_info(&format!("WSL project \u{2192} temp build dir: {}", sd.display()));
+            emit_info("(Radiant requires Windows-native paths; outputs copied back after build)");
         }
         for (key, val) in &env_vars {
             emit_info(&format!("ENV: {}={}", key, val));
@@ -1392,18 +1393,46 @@ fn needs_wsl_staging(project_dir: &Path) -> bool {
     s.starts_with('/') && !s.starts_with("/mnt/")
 }
 
-/// Create a staging directory on the Windows filesystem and copy project sources there.
-/// Returns the staging directory path (under /mnt/c/).
+/// Find the Windows %TEMP% directory from WSL.
+fn find_windows_temp() -> Option<PathBuf> {
+    // Try running cmd.exe to get %TEMP%
+    if let Ok(output) = std::process::Command::new("cmd.exe")
+        .args(["/c", "echo", "%TEMP%"])
+        .output()
+    {
+        let temp_win = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // Convert Windows path (C:\Users\...) to WSL path (/mnt/c/Users/...)
+        if temp_win.len() > 3 && temp_win.chars().nth(1) == Some(':') {
+            let drive = temp_win.chars().next().unwrap().to_lowercase().to_string();
+            let rest = temp_win[2..].replace('\\', "/");
+            let wsl_path = PathBuf::from(format!("/mnt/{}{}", drive, rest));
+            if wsl_path.is_dir() {
+                return Some(wsl_path);
+            }
+        }
+    }
+    // Fall back: scan /mnt/c/Users/*/AppData/Local/Temp
+    if let Ok(entries) = std::fs::read_dir("/mnt/c/Users") {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let temp = entry.path().join("AppData/Local/Temp");
+            if temp.is_dir() {
+                return Some(temp);
+            }
+        }
+    }
+    None
+}
+
+/// Create a temporary staging directory on the Windows filesystem for building.
+/// Radiant lowercases UNC paths to WSL, breaking case-sensitive Linux paths.
+/// The staging dir lives in Windows %TEMP% and is cleaned up after the build.
 fn create_wsl_staging(project_dir: &Path, project_name: &str) -> Result<PathBuf, String> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    // Find Windows temp dir: try cmd.exe, fall back to known path
+    let win_temp = find_windows_temp()
+        .unwrap_or_else(|| PathBuf::from("/mnt/c/Users/tcove/AppData/Local/Temp"));
 
-    let mut hasher = DefaultHasher::new();
-    project_dir.hash(&mut hasher);
-    let hash = format!("{:x}", hasher.finish());
-
-    let staging_base = PathBuf::from("/mnt/c/coverteda_builds");
-    let staging_dir = staging_base.join(format!("{}_{}", project_name, &hash[..8]));
+    let uid = uuid_v4();
+    let staging_dir = win_temp.join(format!("coverteda_{}", &uid[..12]));
 
     // Clean and recreate
     if staging_dir.exists() {
