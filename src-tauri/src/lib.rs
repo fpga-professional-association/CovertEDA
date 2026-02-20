@@ -47,6 +47,7 @@ pub fn run() {
             commands::get_project_config_at_head,
             commands::remove_recent_project,
             commands::detect_tools,
+            commands::refresh_tools,
             commands::check_licenses,
             commands::read_file,
             commands::read_build_log,

@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 vi.mock("../hooks/useTauri", () => ({
   getAppConfig: vi.fn(() => Promise.resolve({
-    tool_paths: { diamond: null, radiant: "/mnt/c/lscc/radiant/2025.2", quartus: null, vivado: null, yosys: null, nextpnr: null },
+    tool_paths: { diamond: null, radiant: "/mnt/c/lscc/radiant/2025.2", quartus: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
     license_servers: [],
     default_backend: "radiant",
     theme: "dark",

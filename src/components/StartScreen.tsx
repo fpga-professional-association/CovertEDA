@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { RecentProject, ProjectConfig, BackendMeta, ExampleProject, DetectedTool, LicenseCheckResult } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
@@ -48,6 +48,7 @@ import {
   pickDirectory,
   removeRecentProject,
   detectTools,
+  refreshTools,
   checkLicenses,
   getBundledExamples,
 } from "../hooks/useTauri";
@@ -89,6 +90,27 @@ export default function StartScreen({
   const [showTemplates, setShowTemplates] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
   const [showRecents, setShowRecents] = useState(true);
+  const [leftWidth, setLeftWidth] = useState(340);
+  const dragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      setLeftWidth(Math.max(200, Math.min(x, rect.width - 200)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   useEffect(() => {
     getRecentProjects().then(setRecents).catch(() => {});
@@ -216,16 +238,16 @@ export default function StartScreen({
       </div>
 
       <div
+        ref={containerRef}
         style={{
           flex: 1,
           display: "flex",
           overflow: "hidden",
           padding: "32px 40px 40px",
-          gap: 40,
         }}
       >
         {/* Left: Actions + Environment */}
-        <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflow: "auto" }}>
+        <div style={{ width: leftWidth, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16, overflow: "auto", paddingRight: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO, marginBottom: 4 }}>
             GET STARTED
           </div>
@@ -272,8 +294,26 @@ export default function StartScreen({
 
           {/* Detected Tools */}
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
               DETECTED TOOLS
+              <span
+                onClick={() => {
+                  const prev = tools;
+                  setTools([]);
+                  refreshTools().then(setTools).catch(() => setTools(prev));
+                }}
+                onMouseEnter={() => setHover("refresh-tools")}
+                onMouseLeave={() => setHover(null)}
+                title="Re-detect tools"
+                style={{
+                  cursor: "pointer",
+                  opacity: hover === "refresh-tools" ? 1 : 0.5,
+                  fontSize: 10,
+                  transition: "opacity .15s",
+                }}
+              >
+                {"\u21BB"}
+              </span>
             </div>
             {tools.length === 0 ? (
               <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3 }}>Scanning...</div>
@@ -330,6 +370,23 @@ export default function StartScreen({
               <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
                 <Key />
                 LICENSE STATUS
+                <span
+                  onClick={() => {
+                    setLicenseResult(null);
+                    checkLicenses().then(setLicenseResult).catch(() => {});
+                  }}
+                  onMouseEnter={() => setHover("refresh-lic")}
+                  onMouseLeave={() => setHover(null)}
+                  title="Re-check licenses"
+                  style={{
+                    cursor: "pointer",
+                    opacity: hover === "refresh-lic" ? 1 : 0.5,
+                    fontSize: 10,
+                    transition: "opacity .15s",
+                  }}
+                >
+                  {"\u21BB"}
+                </span>
               </div>
               {hasLicense ? (
                 <div
@@ -373,25 +430,28 @@ export default function StartScreen({
             </div>
           )}
 
-          {/* Backend badges */}
-          {availableTools.length === 0 && tools.length > 0 && (
-            <div style={{ marginTop: 4 }}>
-              <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 8 }}>
-                SUPPORTED BACKENDS
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {BACKEND_META.map((b) => (
-                  <Badge key={b.id} color={b.color}>
-                    {b.icon} {b.short}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
+        </div>
+
+        {/* Drag handle */}
+        <div
+          onMouseDown={onDragStart}
+          style={{
+            width: 6,
+            cursor: "col-resize",
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div style={{ width: 2, height: 40, borderRadius: 1, background: C.b1, transition: "background .15s" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = C.accent; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = C.b1; }}
+          />
         </div>
 
         {/* Right: Templates + Examples + Recent Projects */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, paddingLeft: 16 }}>
           {/* Project Templates */}
           <div style={{ marginBottom: 20 }}>
             <div

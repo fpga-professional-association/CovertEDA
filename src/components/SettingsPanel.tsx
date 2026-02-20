@@ -100,8 +100,7 @@ const TOOL_FIELDS: { key: keyof AppConfig["tool_paths"]; label: string }[] = [
   { key: "radiant", label: "Lattice Radiant" },
   { key: "quartus", label: "Intel Quartus" },
   { key: "vivado", label: "AMD Vivado" },
-  { key: "yosys", label: "Yosys" },
-  { key: "nextpnr", label: "nextpnr" },
+  { key: "oss_cad_suite", label: "OSS CAD Suite" },
 ];
 
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {

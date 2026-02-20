@@ -38,6 +38,8 @@ pub struct ToolPaths {
     pub vivado: Option<PathBuf>,
     pub yosys: Option<PathBuf>,
     pub nextpnr: Option<PathBuf>,
+    #[serde(default)]
+    pub oss_cad_suite: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +58,7 @@ impl Default for AppConfig {
                 vivado: None,
                 yosys: None,
                 nextpnr: None,
+                oss_cad_suite: None,
             },
             license_servers: vec![],
             default_backend: "diamond".to_string(),

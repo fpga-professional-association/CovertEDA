@@ -317,7 +317,8 @@ pub fn start_build(
     drop(registry);
 
     // Write the build script to a temp file in the project directory
-    let script_path = project_path.join(".coverteda_build.tcl");
+    let script_ext = if backend_id == "opensource" { ".sh" } else { ".tcl" };
+    let script_path = project_path.join(format!(".coverteda_build{}", script_ext));
     std::fs::write(&script_path, &script)
         .map_err(|e| format!("Failed to write build script: {}", e))?;
 
@@ -736,6 +737,7 @@ pub fn clean_build(project_dir: String) -> Result<u32, String> {
     // Remove build artifacts in project root
     let artifacts = [
         ".coverteda_build.tcl",
+        ".coverteda_build.sh",
         ".coverteda_build.log",
     ];
     for name in &artifacts {
@@ -1110,6 +1112,10 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
                     let quartus = crate::backend::quartus::QuartusBackend::new();
                     quartus.install_dir().map(|p| p.display().to_string())
                 }
+                "opensource" => {
+                    let oss = crate::backend::oss::OssBackend::new();
+                    oss.install_dir().map(|p| p.display().to_string())
+                }
                 _ => None,
             };
             DetectedTool {
@@ -1144,6 +1150,20 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
     // Sort so available tools come first
     tools.sort_by(|a, b| b.available.cmp(&a.available));
     Ok(tools)
+}
+
+/// Re-detect all tools by re-running each backend's detection logic.
+/// This re-creates the backend registry, picking up any tools installed
+/// or configured since the app started.
+#[tauri::command]
+pub fn refresh_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, String> {
+    // Re-create the registry so backends re-run their detection
+    {
+        let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
+        *registry = crate::backend::BackendRegistry::new();
+    }
+    // Re-use detect_tools to return the updated list
+    detect_tools(state)
 }
 
 #[tauri::command]
@@ -1337,6 +1357,10 @@ fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
                 return path.display().to_string();
             }
             cli_tool.to_string()
+        }
+        "opensource" => {
+            // OSS scripts are bash; cli_tool is already "bash"
+            "bash".to_string()
         }
         _ => cli_tool.to_string(),
     }

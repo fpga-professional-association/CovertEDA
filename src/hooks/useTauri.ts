@@ -346,6 +346,11 @@ export async function detectTools(): Promise<DetectedTool[]> {
   return invoke<DetectedTool[]>("detect_tools");
 }
 
+export async function refreshTools(): Promise<DetectedTool[]> {
+  if (!isTauri) return detectTools();
+  return invoke<DetectedTool[]>("refresh_tools");
+}
+
 export async function checkLicenses(): Promise<LicenseCheckResult> {
   if (!isTauri) {
     return {
@@ -374,6 +379,7 @@ export interface AppConfig {
     vivado: string | null;
     yosys: string | null;
     nextpnr: string | null;
+    oss_cad_suite: string | null;
   };
   license_servers: { vendor: string; address: string }[];
   default_backend: string;
@@ -389,7 +395,7 @@ export interface AppConfig {
 export async function getAppConfig(): Promise<AppConfig> {
   if (!isTauri) {
     return {
-      tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null },
+      tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
       license_servers: [],
       default_backend: "radiant",
       theme: "dark",

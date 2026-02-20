@@ -22,6 +22,11 @@ vi.mock("../hooks/useTauri", () => ({
     { backendId: "quartus", name: "Intel Quartus", version: "23.1", installPath: null, available: false },
   ])),
   checkLicenses: vi.fn(() => Promise.resolve({ licenseFiles: [], features: [] })),
+  refreshTools: vi.fn(() => Promise.resolve([
+    { backendId: "radiant", name: "Lattice Radiant", version: "2025.2", installPath: "/mnt/c/lscc", available: true },
+    { backendId: "quartus", name: "Intel Quartus", version: "23.1", installPath: null, available: false },
+  ])),
+  getBundledExamples: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("../components/NewProjectWizard", () => ({
