@@ -1,0 +1,42 @@
+--- Lattice Radiant Software (64-bit) 2025.2.0.48.0
+--- Copyright (C) 1992-2025 Lattice Semiconductor Corporation.
+--- All Rights Reserved.
+--- Lattice Radiant Software install path: C:/lscc/radiant/2025.2
+--- Date    : 12:04:02 02/20/26
+--- UserName: tcove
+--- HostName: tcovert
+--- RunDir  : \\wsl.localhost\Ubuntu-24.04\home\tcovert\projects\CovertEDA\src-tauri
+--- PID     : 13440
+--- TclFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.tcl.13440
+--- LogFile : C:\Users\tcove\AppData\Roaming\LatticeSemi\DiamondNG\tcl\radiantc.log.13440
+--------------------------------------------------------------------------------
+
+Thank you for using Radiant. Total CPU/Elapsed time: 0 secs /0 secs 
+═══ BUILD FAILED ═══  exit status: 1 (0m 5s)
+]     prj_add_source [-impl <implement name>] [-simulate_only|-synthesis_only][-work <VHDL lib name>]
+[stderr]                    [[-opt <name=value>] ...] [-exclude] <src file>...
+[stderr] 
+[stderr] Arguments
+[stderr]     -impl <implement name>
+[stderr]       (Optional) Specify the implementation name. If not specified, use the default implementation.
+[stderr]     -simulate_only|-synthesis_only
+[stderr]       (Optional) Indicate to new added source to be simulation or synthesis only.
+[stderr]     -work <VHDL lib name>
+[stderr]       (Optional) Indicate VHDL library name. Default library name is "work".
+[stderr]     -opt <name=value> ...
+[stderr]       (Optional) Specify one or multiple option value pair of source file. 
+[stderr]     -exclude
+[stderr]       (Optional) Indicate the source to be excluded from the project.
+[stderr]     <src file>...
+[stderr]        Specify one or multiple source file paths.
+[stderr] Example
+[stderr]     prj_add_source -synthesis_only "D:/my_design/counter/source/count_attr.v"
+[stderr]     prj_add_source -work mywork D:/my_design/counter/source/my.vhd
+[stderr] 
+[stderr] See Also
+[stderr]     prj_remove_source
+[stderr]     prj_list_source
+[stderr] 
+[stderr]     while executing
+[stderr] "prj_add_source "//wsl.localhost/Ubuntu-24.04/home/tcovert/projects/CovertEDA/examples/radiant-counter/source/counter.pdc" -exclude_from_synth"
+[stderr]     (file "/home/tcovert/projects/CovertEDA/examples/radiant-counter/.coverteda_build.tcl" line 9)
