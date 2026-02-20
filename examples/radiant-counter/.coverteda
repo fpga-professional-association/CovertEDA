@@ -4,10 +4,20 @@
   "backendId": "radiant",
   "device": "LIFCL-40-7BG400I",
   "topModule": "counter",
-  "sourcePatterns": ["source/**/*.v"],
-  "constraintFiles": ["source/*.pdc", "source/*.sdc"],
+  "sourcePatterns": [
+    "source/**/*.v"
+  ],
+  "constraintFiles": [
+    "source/*.pdc",
+    "source/*.sdc"
+  ],
   "implDir": "impl1",
   "backendConfig": {},
+  "buildStages": [],
+  "buildOptions": {
+    "syn_infer_dsp": "false",
+    "synth_engine": "Synplify Pro"
+  },
   "createdAt": "2025-06-01T00:00:00Z",
-  "updatedAt": "2025-06-01T00:00:00Z"
+  "updatedAt": "2026-02-20T18:28:01.816088264+00:00"
 }

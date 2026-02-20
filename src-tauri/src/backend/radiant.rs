@@ -656,15 +656,8 @@ fn to_tcl_path(path: &Path) -> String {
         let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
         let rest = &s[6..];
         format!("{}:{}", drive, rest)
-    } else if s.starts_with('/') {
-        // WSL-native path → UNC path for Windows tool access
-        // e.g. /home/user/proj → //wsl.localhost/Ubuntu-24.04/home/user/proj
-        if let Ok(distro) = std::env::var("WSL_DISTRO_NAME") {
-            format!("//wsl.localhost/{}{}", distro, s)
-        } else {
-            s
-        }
     } else {
+        // Paths should already be on Windows filesystem (staging handles WSL-native)
         s.replace('\\', "/")
     }
 }
@@ -801,14 +794,9 @@ mod tests {
 
     #[test]
     fn test_radiant_to_tcl_path_native() {
+        // WSL-native paths now pass through as-is (staging handles the conversion)
         let path = Path::new("/home/user/project/test.rdf");
         let result = to_tcl_path(path);
-        // In WSL, native paths get converted to UNC; outside WSL they stay as-is
-        if std::env::var("WSL_DISTRO_NAME").is_ok() {
-            assert!(result.starts_with("//wsl.localhost/"));
-            assert!(result.ends_with("/home/user/project/test.rdf"));
-        } else {
-            assert_eq!(result, "/home/user/project/test.rdf");
-        }
+        assert_eq!(result, "/home/user/project/test.rdf");
     }
 }
