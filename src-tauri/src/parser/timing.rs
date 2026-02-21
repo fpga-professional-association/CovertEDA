@@ -202,6 +202,67 @@ pub fn parse_radiant_timing(content: &str) -> BackendResult<TimingReport> {
     })
 }
 
+/// Parse Achronix ACE *_timing.rpt timing report.
+///
+/// ACE timing reports contain sections like:
+///   Clock:   clk  Frequency: 500.00 MHz  Period: 2.000 ns
+///   Setup Slack (WNS): 0.123 ns   TNS: 0.000 ns
+///   Hold  Slack (WHS): 0.456 ns   THS: 0.000 ns
+///   Failing Paths (Setup): 0
+pub fn parse_ace_timing(content: &str) -> BackendResult<TimingReport> {
+    // Fmax: "Frequency: NNN.NN MHz"
+    let fmax = extract_float(content, r"Frequency:\s*([\d.]+)\s*MHz").unwrap_or(0.0);
+
+    // WNS/TNS (setup)
+    let wns = extract_float(content, r"(?i)Setup\s+Slack[^:]*:\s*([+-]?[\d.]+)\s*ns")
+        .unwrap_or(0.0);
+    let tns = extract_float(content, r"(?i)TNS:\s*([+-]?[\d.]+)\s*ns").unwrap_or(0.0);
+
+    // WHS/THS (hold)
+    let whs = extract_float(content, r"(?i)Hold\s+Slack[^:]*:\s*([+-]?[\d.]+)\s*ns")
+        .unwrap_or(0.0);
+    let ths = extract_float(content, r"(?i)THS:\s*([+-]?[\d.]+)\s*ns").unwrap_or(0.0);
+
+    // Failing paths
+    let failing = extract_float(content, r"(?i)Failing\s+Paths[^:]*:\s*(\d+)")
+        .map(|v| v as u32)
+        .unwrap_or(if wns < 0.0 { 1 } else { 0 });
+
+    // Clock domains: "Clock: <name>  Frequency: NNN MHz  Period: N.NNN ns  WNS: N.NNN ns"
+    let clock_re = Regex::new(
+        r"(?m)Clock:\s+(\S+)\s+Frequency:\s*([\d.]+)\s*MHz\s+Period:\s*([\d.]+)\s*ns(?:.*?WNS:\s*([+-]?[\d.]+)\s*ns)?"
+    ).unwrap();
+    let mut clock_domains = vec![];
+    for cap in clock_re.captures_iter(content) {
+        let name = cap[1].to_string();
+        let freq: f64 = cap[2].parse().unwrap_or(0.0);
+        let period: f64 = cap[3].parse().unwrap_or(0.0);
+        let slack: f64 = cap.get(4).and_then(|m| m.as_str().parse().ok()).unwrap_or(0.0);
+        clock_domains.push(ClockDomain {
+            name,
+            period_ns: period,
+            frequency_mhz: freq,
+            source: String::new(),
+            clock_type: "primary".into(),
+            wns_ns: slack,
+            path_count: 0,
+        });
+    }
+
+    Ok(TimingReport {
+        fmax_mhz: fmax,
+        target_mhz: fmax,
+        wns_ns: wns,
+        tns_ns: tns,
+        whs_ns: whs,
+        ths_ns: ths,
+        failing_paths: failing,
+        total_paths: 0,
+        clock_domains,
+        critical_paths: vec![],
+    })
+}
+
 fn extract_float(content: &str, pattern: &str) -> Option<f64> {
     Regex::new(pattern)
         .ok()?
@@ -350,5 +411,38 @@ Target Period : 10.000
         let report = parse_vivado_timing(content).unwrap();
         assert!(report.wns_ns > 0.0, "wns={}", report.wns_ns);
         assert!(report.fmax_mhz > 0.0, "fmax={}", report.fmax_mhz);
+    }
+
+    #[test]
+    fn test_parse_ace_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/ace/timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!((report.fmax_mhz - 487.32).abs() < 0.1, "fmax={}", report.fmax_mhz);
+        assert!(report.wns_ns > 0.0, "wns={}", report.wns_ns);
+        assert_eq!(report.failing_paths, 0);
+        assert!(!report.clock_domains.is_empty(), "should have clock domains");
+    }
+
+    #[test]
+    fn test_parse_ace_timing_with_data() {
+        let content = "Clock: sys_clk  Frequency: 500.00 MHz  Period: 2.000 ns  WNS: 0.150 ns\n\
+                       Setup Slack (WNS): 0.150 ns\nTNS: 0.000 ns\n\
+                       Hold  Slack (WHS): 0.055 ns\nTHS: 0.000 ns\n\
+                       Failing Paths (Setup): 0\n";
+        let report = parse_ace_timing(content).unwrap();
+        assert!((report.fmax_mhz - 500.0).abs() < 0.1);
+        assert!((report.wns_ns - 0.150).abs() < 0.001);
+        assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.clock_domains.len(), 1);
+        assert_eq!(report.clock_domains[0].name, "sys_clk");
+    }
+
+    #[test]
+    fn test_parse_ace_timing_empty() {
+        let report = parse_ace_timing("").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+        assert_eq!(report.wns_ns, 0.0);
+        assert_eq!(report.failing_paths, 0);
+        assert!(report.clock_domains.is_empty());
     }
 }

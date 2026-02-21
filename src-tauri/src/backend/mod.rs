@@ -1,3 +1,4 @@
+pub mod ace;
 pub mod diamond;
 pub mod libero;
 pub mod oss;
@@ -145,6 +146,7 @@ impl BackendRegistry {
                 Box::new(vivado::VivadoBackend::new()),
                 Box::new(libero::LiberoBackend::new()),
                 Box::new(oss::OssBackend::new()),
+                Box::new(ace::AceBackend::new()),
             ],
             active_idx: 0,
         }
@@ -245,6 +247,7 @@ mod tests {
         assert!(ids.contains(&"vivado".to_string()));
         assert!(ids.contains(&"libero".to_string()));
         assert!(ids.contains(&"opensource".to_string()));
+        assert!(ids.contains(&"ace".to_string()));
     }
 
     #[test]

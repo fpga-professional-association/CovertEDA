@@ -1,0 +1,27 @@
+Achronix CAD Environment (ACE) Utilization Report
+Design: counter
+Device: AC7t1500ES0HIIC80
+Date:   2026-02-20 10:00:00
+
+===========================================================================
+Resource Utilization Summary
+===========================================================================
+
+Resource                Used   Total   Utilization
+--------                ----   -----   -----------
+ALMs                      12  251680         0.00%
+Registers                 16  503360         0.00%
+MLABs                      0   31460         0.00%
+M20Ks                      0    2131         0.00%
+DSP Blocks                 0     768         0.00%
+PLLs                       1      32         3.13%
+I/O Pins                  10     480         2.08%
+
+===========================================================================
+Logic Utilization Detail
+===========================================================================
+
+Module              ALMs   Registers   MLABs
+------              ----   ---------   -----
+counter               12          16       0
+  (top-level)         12          16       0

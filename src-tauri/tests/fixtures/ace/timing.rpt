@@ -1,0 +1,38 @@
+Achronix CAD Environment (ACE) Timing Report
+Design: counter
+Device: AC7t1500ES0HIIC80
+Date:   2026-02-20 10:00:00
+
+===========================================================================
+Timing Summary
+===========================================================================
+
+Clock: clk  Frequency: 487.32 MHz  Period: 2.052 ns  WNS: 0.241 ns
+
+Setup Slack (WNS): 0.241 ns
+Total Negative Slack (TNS): 0.000 ns
+Hold  Slack (WHS): 0.085 ns
+Total Hold Slack (THS): 0.000 ns
+
+Failing Paths (Setup): 0
+Failing Paths (Hold): 0
+
+===========================================================================
+Clock Domain Summary
+===========================================================================
+
+Clock          Frequency    Period    WNS       Paths
+-----          ---------    ------    ---       -----
+clk            487.32 MHz   2.052 ns  0.241 ns  148
+
+===========================================================================
+Critical Path (Best Setup Slack)
+===========================================================================
+
+Path:          counter_reg[7] -> counter_out[7]
+  Start:       counter_reg[7]/Q
+  End:         counter_out[7]/D
+  Requirement: 2.052 ns
+  Slack:       0.241 ns
+  Data Delay:  1.811 ns
+  Logic Levels: 3
