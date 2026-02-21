@@ -1536,37 +1536,29 @@ pub struct BundledExample {
 }
 
 /// Find the examples/ directory containing bundled example projects.
-/// In Tauri dev mode CWD is typically src-tauri/, so we check ../examples first
-/// (the canonical project-root location). The src-tauri/examples/ created by
-/// Tauri resource bundling only has .coverteda stubs, not full source trees.
+/// In dev mode, checks CWD-relative paths (project root).
+/// In production, checks next to the executable.
 fn find_examples_dir() -> Option<PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
-
-    // Prefer parent examples/ (project root) — this is the canonical location.
-    // In Tauri dev mode CWD=src-tauri/, so ../examples = project root examples/.
-    // In project-root CWD this is harmless (../ just goes up one level).
-    let parent_path = cwd.join("..").join("examples");
-    if parent_path.is_dir() {
-        return Some(parent_path.canonicalize().unwrap_or(parent_path));
+    // Dev mode: check relative to CWD (project root)
+    if let Ok(cwd) = std::env::current_dir() {
+        // CWD=src-tauri/ → ../examples = project root
+        let parent_path = cwd.join("..").join("examples");
+        if parent_path.is_dir() {
+            return Some(parent_path.canonicalize().unwrap_or(parent_path));
+        }
+        // CWD=project root
+        let dev_path = cwd.join("examples");
+        if dev_path.is_dir() {
+            return Some(dev_path);
+        }
     }
 
-    // Fallback: CWD/examples (when CWD is already the project root)
-    let dev_path = cwd.join("examples");
-    if dev_path.is_dir() {
-        return Some(dev_path);
-    }
-
-    // Production: relative to executable
+    // Production: next to executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let prod_path = exe_dir.join("examples");
             if prod_path.is_dir() {
                 return Some(prod_path);
-            }
-            // Tauri resource dir (one level up from bin)
-            let resource_path = exe_dir.join("../examples");
-            if resource_path.is_dir() {
-                return Some(resource_path);
             }
         }
     }
