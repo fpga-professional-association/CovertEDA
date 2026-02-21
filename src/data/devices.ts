@@ -43,3 +43,40 @@ export function getDeviceFamilies(): string[] {
   const families = new Set(RADIANT_DEVICES.map((d) => d.family));
   return Array.from(families);
 }
+
+// ── Microchip Libero SoC devices ──────────────────────────────────────────
+
+export const LIBERO_DEVICES: DeviceInfo[] = [
+  // PolarFire (MPF) — high-density, low-power FPGA
+  { partNumber: "MPF100T", family: "PolarFire", luts: 99008,  ffs: 99008,  ebr: 756,  dsp: 336,  io: 254, package: "FCG484",  speedGrade: "STD" },
+  { partNumber: "MPF200T", family: "PolarFire", luts: 198008, ffs: 198008, ebr: 1512, dsp: 672,  io: 254, package: "FCG484",  speedGrade: "STD" },
+  { partNumber: "MPF300T", family: "PolarFire", luts: 299008, ffs: 299008, ebr: 2016, dsp: 1404, io: 484, package: "FCG1152", speedGrade: "STD" },
+  { partNumber: "MPF500T", family: "PolarFire", luts: 481000, ffs: 481000, ebr: 3888, dsp: 1944, io: 624, package: "FCG1152", speedGrade: "STD" },
+
+  // PolarFire SoC (MPFS) — FPGA + RISC-V Linux-capable SoC
+  { partNumber: "MPFS025T", family: "PolarFire SoC", luts: 25000,  ffs: 25000,  ebr: 252,  dsp: 112,  io: 114, package: "FCVG484",  speedGrade: "STD" },
+  { partNumber: "MPFS095T", family: "PolarFire SoC", luts: 95000,  ffs: 95000,  ebr: 756,  dsp: 336,  io: 254, package: "FCVG484",  speedGrade: "STD" },
+  { partNumber: "MPFS160T", family: "PolarFire SoC", luts: 160000, ffs: 160000, ebr: 1512, dsp: 672,  io: 254, package: "FCVG784",  speedGrade: "STD" },
+  { partNumber: "MPFS250T", family: "PolarFire SoC", luts: 254000, ffs: 254000, ebr: 2016, dsp: 1404, io: 484, package: "FCVG1152", speedGrade: "STD" },
+  { partNumber: "MPFS460T", family: "PolarFire SoC", luts: 460000, ffs: 460000, ebr: 3888, dsp: 1944, io: 624, package: "FCVG1152", speedGrade: "STD" },
+
+  // SmartFusion2 (M2S) — FPGA + ARM Cortex-M3 SoC
+  { partNumber: "M2S010",  family: "SmartFusion2", luts: 12084,  ffs: 12084,  ebr: 64,  dsp: 8,   io: 73,  package: "VF256",  speedGrade: "STD" },
+  { partNumber: "M2S025",  family: "SmartFusion2", luts: 27084,  ffs: 27084,  ebr: 64,  dsp: 22,  io: 73,  package: "VF256",  speedGrade: "STD" },
+  { partNumber: "M2S050",  family: "SmartFusion2", luts: 56084,  ffs: 56084,  ebr: 128, dsp: 54,  io: 145, package: "FBGA672", speedGrade: "STD" },
+  { partNumber: "M2S090",  family: "SmartFusion2", luts: 94084,  ffs: 94084,  ebr: 256, dsp: 66,  io: 350, package: "FBGA896", speedGrade: "STD" },
+
+  // IGLOO2 (M2GL) — low-power FPGA
+  { partNumber: "M2GL010", family: "IGLOO2", luts: 12084,  ffs: 12084,  ebr: 64,  dsp: 8,   io: 73,  package: "VF256",  speedGrade: "STD" },
+  { partNumber: "M2GL025", family: "IGLOO2", luts: 27084,  ffs: 27084,  ebr: 64,  dsp: 22,  io: 73,  package: "VF256",  speedGrade: "STD" },
+  { partNumber: "M2GL050", family: "IGLOO2", luts: 56084,  ffs: 56084,  ebr: 128, dsp: 54,  io: 145, package: "FBGA256", speedGrade: "STD" },
+  { partNumber: "M2GL090", family: "IGLOO2", luts: 94084,  ffs: 94084,  ebr: 256, dsp: 66,  io: 350, package: "FBGA896", speedGrade: "STD" },
+
+  // RTG4 — radiation-tolerant FPGA
+  { partNumber: "RT4G150", family: "RTG4", luts: 149976, ffs: 149976, ebr: 648, dsp: 384, io: 340, package: "CG1657", speedGrade: "STD" },
+];
+
+export function getLiberoDeviceFamilies(): string[] {
+  const families = new Set(LIBERO_DEVICES.map((d) => d.family));
+  return Array.from(families);
+}
