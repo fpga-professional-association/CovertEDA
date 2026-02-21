@@ -64,5 +64,25 @@
     "fmaxMhz": 206.4,
     "ffUsed": 33,
     "ffTotal": 83640
+  },
+  {
+    "id": "b-1771695534553",
+    "timestamp": "2026-02-21T17:38:54.553Z",
+    "duration": 2,
+    "status": "success",
+    "backend": "OSS",
+    "device": "LFE5U-85F-6BG381C",
+    "stages": [
+      "synth",
+      "pnr",
+      "pack"
+    ],
+    "warnings": 0,
+    "errors": 0,
+    "commitHash": "e17e16f",
+    "commitMsg": "Pre-build: LED Blinker 2026-02-21",
+    "fmaxMhz": 206.4,
+    "ffUsed": 33,
+    "ffTotal": 83640
   }
 ]
