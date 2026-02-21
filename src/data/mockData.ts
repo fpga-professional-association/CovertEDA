@@ -612,6 +612,156 @@ export const BACKENDS: Record<string, Backend> = {
     ],
   },
 
+  libero: {
+    id: "libero",
+    name: "Microchip Libero SoC",
+    short: "Libero",
+    color: "#e84393",
+    icon: "\u2764", // ♥ (Microchip heart-logo inspired)
+    version: "2024.1",
+    cli: "libero",
+    defaultDev: "MPF300T",
+    constrExt: ".pdc",
+    pipeline: [
+      {
+        id: "synth",
+        label: "Synthesis",
+        cmd: "run_tool -name {SYNTHESIZE}",
+        detail: "RTL \u2192 technology",
+      },
+      {
+        id: "par",
+        label: "Place & Route",
+        cmd: "run_tool -name {PLACEROUTE}",
+        detail: "Placement + routing",
+      },
+      {
+        id: "timing",
+        label: "Verify Timing",
+        cmd: "run_tool -name {VERIFYTIMING}",
+        detail: "SmartTime STA",
+      },
+      {
+        id: "progfile",
+        label: "Programming File",
+        cmd: "run_tool -name {GENERATEPROGRAMMINGFILE}",
+        detail: ".stp bitstream",
+      },
+    ],
+    resources: [
+      { label: "4LUT", used: 2840, total: 299008 },
+      { label: "DFF", used: 1284, total: 299008 },
+      { label: "I/O", used: 28, total: 484 },
+      { label: "LSRAM", used: 4, total: 2016, unit: " blk" },
+      { label: "MACC", used: 2, total: 1404 },
+    ],
+    timing: { fmax: "118.4", target: "100.0", setup: "+1.56", hold: "+0.42" },
+    constraints: [
+      { pin: "T2",  net: "clk",      dir: "IN",    std: "LVCMOS33", bank: "0", lock: true },
+      { pin: "G14", net: "reset_n",  dir: "IN",    std: "LVCMOS33", bank: "0", lock: true },
+      { pin: "C16", net: "led[0]",   dir: "OUT",   std: "LVCMOS33", bank: "1", lock: true },
+      { pin: "D16", net: "led[1]",   dir: "OUT",   std: "LVCMOS33", bank: "1", lock: true },
+      { pin: "AB5", net: "uart_tx",  dir: "OUT",   std: "LVCMOS33", bank: "2", lock: true },
+      { pin: "AB6", net: "uart_rx",  dir: "IN",    std: "LVCMOS33", bank: "2", lock: true },
+    ],
+    paths: [
+      { from: "ctrl.state_reg[2]", to: "datapath.acc_reg[31]", slack: "+1.56 ns", lvl: 5 },
+    ],
+    history: [
+      { time: "11:32", ok: true,  fmax: "118.4", util: "0.95%", w: 0 },
+      { time: "11:08", ok: false, fmax: "—",     util: "—",     w: 2 },
+    ],
+    log: [
+      { t: "cmd",  m: "libero SCRIPT:build.tcl" },
+      { t: "info", m: "CovertEDA \u2192 Libero SoC (MPF300T)" },
+      { t: "out",  m: "Synthesis: 2,840 4LUTs, 1,284 DFFs" },
+      { t: "ok",   m: "Synthesis complete" },
+      { t: "out",  m: "Place & Route: 100% routed" },
+      { t: "ok",   m: "P&R complete" },
+      { t: "out",  m: "SmartTime: Fmax clk = 118.4 MHz (target 100.0 MHz)" },
+      { t: "ok",   m: "Timing met" },
+      { t: "ok",   m: "build.stp generated" },
+      { t: "info", m: "\u2550\u2550\u2550 DONE \u2550\u2550\u2550 3m12s" },
+    ],
+    ipCatalog: [
+      {
+        cat: "Memory",
+        items: [
+          {
+            name: "LSRAM",
+            desc: "Large SRAM block (18 Kbit)",
+            params: ["Width: 1-18", "Depth: 512-16K", "ECC"],
+          },
+          {
+            name: "USRAM",
+            desc: "Micro SRAM block (2 Kbit)",
+            params: ["Width: 1-4", "Depth: 64-512"],
+          },
+          {
+            name: "TPSRAM",
+            desc: "Two-Port SRAM",
+            params: ["Width: 1-18", "Sync/Async RD"],
+          },
+        ],
+      },
+      {
+        cat: "Communication",
+        items: [
+          {
+            name: "COREI2C",
+            desc: "I2C Master/Slave",
+            params: ["Speed: 100/400 kHz", "7/10-bit addr"],
+          },
+          {
+            name: "CoreSPI",
+            desc: "SPI Master/Slave",
+            params: ["CPOL/CPHA", "FIFO: 4-32", "Width: 8/16/32"],
+          },
+          {
+            name: "CoreUARTapb",
+            desc: "UART with APB bus",
+            params: ["Baud: programmable", "FIFO: opt."],
+          },
+          {
+            name: "CoreGPIO",
+            desc: "General Purpose I/O",
+            params: ["Width: 1-32", "Interrupt", "Tri-state"],
+          },
+        ],
+      },
+      {
+        cat: "Processing",
+        items: [
+          {
+            name: "MiV_RV32",
+            desc: "Mi-V RISC-V 32-bit soft core",
+            params: ["RV32IM", "IRQ", "Debug", "AHB bus"],
+          },
+          {
+            name: "CoreAHBLite",
+            desc: "AHB-Lite bus matrix",
+            params: ["Masters: 1-16", "Slaves: 1-16"],
+          },
+        ],
+      },
+      {
+        cat: "Clocking",
+        items: [
+          {
+            name: "PF_CCC",
+            desc: "Clock Conditioning Circuit (PLL)",
+            params: ["In: 1-400 MHz", "Out: 2 clks", "Phase adj."],
+          },
+          {
+            name: "PF_OSC",
+            desc: "On-chip oscillator",
+            params: ["Freq: 2-160 MHz", "±2.5%"],
+          },
+        ],
+      },
+    ],
+  },
+
   opensource: {
     id: "opensource",
     name: "OSS CAD Suite",
