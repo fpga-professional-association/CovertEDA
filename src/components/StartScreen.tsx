@@ -178,7 +178,6 @@ export default function StartScreen({
     transition: "all .15s",
   };
 
-  const availableTools = tools.filter((t) => t.available);
   const hasLicense = licenseResult && licenseResult.features.length > 0;
 
   // Placeholder backends not yet implemented — show as "IN DEVELOPMENT"
