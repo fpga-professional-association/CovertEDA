@@ -1,0 +1,3 @@
+QUARTUS_VERSION = "23.1"
+DATE = "00:00:00  June 01, 2025"
+PROJECT_REVISION = "pwm_gen"

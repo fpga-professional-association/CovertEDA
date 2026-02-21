@@ -1,0 +1,15 @@
+{
+  "name": "LED Blinker",
+  "description": "Prescaler-driven LED shift pattern. Beginner sequential logic example targeting Lattice MachXO3LF.",
+  "backendId": "diamond",
+  "device": "LCMXO3LF-6900C-5BG256C",
+  "topModule": "blinky",
+  "sourcePatterns": ["src/**/*.v"],
+  "constraintFiles": ["constraints/*.lpf"],
+  "implDir": "impl1",
+  "backendConfig": {},
+  "buildStages": [],
+  "buildOptions": {},
+  "createdAt": "2025-06-01T00:00:00Z",
+  "updatedAt": "2025-06-01T00:00:00Z"
+}

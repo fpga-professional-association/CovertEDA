@@ -8,6 +8,8 @@
   "constraintFiles": ["*.sdc"],
   "implDir": "output_files",
   "backendConfig": {},
+  "buildStages": [],
+  "buildOptions": {},
   "createdAt": "2025-06-01T00:00:00Z",
   "updatedAt": "2025-06-01T00:00:00Z"
 }
