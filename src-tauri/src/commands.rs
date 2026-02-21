@@ -530,6 +530,58 @@ pub fn start_build(
                                 }
                             }
 
+                            // Detect OSS CAD Suite stages from build script echo markers
+                            if backend_id == "opensource" {
+                                // Stage starts: "=== Yosys Synthesis", "=== nextpnr", "=== ecppack/icepack/gowin_pack Bitstream"
+                                if lower.contains("=== yosys synthesis") {
+                                    current_stage = 0;
+                                }
+                                if lower.contains("=== nextpnr") || lower.contains("place & route") {
+                                    if current_stage == 0 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 0,
+                                            status: BuildStatus::Success,
+                                            message: "Synthesis complete".into(),
+                                        });
+                                    }
+                                    current_stage = 1;
+                                }
+                                if lower.contains("=== ecppack") || lower.contains("=== icepack")
+                                    || lower.contains("=== gowin_pack") || lower.contains("=== prjoxide")
+                                    || lower.contains("bitstream")
+                                        && (lower.starts_with("=== ") || lower.contains("=== "))
+                                        && !lower.contains("done")
+                                {
+                                    if current_stage == 1 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 1,
+                                            status: BuildStatus::Success,
+                                            message: "Place & Route complete".into(),
+                                        });
+                                    }
+                                    current_stage = 2;
+                                }
+                                if lower.contains("=== done") {
+                                    if current_stage == 2 {
+                                        let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                            build_id: build_id_clone.clone(), stage_idx: 2,
+                                            status: BuildStatus::Success,
+                                            message: "Bitstream complete".into(),
+                                        });
+                                    }
+                                }
+                                // Detect failures from tool error output
+                                if lower.starts_with("error") || lower.contains("] error") {
+                                    let failed_stage = current_stage.max(0) as usize;
+                                    let _ = app_handle.emit("build:stage_complete", BuildEvent {
+                                        build_id: build_id_clone.clone(),
+                                        stage_idx: failed_stage,
+                                        status: BuildStatus::Failed,
+                                        message: line.clone(),
+                                    });
+                                }
+                            }
+
                             // Detect Radiant stage starts — emit info lines and track progress
                             if current_stage < 0
                                 && (lower.contains("running synthesis")

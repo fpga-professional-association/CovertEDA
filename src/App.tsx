@@ -616,6 +616,7 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [bStep, setBStep] = useState(-1);
+  const [stageResults, setStageResults] = useState<Record<number, "success" | "failed">>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsRef = useRef<LogEntry[]>([]);
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1013,7 +1014,11 @@ export default function App() {
     const unlistenStage = await listen<{ build_id: string; stage_idx: number; status: string; message: string }>(
       "build:stage_complete",
       (data) => {
-        setBStep(data.stage_idx + 1);
+        const result = data.status === "failed" ? "failed" as const : "success" as const;
+        setStageResults((prev) => ({ ...prev, [data.stage_idx]: result }));
+        if (result === "success") {
+          setBStep(data.stage_idx + 1);
+        }
         setActiveStage(data.stage_idx);
       }
     );
