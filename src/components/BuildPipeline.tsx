@@ -10,6 +10,10 @@ type StageOption = {
   type: "text" | "select" | "boolean";
   choices?: string[];
   tier: "primary" | "advanced";
+  /** Tooltip shown on hover over the option label */
+  tooltip?: string;
+  /** Default value — used for color-coding (non-default = accent color) */
+  defaultValue?: string;
 };
 
 const RADIANT_STAGE_OPTIONS: Record<string, StageOption[]> = {
@@ -145,27 +149,98 @@ const VIVADO_STAGE_OPTIONS: Record<string, StageOption[]> = {
 
 const OSS_STAGE_OPTIONS: Record<string, StageOption[]> = {
   synth: [
-    { key: "syn_top", label: "Top Module", type: "text", tier: "primary" },
-    { key: "syn_abc_opt", label: "ABC Optimization", type: "select", choices: ["Default", "Area", "Speed"], tier: "primary" },
-    { key: "syn_flatten", label: "Flatten Design", type: "boolean", tier: "advanced" },
-    { key: "syn_rw_passes", label: "Rewrite Passes", type: "text", tier: "advanced" },
-    { key: "syn_auto_infer_bram", label: "Infer BRAM", type: "boolean", tier: "advanced" },
-    { key: "syn_auto_infer_dsp", label: "Infer DSP", type: "boolean", tier: "advanced" },
-    { key: "syn_no_alu", label: "Disable ALU Mapping", type: "boolean", tier: "advanced" },
+    // ── Primary: common yosys synth_ecp5 options ──
+    { key: "syn_nowidelut", label: "Area Optimize (-nowidelut)", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Prevent PFU muxes from implementing wide (>4-input) LUTs. Improves routability and reduces area at cost of delay." },
+    { key: "syn_noflatten", label: "Preserve Hierarchy", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Don't flatten the design hierarchy. Useful to see per-module utilization stats. Slight area overhead." },
+    { key: "syn_abc9_timing", label: "ABC9 Target (ps)", type: "text", tier: "primary", defaultValue: "",
+      tooltip: "Target clock period in picoseconds for ABC9 optimization. Tells ABC9 to recover area without missing timing. E.g. 8000 = 125 MHz." },
+    { key: "syn_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
+      tooltip: "Yosys output verbosity. Quiet suppresses all but errors; verbose adds detailed log headers." },
+    // ── Advanced: all synth_ecp5 flags ──
+    { key: "syn_noabc9", label: "Disable ABC9", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Fall back to legacy ABC mapping instead of ABC9. Not recommended — ABC9 produces faster and smaller netlists." },
+    { key: "syn_abc2", label: "ABC2 Double Pass", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Run an additional ABC optimization pass before LUT mapping for modest area savings. Conflicts with ABC9." },
+    { key: "syn_dff", label: "ABC DFF Mode", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Run ABC/ABC9 in DFF-aware mode. Can sometimes remove unnecessary flip-flops." },
+    { key: "syn_retime", label: "Retiming", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Run ABC with retiming to move flip-flops and balance combinational stages. Cannot be combined with ABC9." },
+    { key: "syn_nobram", label: "Disable Block RAM", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't infer ECP5 block RAM (DP16KD). Memories implemented with LUT RAM or flip-flops." },
+    { key: "syn_nolutram", label: "Disable LUT RAM", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't infer distributed LUT RAM. Memories implemented entirely from flip-flops (combine with -nobram for full effect)." },
+    { key: "syn_nodsp", label: "Disable DSP", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't map multipliers to MULT18X18D DSP blocks. Implements multipliers as shift/add logic." },
+    { key: "syn_noccu2", label: "Disable Carry Chains", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't use CCU2C carry-chain cells. For debugging carry-chain routing issues." },
+    { key: "syn_nodffe", label: "Disable Clock-Enable FFs", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't use flip-flops with clock enable (DFFE). For debugging clock enable issues." },
+    { key: "syn_no_rw_check", label: "No R/W Collision Check", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Mark memory read ports as don't-care on simultaneous read/write. Enables better memory optimization." },
+    { key: "syn_defines", label: "Verilog Defines", type: "text", tier: "advanced", defaultValue: "",
+      tooltip: "Space-separated Verilog preprocessor defines passed to yosys with -D. E.g. 'SIM=1 DEBUG'." },
   ],
   pnr: [
-    { key: "pnr_seed", label: "Seed", type: "text", tier: "primary" },
-    { key: "pnr_freq", label: "Target Frequency (MHz)", type: "text", tier: "primary" },
-    { key: "pnr_timing_driven", label: "Timing-Driven", type: "boolean", tier: "advanced" },
-    { key: "pnr_slack_redist", label: "Slack Redistribution", type: "boolean", tier: "advanced" },
-    { key: "pnr_placer", label: "Placer Algorithm", type: "select", choices: ["sa", "heap"], tier: "advanced" },
-    { key: "pnr_router", label: "Router Algorithm", type: "select", choices: ["router1", "router2"], tier: "advanced" },
-    { key: "pnr_placer_exp", label: "Placer Explore", type: "text", tier: "advanced" },
+    // ── Primary: common nextpnr-ecp5 options ──
+    { key: "pnr_freq", label: "Target Frequency (MHz)", type: "text", tier: "primary", defaultValue: "12.0",
+      tooltip: "Target clock frequency in MHz. Applied as default constraint to all clocks. Default is 12 MHz if no SDC constraints." },
+    { key: "pnr_seed", label: "Placement Seed", type: "text", tier: "primary", defaultValue: "1",
+      tooltip: "Seed value for the random number generator. Different seeds produce different placements — useful for timing exploration." },
+    { key: "pnr_placer", label: "Placer Algorithm", type: "select", choices: ["heap", "sa"], tier: "primary", defaultValue: "heap",
+      tooltip: "Placement algorithm. HeAP (analytical) is faster and generally better. SA (simulated annealing) is the legacy algorithm." },
+    { key: "pnr_router", label: "Router Algorithm", type: "select", choices: ["router1", "router2"], tier: "primary", defaultValue: "router1",
+      tooltip: "Routing algorithm. router1 is the original maze-based router. router2 is newer and generally faster for larger designs." },
+    { key: "pnr_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
+      tooltip: "nextpnr output verbosity. Quiet shows only errors/warnings. Verbose enables detailed debug output." },
+    // ── Advanced: all nextpnr-ecp5 flags ──
+    { key: "pnr_timing_allow_fail", label: "Allow Timing Failure", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Continue and produce output even when timing constraints are not met. Design may not work at target frequency." },
+    { key: "pnr_no_tmdriv", label: "Disable Timing-Driven", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Disable timing-driven placement. Placement will only optimize wirelength, ignoring timing paths." },
+    { key: "pnr_randomize_seed", label: "Randomize Seed", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Use a random seed instead of the specified seed. Good for exploring the solution space." },
+    { key: "pnr_parallel_refine", label: "Parallel Refinement", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Enable experimental parallelized engine for placement refinement. May improve runtime on multi-core systems." },
+    { key: "pnr_tmg_ripup", label: "Timing-Driven Ripup", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Enable experimental timing-driven ripup in the router. Improves timing at cost of runtime." },
+    { key: "pnr_no_promote_globals", label: "No Global Promotion", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Disable automatic promotion of high-fanout clocks/resets to the global routing network." },
+    { key: "pnr_lpf_allow_unconstrained", label: "Allow Unconstrained I/O", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't error when I/O pins are not constrained in the LPF file." },
+    { key: "pnr_detailed_timing", label: "Detailed Timing Report", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Append detailed per-net timing data to the JSON report." },
+    { key: "pnr_threads", label: "Threads", type: "text", tier: "advanced", defaultValue: "",
+      tooltip: "Number of threads for parallel operations. Leave empty for auto-detection." },
+    { key: "pnr_heap_alpha", label: "HeAP Alpha", type: "text", tier: "advanced", defaultValue: "0.1",
+      tooltip: "HeAP placer alpha: trade-off between wirelength (0) and spreading (1). Default 0.1." },
+    { key: "pnr_heap_beta", label: "HeAP Beta (Density)", type: "text", tier: "advanced", defaultValue: "0.9",
+      tooltip: "HeAP placer max density. 1.0 = pack tight. Lower values spread logic more. Default 0.9." },
+    { key: "pnr_heap_critexp", label: "HeAP Crit Exponent", type: "text", tier: "advanced", defaultValue: "2",
+      tooltip: "HeAP criticality exponent for timing-driven weighting. Higher = more aggressive timing focus." },
+    { key: "pnr_heap_timingweight", label: "HeAP Timing Weight", type: "text", tier: "advanced", defaultValue: "10",
+      tooltip: "HeAP timing weight factor. Higher = more aggressive timing optimization vs wirelength." },
   ],
-  bitgen: [
-    { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary" },
-    { key: "bit_spi_mode", label: "SPI Mode", type: "select", choices: ["Disabled", "1x", "2x", "4x"], tier: "advanced" },
-    { key: "bit_svf", label: "Generate SVF", type: "boolean", tier: "advanced" },
+  pack: [
+    // ── Primary: ecppack bitstream options ──
+    { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary", defaultValue: "true",
+      tooltip: "Enable ECP5 built-in bitstream compression to reduce file size. Recommended for production." },
+    { key: "bit_spimode", label: "SPI Mode", type: "select", choices: ["fast-read", "dual-spi", "qspi"], tier: "primary", defaultValue: "",
+      tooltip: "SPI flash read mode for configuration. fast-read uses 1 data line, dual-spi uses 2, qspi uses 4 for faster boot." },
+    { key: "bit_freq", label: "Config Clock (MHz)", type: "select", choices: ["2.4", "4.8", "9.7", "19.4", "38.8", "62.0"], tier: "primary", defaultValue: "",
+      tooltip: "MCCLK configuration clock frequency. Higher values speed up FPGA configuration from flash." },
+    { key: "bit_svf", label: "Generate SVF (JTAG)", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Generate SVF file for JTAG programming with tools like OpenOCD." },
+    // ── Advanced: ecppack advanced options ──
+    { key: "bit_background", label: "Background Reconfig", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Enable background reconfiguration. FPGA can be reprogrammed while current design continues running." },
+    { key: "bit_usercode", label: "User Code", type: "text", tier: "advanced", defaultValue: "",
+      tooltip: "32-bit USERCODE value embedded in the bitstream. Can be read back from the device. E.g. 0xDEADBEEF." },
+    { key: "bit_bootaddr", label: "Boot Address", type: "text", tier: "advanced", defaultValue: "",
+      tooltip: "Next boot address for multi-boot. Must be 64K-aligned (e.g. 0x00100000). Enables multi-boot feature." },
+    { key: "bit_svf_rowsize", label: "SVF Row Size (bits)", type: "text", tier: "advanced", defaultValue: "8000",
+      tooltip: "SVF row size in bits for JTAG programming. Must be a multiple of 8. Default 8000." },
   ],
 };
 
@@ -186,10 +261,27 @@ interface BuildPipelineProps {
 
 function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; onChange: (v: string) => void }) {
   const { C, MONO } = useTheme();
+
+  // Determine if value differs from default for color-coding
+  const isDefault = !value || value === "" || value === opt.defaultValue;
+  const labelColor = isDefault ? C.t3 : C.cyan;
+
+  // For booleans, match against defaultValue (e.g. "true" or "false")
+  const boolDefault = opt.defaultValue ?? "true";
+  const boolIsDefault = !value || value === boolDefault;
+  const boolLabelColor = boolIsDefault ? C.t3 : C.cyan;
+
+  const effectiveLabelColor = opt.type === "boolean" ? boolLabelColor : labelColor;
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, width: 130, flexShrink: 0 }}>
+      <span
+        style={{ fontSize: 8, fontFamily: MONO, color: effectiveLabelColor, width: 150, flexShrink: 0, cursor: opt.tooltip ? "help" : "default" }}
+        title={opt.tooltip}
+      >
         {opt.label}
+        {!isDefault && opt.type !== "boolean" && <span style={{ color: C.cyan, marginLeft: 2 }}>{"\u2022"}</span>}
+        {opt.type === "boolean" && !boolIsDefault && <span style={{ color: C.cyan, marginLeft: 2 }}>{"\u2022"}</span>}
       </span>
       {opt.type === "select" ? (
         <Select
@@ -197,15 +289,15 @@ function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; 
           value={value}
           onChange={onChange}
           options={[
-            { value: "", label: "Default" },
+            { value: "", label: opt.defaultValue ? `Default (${opt.defaultValue})` : "Default" },
             ...(opt.choices ?? []).map((c) => ({ value: c, label: c })),
           ]}
-          placeholder="Default"
+          placeholder={opt.defaultValue ? `Default (${opt.defaultValue})` : "Default"}
         />
       ) : opt.type === "boolean" ? (
         <Select
           compact
-          value={value || "true"}
+          value={value || boolDefault}
           onChange={onChange}
           options={[
             { value: "true", label: "On" },
@@ -217,13 +309,13 @@ function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; 
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Default"
+          placeholder={opt.defaultValue || "Default"}
           style={{
             fontSize: 8,
             fontFamily: MONO,
             background: C.s1,
-            color: C.t1,
-            border: `1px solid ${C.b1}`,
+            color: isDefault ? C.t2 : C.cyan,
+            border: `1px solid ${isDefault ? C.b1 : `${C.cyan}40`}`,
             borderRadius: 3,
             padding: "2px 6px",
             width: 80,
@@ -286,6 +378,7 @@ function PStep({
     quartus: QUARTUS_STAGE_OPTIONS,
     vivado: VIVADO_STAGE_OPTIONS,
     oss: OSS_STAGE_OPTIONS,
+    opensource: OSS_STAGE_OPTIONS,
   };
   const allStageOptions = STAGE_OPTIONS_MAP[backendId] ?? RADIANT_STAGE_OPTIONS;
   const myOpts = allStageOptions[s.id] ?? [];

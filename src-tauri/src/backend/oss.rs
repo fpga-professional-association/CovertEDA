@@ -302,14 +302,64 @@ impl FpgaBackend for OssBackend {
         device: &str,
         top_module: &str,
         _stages: &[String],
-        _options: &HashMap<String, String>,
+        options: &HashMap<String, String>,
     ) -> BackendResult<String> {
-        let family = if device.starts_with("LFE5U") {
+        let family = if device.starts_with("LFE5U") || device.starts_with("lfe5u") {
             "ecp5"
+        } else if device.to_lowercase().starts_with("ice40") {
+            "ice40"
+        } else if device.to_lowercase().starts_with("gw") {
+            "gowin"
         } else {
             "ecp5"
         };
-        let size = "85k"; // TODO: extract from device string
+
+        // Parse ECP5 device string: LFE5U-85F-6BG381 → --85k --package CABGA381 --speed 6
+        // or LFE5UM5G-45F-8BG554 → --um5g-45k --package CABGA554 --speed 8
+        let dev_upper = device.to_uppercase();
+        let (size, package, speed) = if dev_upper.starts_with("LFE5U") {
+            // Extract prefix (LFE5U, LFE5UM, LFE5UM5G) and size
+            let prefix = if dev_upper.starts_with("LFE5UM5G") {
+                "um5g-"
+            } else if dev_upper.starts_with("LFE5UM") {
+                "um-"
+            } else {
+                ""
+            };
+            // Find the size: 12F, 25F, 45F, 85F
+            let size_k = if dev_upper.contains("12F") {
+                "12k"
+            } else if dev_upper.contains("25F") {
+                "25k"
+            } else if dev_upper.contains("45F") {
+                "45k"
+            } else {
+                "85k"
+            };
+            let size_flag = format!("{}{}", prefix, size_k);
+            // Extract speed grade and package from e.g. "6BG381"
+            let parts: Vec<&str> = device.split('-').collect();
+            let (spd, pkg) = if parts.len() >= 3 {
+                let last = parts[parts.len() - 1];
+                // Speed grade is first char, package is rest: "6BG381" → speed=6, pkg=CABGA381
+                let speed_char = &last[..1];
+                let pkg_raw = &last[1..];
+                // Map BG### to CABGA###
+                let package = if pkg_raw.starts_with("BG") || pkg_raw.starts_with("bg") {
+                    format!("CABGA{}", &pkg_raw[2..])
+                } else if pkg_raw.starts_with("TQFP") || pkg_raw.starts_with("tqfp") {
+                    format!("TQFP{}", &pkg_raw[4..])
+                } else {
+                    format!("CABGA{}", &pkg_raw[2..])
+                };
+                (speed_char.to_string(), package)
+            } else {
+                ("6".to_string(), "CABGA381".to_string())
+            };
+            (size_flag, pkg, spd)
+        } else {
+            ("85k".to_string(), "CABGA381".to_string(), "6".to_string())
+        };
 
         let yosys = self.resolve_tool("yosys");
         let nextpnr = self.resolve_tool(&format!("nextpnr-{}", family));
@@ -327,10 +377,222 @@ impl FpgaBackend for OssBackend {
             String::new()
         };
 
+        // Helper: get option value or empty string
+        let opt = |key: &str| -> String {
+            options.get(key).cloned().unwrap_or_default()
+        };
+
+        // ── Yosys synth_ecp5 options ──
+        let mut synth_flags = Vec::new();
+        synth_flags.push(format!("-top {}", top_module));
+        synth_flags.push("-json build/out.json".to_string());
+
+        if opt("syn_noflatten") == "true" {
+            synth_flags.push("-noflatten".to_string());
+        }
+        if opt("syn_nowidelut") == "true" {
+            synth_flags.push("-nowidelut".to_string());
+        }
+        if opt("syn_noabc9") == "true" {
+            synth_flags.push("-noabc9".to_string());
+        }
+        if opt("syn_abc2") == "true" {
+            synth_flags.push("-abc2".to_string());
+        }
+        if opt("syn_dff") == "true" {
+            synth_flags.push("-dff".to_string());
+        }
+        if opt("syn_retime") == "true" {
+            synth_flags.push("-retime".to_string());
+        }
+        if opt("syn_nobram") == "true" {
+            synth_flags.push("-nobram".to_string());
+        }
+        if opt("syn_nolutram") == "true" {
+            synth_flags.push("-nolutram".to_string());
+        }
+        if opt("syn_nodsp") == "true" {
+            synth_flags.push("-nodsp".to_string());
+        }
+        if opt("syn_noccu2") == "true" {
+            synth_flags.push("-noccu2".to_string());
+        }
+        if opt("syn_nodffe") == "true" {
+            synth_flags.push("-nodffe".to_string());
+        }
+        if opt("syn_no_rw_check") == "true" {
+            synth_flags.push("-no-rw-check".to_string());
+        }
+
+        // ABC9 timing hint via scratchpad
+        let abc9_timing = opt("syn_abc9_timing");
+        let yosys_pre = if !abc9_timing.is_empty() {
+            format!(
+                "scratchpad -set abc9.D {}; ",
+                abc9_timing
+            )
+        } else {
+            String::new()
+        };
+
+        let synth_cmd = synth_flags.join(" ");
+
+        // ── Yosys verbosity flags ──
+        let mut yosys_flags = Vec::new();
+        match opt("syn_verbosity").as_str() {
+            "quiet" => yosys_flags.push("-q".to_string()),
+            "verbose" => yosys_flags.push("-v 1".to_string()),
+            _ => {}
+        }
+
+        // ── Yosys defines ──
+        let syn_defines = opt("syn_defines");
+        if !syn_defines.is_empty() {
+            for d in syn_defines.split_whitespace() {
+                yosys_flags.push(format!("-D {}", d));
+            }
+        }
+        let yosys_extra = if yosys_flags.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", yosys_flags.join(" "))
+        };
+
+        // ── nextpnr-ecp5 options ──
+        let mut pnr_flags = Vec::new();
+        pnr_flags.push(format!("--{}", size));
+        pnr_flags.push(format!("--package {}", package));
+        pnr_flags.push(format!("--speed {}", speed));
+        pnr_flags.push("--json build/out.json".to_string());
+        pnr_flags.push("--lpf constraints/pins.lpf".to_string());
+        pnr_flags.push("--textcfg build/out.config".to_string());
+        pnr_flags.push("--report build/report.json".to_string());
+
+        let pnr_freq = opt("pnr_freq");
+        if !pnr_freq.is_empty() {
+            pnr_flags.push(format!("--freq {}", pnr_freq));
+        }
+
+        let pnr_seed = opt("pnr_seed");
+        if !pnr_seed.is_empty() {
+            pnr_flags.push(format!("--seed {}", pnr_seed));
+        }
+
+        let pnr_placer = opt("pnr_placer");
+        if !pnr_placer.is_empty() {
+            pnr_flags.push(format!("--placer {}", pnr_placer));
+        }
+
+        let pnr_router = opt("pnr_router");
+        if !pnr_router.is_empty() {
+            pnr_flags.push(format!("--router {}", pnr_router));
+        }
+
+        if opt("pnr_no_tmdriv") == "true" {
+            pnr_flags.push("--no-tmdriv".to_string());
+        }
+        if opt("pnr_timing_allow_fail") == "true" {
+            pnr_flags.push("--timing-allow-fail".to_string());
+        }
+        if opt("pnr_randomize_seed") == "true" {
+            pnr_flags.push("--randomize-seed".to_string());
+        }
+        if opt("pnr_parallel_refine") == "true" {
+            pnr_flags.push("--parallel-refine".to_string());
+        }
+        if opt("pnr_tmg_ripup") == "true" {
+            pnr_flags.push("--tmg-ripup".to_string());
+        }
+        if opt("pnr_no_promote_globals") == "true" {
+            pnr_flags.push("--no-promote-globals".to_string());
+        }
+        if opt("pnr_detailed_timing") == "true" {
+            pnr_flags.push("--detailed-timing-report".to_string());
+        }
+        if opt("pnr_lpf_allow_unconstrained") == "true" {
+            pnr_flags.push("--lpf-allow-unconstrained".to_string());
+        }
+
+        let pnr_threads = opt("pnr_threads");
+        if !pnr_threads.is_empty() {
+            pnr_flags.push(format!("--threads {}", pnr_threads));
+        }
+
+        // HeAP placer tuning
+        let heap_alpha = opt("pnr_heap_alpha");
+        if !heap_alpha.is_empty() {
+            pnr_flags.push(format!("--placer-heap-alpha {}", heap_alpha));
+        }
+        let heap_beta = opt("pnr_heap_beta");
+        if !heap_beta.is_empty() {
+            pnr_flags.push(format!("--placer-heap-beta {}", heap_beta));
+        }
+        let heap_critexp = opt("pnr_heap_critexp");
+        if !heap_critexp.is_empty() {
+            pnr_flags.push(format!("--placer-heap-critexp {}", heap_critexp));
+        }
+        let heap_timingweight = opt("pnr_heap_timingweight");
+        if !heap_timingweight.is_empty() {
+            pnr_flags.push(format!("--placer-heap-timingweight {}", heap_timingweight));
+        }
+
+        match opt("pnr_verbosity").as_str() {
+            "quiet" => pnr_flags.push("--quiet".to_string()),
+            "verbose" => pnr_flags.push("--verbose".to_string()),
+            _ => {}
+        }
+
+        let pnr_cmd = pnr_flags.join(" \\\n    ");
+
+        // ── ecppack options ──
+        let mut bit_flags = Vec::new();
+        bit_flags.push("build/out.config".to_string());
+        bit_flags.push("--bit build/out.bit".to_string());
+
+        if opt("bit_compress") != "false" {
+            // Compress is ON by default
+            bit_flags.push("--compress".to_string());
+        }
+
+        let bit_spi = opt("bit_spimode");
+        if !bit_spi.is_empty() && bit_spi != "Default" {
+            bit_flags.push(format!("--spimode {}", bit_spi));
+        }
+
+        let bit_freq = opt("bit_freq");
+        if !bit_freq.is_empty() {
+            bit_flags.push(format!("--freq {}", bit_freq));
+        }
+
+        if opt("bit_svf") == "true" {
+            bit_flags.push("--svf build/out.svf".to_string());
+        }
+
+        if opt("bit_background") == "true" {
+            bit_flags.push("--background".to_string());
+        }
+
+        let bit_usercode = opt("bit_usercode");
+        if !bit_usercode.is_empty() {
+            bit_flags.push(format!("--usercode {}", bit_usercode));
+        }
+
+        let bit_bootaddr = opt("bit_bootaddr");
+        if !bit_bootaddr.is_empty() {
+            bit_flags.push(format!("--bootaddr {}", bit_bootaddr));
+        }
+
+        let bit_svf_rowsize = opt("bit_svf_rowsize");
+        if !bit_svf_rowsize.is_empty() {
+            bit_flags.push(format!("--svf-rowsize {}", bit_svf_rowsize));
+        }
+
+        let bit_cmd = bit_flags.join(" \\\n    ");
+
         Ok(format!(
             r#"#!/bin/bash
 # CovertEDA — OSS CAD Build Script
-# Device: {device}
+# Device: {device}  ({size} / {package} / speed {speed})
 # Top: {top_module}
 set -e
 shopt -s nullglob
@@ -347,17 +609,13 @@ fi
 mkdir -p build
 
 echo "=== Yosys Synthesis ==="
-{yosys} -p "synth_{family} -top {top_module} -json build/out.json" "${{SRC_FILES[@]}}" 2>&1 | tee build/synth.log
+{yosys}{yosys_extra} -p "{yosys_pre}synth_{family} {synth_cmd}" "${{SRC_FILES[@]}}" 2>&1 | tee build/synth.log
 
 echo "=== nextpnr Place & Route ==="
-{nextpnr} --{size} \
-    --json build/out.json \
-    --lpf constraints/pins.lpf \
-    --textcfg build/out.config \
-    --report build/report.json 2>&1 | tee build/pnr.log
+{nextpnr} {pnr_cmd} 2>&1 | tee build/pnr.log
 
 echo "=== ecppack Bitstream ==="
-{ecppack} --compress build/out.config --bit build/out.bit 2>&1 | tee build/bitstream.log
+{ecppack} {bit_cmd} 2>&1 | tee build/bitstream.log
 
 echo "=== Done ==="
 "#,
