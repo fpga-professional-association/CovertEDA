@@ -1,3 +1,4 @@
+pub mod ace;
 pub mod diamond;
 pub mod oss;
 pub mod quartus;
@@ -143,6 +144,7 @@ impl BackendRegistry {
                 Box::new(quartus::QuartusBackend::new()),
                 Box::new(vivado::VivadoBackend::new()),
                 Box::new(oss::OssBackend::new()),
+                Box::new(ace::AceBackend::new()),
             ],
             active_idx: 0,
         }
@@ -188,9 +190,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_registry_new_has_five_backends() {
+    fn test_registry_new_has_six_backends() {
         let reg = BackendRegistry::new();
-        assert_eq!(reg.list().len(), 5);
+        assert_eq!(reg.list().len(), 6);
     }
 
     #[test]
@@ -242,6 +244,7 @@ mod tests {
         assert!(ids.contains(&"quartus".to_string()));
         assert!(ids.contains(&"vivado".to_string()));
         assert!(ids.contains(&"opensource".to_string()));
+        assert!(ids.contains(&"ace".to_string()));
     }
 
     #[test]
