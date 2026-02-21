@@ -84,5 +84,20 @@
     "fmaxMhz": 206.4,
     "ffUsed": 33,
     "ffTotal": 83640
+  },
+  {
+    "id": "b-1771697745846",
+    "timestamp": "2026-02-21T18:15:45.846Z",
+    "duration": 1,
+    "status": "success",
+    "backend": "OSS",
+    "device": "LFE5U-85F-6BG381C",
+    "stages": [
+      "synth",
+      "pnr",
+      "pack"
+    ],
+    "warnings": 0,
+    "errors": 0
   }
 ]

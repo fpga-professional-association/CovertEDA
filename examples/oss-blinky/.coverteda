@@ -14,8 +14,10 @@
   "backendConfig": {},
   "buildStages": [],
   "buildOptions": {
-    "pnr_placer": ""
+    "syn_nowidelut": "true",
+    "pnr_placer": "",
+    "pnr_freq": "200"
   },
   "createdAt": "2025-06-01T00:00:00Z",
-  "updatedAt": "2026-02-21T17:38:35.389133377+00:00"
+  "updatedAt": "2026-02-21T18:16:29.031199238+00:00"
 }
