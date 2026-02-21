@@ -366,39 +366,54 @@ impl FpgaBackend for RadiantBackend {
             let _ = family; // family is implicit in the device string for prj_create
         }
 
-        // Synthesis engine selection (LSE or Synplify Pro)
-        if let Some(engine) = options.get("synth_engine") {
-            match engine.as_str() {
-                "synplify" | "synplify_pro" => {
-                    script.push_str("prj_set_strategy_value -strategy Strategy1 {SYN_Tool=SYNPLIFY_PRO}\n");
-                }
-                _ => {
-                    // LSE is the default — explicitly set to be safe
-                    script.push_str("prj_set_strategy_value -strategy Strategy1 {SYN_Tool=LSE}\n");
-                }
-            }
-        }
+        // Resolve the project's active strategy name at runtime via TCL.
+        // Radiant projects may use "Strategy1", "Area", or any user-defined name.
+        let has_strategy_overrides = options.iter().any(|(k, v)| {
+            !v.is_empty()
+                && matches!(
+                    k.as_str(),
+                    "synth_engine" | "syn_frequency" | "syn_optimization" | "par_path_based"
+                )
+        });
 
-        // Strategy value options (applied before running stages)
-        if let Some(freq) = options.get("syn_frequency") {
-            if !freq.is_empty() {
-                script.push_str(&format!(
-                    "prj_set_strategy_value -strategy Strategy1 {{SYN_Frequency={}}}\n", freq
-                ));
+        if has_strategy_overrides {
+            script.push_str("set _strat [lindex [prj_get_strategy_list] 0]\n");
+
+            // Synthesis engine selection (LSE or Synplify Pro)
+            if let Some(engine) = options.get("synth_engine") {
+                match engine.as_str() {
+                    "synplify" | "synplify_pro" => {
+                        script.push_str("prj_set_strategy_value -strategy $_strat {SYN_Tool=SYNPLIFY_PRO}\n");
+                    }
+                    "lse" => {
+                        script.push_str("prj_set_strategy_value -strategy $_strat {SYN_Tool=LSE}\n");
+                    }
+                    _ => {} // empty or unknown — leave default
+                }
             }
-        }
-        if let Some(opt) = options.get("syn_optimization") {
-            if !opt.is_empty() {
-                script.push_str(&format!(
-                    "prj_set_strategy_value -strategy Strategy1 {{SYN_Optimization_goal={}}}\n", opt
-                ));
+
+            if let Some(freq) = options.get("syn_frequency") {
+                if !freq.is_empty() {
+                    script.push_str(&format!(
+                        "prj_set_strategy_value -strategy $_strat {{SYN_Frequency={}}}\n", freq
+                    ));
+                }
             }
-        }
-        if let Some(pb) = options.get("par_path_based") {
-            let val = if pb == "true" || pb == "ON" { "ON" } else { "OFF" };
-            script.push_str(&format!(
-                "prj_set_strategy_value -strategy Strategy1 {{parPathBased={}}}\n", val
-            ));
+            if let Some(opt) = options.get("syn_optimization") {
+                if !opt.is_empty() {
+                    script.push_str(&format!(
+                        "prj_set_strategy_value -strategy $_strat {{SYN_Optimization_goal={}}}\n", opt
+                    ));
+                }
+            }
+            if let Some(pb) = options.get("par_path_based") {
+                if !pb.is_empty() {
+                    let val = if pb == "true" || pb == "ON" { "ON" } else { "OFF" };
+                    script.push_str(&format!(
+                        "prj_set_strategy_value -strategy $_strat {{parPathBased={}}}\n", val
+                    ));
+                }
+            }
         }
 
         // Save project before running stages
@@ -772,6 +787,22 @@ mod tests {
             tmp.path(), "LIFCL-40", "top", &[], &opts,
         ).unwrap();
         assert!(script.contains("SYN_Tool=SYNPLIFY_PRO"));
+        assert!(script.contains("prj_get_strategy_list"), "should resolve strategy name dynamically");
+    }
+
+    #[test]
+    fn test_radiant_build_script_empty_options_no_strategy() {
+        // Empty option values should NOT emit strategy commands
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
+        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let mut opts = HashMap::new();
+        opts.insert("synth_engine".into(), "".into());
+        opts.insert("syn_optimization".into(), "".into());
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "top", &[], &opts,
+        ).unwrap();
+        assert!(!script.contains("prj_set_strategy_value"), "empty options should not set strategy values:\n{}", script);
     }
 
     #[test]
