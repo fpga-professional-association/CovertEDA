@@ -355,8 +355,9 @@ impl OssBackend {
     }
 
     /// Parse ECP5 device string into (size_flag, package, speed).
-    /// e.g. "LFE5U-85F-6BG381" → ("85k", "CABGA381", "6")
+    /// e.g. "LFE5U-85F-6BG381C" → ("85k", "CABGA381", "6")
     /// e.g. "LFE5UM5G-45F-8BG554" → ("um5g-45k", "CABGA554", "8")
+    /// Strips trailing temperature grade suffix (C = commercial, I = industrial).
     fn parse_ecp5_device(device: &str) -> (String, String, String) {
         let dev_upper = device.to_uppercase();
         let prefix = if dev_upper.starts_with("LFE5UM5G") {
@@ -377,12 +378,14 @@ impl OssBackend {
             let last = parts[parts.len() - 1];
             let speed_char = &last[..1];
             let pkg_raw = &last[1..];
-            let package = if pkg_raw.to_uppercase().starts_with("BG") {
-                format!("CABGA{}", &pkg_raw[2..])
-            } else if pkg_raw.to_uppercase().starts_with("TQFP") {
-                format!("TQFP{}", &pkg_raw[4..])
+            // Strip trailing temperature grade (C/I) — e.g. "BG381C" → "BG381"
+            let pkg_stripped = pkg_raw.trim_end_matches(|c: char| c == 'C' || c == 'I' || c == 'c' || c == 'i');
+            let package = if pkg_stripped.to_uppercase().starts_with("BG") {
+                format!("CABGA{}", &pkg_stripped[2..])
+            } else if pkg_stripped.to_uppercase().starts_with("TQFP") {
+                format!("TQFP{}", &pkg_stripped[4..])
             } else {
-                format!("CABGA{}", &pkg_raw[2..])
+                format!("CABGA{}", &pkg_stripped[2..])
             };
             (speed_char.to_string(), package)
         } else {
@@ -1146,6 +1149,16 @@ mod tests {
         assert_eq!(size, "85k");
         assert_eq!(pkg, "CABGA381");
         assert_eq!(spd, "6");
+
+        // Temperature grade suffix C (commercial) must be stripped
+        let (size, pkg, spd) = OssBackend::parse_ecp5_device("LFE5U-85F-6BG381C");
+        assert_eq!(size, "85k");
+        assert_eq!(pkg, "CABGA381");
+        assert_eq!(spd, "6");
+
+        // Temperature grade suffix I (industrial) must be stripped
+        let (_, pkg, _) = OssBackend::parse_ecp5_device("LFE5U-85F-6BG381I");
+        assert_eq!(pkg, "CABGA381");
 
         let (size, pkg, spd) = OssBackend::parse_ecp5_device("LFE5UM5G-45F-8BG554");
         assert_eq!(size, "um5g-45k");
