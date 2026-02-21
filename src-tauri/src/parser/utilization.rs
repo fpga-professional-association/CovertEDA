@@ -239,11 +239,85 @@ pub fn parse_ace_utilization(content: &str, device: &str) -> BackendResult<Resou
 }
 
 /// Parse nextpnr JSON utilization
+///
+/// nextpnr report.json contains a `utilisation` object mapping resource type
+/// names (e.g. "TRELLIS_SLICE", "TRELLIS_IO", "DP16KD") to
+/// `{"available": N, "used": N}`.
 pub fn parse_nextpnr_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
-    let _ = content;
+    use crate::backend::BackendError;
+
+    let json: serde_json::Value = serde_json::from_str(content)
+        .map_err(|e| BackendError::ParseError(format!("Invalid nextpnr JSON: {}", e)))?;
+
+    // nextpnr uses British spelling "utilisation"
+    let util_obj = json
+        .pointer("/utilisation")
+        .or_else(|| json.pointer("/utilization"))
+        .and_then(|v| v.as_object());
+
+    let mut logic_items = vec![];
+    let mut io_items = vec![];
+    let mut memory_items = vec![];
+    let mut dsp_items = vec![];
+    let mut clock_items = vec![];
+    let mut other_items = vec![];
+
+    if let Some(resources) = util_obj {
+        for (name, data) in resources {
+            let used = data.get("used").and_then(|v| v.as_u64()).unwrap_or(0);
+            let available = data.get("available").and_then(|v| v.as_u64()).unwrap_or(0);
+
+            let item = ResourceItem {
+                resource: name.clone(),
+                used,
+                total: available,
+                detail: None,
+            };
+
+            let n = name.to_uppercase();
+            if n.contains("SLICE") || n.contains("LUT") || n.contains("CCU2") {
+                logic_items.push(item);
+            } else if n.contains("IO") {
+                io_items.push(item);
+            } else if n.contains("DP16K") || n.contains("PDPW16K") || n.contains("RAM")
+                || n.contains("BRAM") || n.contains("EBR")
+            {
+                memory_items.push(item);
+            } else if n.contains("MULT") || n.contains("ALU54") || n.contains("DSP") {
+                dsp_items.push(item);
+            } else if n.contains("PLL") || n.contains("DCC") || n.contains("ECLK")
+                || n.contains("OSC") || n.contains("CLKDIV")
+            {
+                clock_items.push(item);
+            } else {
+                other_items.push(item);
+            }
+        }
+    }
+
+    let mut categories = vec![];
+    if !logic_items.is_empty() {
+        categories.push(ResourceCategory { name: "Logic".into(), items: logic_items });
+    }
+    if !io_items.is_empty() {
+        categories.push(ResourceCategory { name: "I/O".into(), items: io_items });
+    }
+    if !memory_items.is_empty() {
+        categories.push(ResourceCategory { name: "Memory".into(), items: memory_items });
+    }
+    if !dsp_items.is_empty() {
+        categories.push(ResourceCategory { name: "DSP".into(), items: dsp_items });
+    }
+    if !clock_items.is_empty() {
+        categories.push(ResourceCategory { name: "Clocking".into(), items: clock_items });
+    }
+    if !other_items.is_empty() {
+        categories.push(ResourceCategory { name: "Other".into(), items: other_items });
+    }
+
     Ok(ResourceReport {
         device: device.to_string(),
-        categories: vec![],
+        categories,
         by_module: vec![],
     })
 }
@@ -352,5 +426,67 @@ mod tests {
     fn test_parse_ace_utilization_empty_input() {
         let report = parse_ace_utilization("", "test").unwrap();
         assert!(report.categories.is_empty());
+    }
+
+    // ── nextpnr (OSS) utilization tests ──
+
+    #[test]
+    fn test_parse_nextpnr_utilization_with_fixture() {
+        let content = include_str!("../../tests/fixtures/oss/report.json");
+        let report = parse_nextpnr_utilization(content, "LFE5U-85F-6BG381C").unwrap();
+        assert_eq!(report.device, "LFE5U-85F-6BG381C");
+        assert!(!report.categories.is_empty(), "should have categories");
+        let has_logic = report.categories.iter().any(|c| c.name == "Logic");
+        assert!(has_logic, "should have Logic category");
+        let logic = report.categories.iter().find(|c| c.name == "Logic").unwrap();
+        let slice = logic.items.iter().find(|i| i.resource == "TRELLIS_SLICE");
+        assert!(slice.is_some(), "should have TRELLIS_SLICE");
+        assert_eq!(slice.unwrap().used, 1890);
+        assert_eq!(slice.unwrap().total, 41820);
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_categorizes_io() {
+        let content = r#"{"utilisation": {"TRELLIS_IO": {"available": 365, "used": 10}}}"#;
+        let report = parse_nextpnr_utilization(content, "test").unwrap();
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "TRELLIS_IO should be I/O");
+        assert_eq!(io.unwrap().items[0].used, 10);
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_categorizes_memory() {
+        let content = r#"{"utilisation": {"DP16KD": {"available": 208, "used": 24}}}"#;
+        let report = parse_nextpnr_utilization(content, "test").unwrap();
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "DP16KD should be Memory");
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_categorizes_dsp() {
+        let content = r#"{"utilisation": {"MULT18X18D": {"available": 156, "used": 4}}}"#;
+        let report = parse_nextpnr_utilization(content, "test").unwrap();
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some(), "MULT18X18D should be DSP");
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_categorizes_clocking() {
+        let content = r#"{"utilisation": {"DCCA": {"available": 56, "used": 1}, "EHXPLLL": {"available": 4, "used": 1}}}"#;
+        let report = parse_nextpnr_utilization(content, "test").unwrap();
+        let clk = report.categories.iter().find(|c| c.name == "Clocking");
+        assert!(clk.is_some(), "DCCA/EHXPLLL should be Clocking");
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_empty_json() {
+        let report = parse_nextpnr_utilization("{}", "test").unwrap();
+        assert!(report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_nextpnr_utilization_invalid_json() {
+        let result = parse_nextpnr_utilization("not json", "test");
+        assert!(result.is_err());
     }
 }

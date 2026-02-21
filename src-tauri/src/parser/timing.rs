@@ -82,25 +82,108 @@ pub fn parse_nextpnr_timing(content: &str) -> BackendResult<TimingReport> {
     let json: serde_json::Value = serde_json::from_str(content)
         .map_err(|e| BackendError::ParseError(format!("Invalid nextpnr JSON: {}", e)))?;
 
-    let fmax = json
-        .pointer("/fmax")
-        .and_then(|v| v.as_object())
-        .and_then(|obj| obj.values().next())
-        .and_then(|v| v.get("achieved"))
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
+    // Extract fmax data per clock domain
+    let fmax_obj = json.pointer("/fmax").and_then(|v| v.as_object());
+
+    let mut best_fmax = 0.0_f64;
+    let mut best_constraint = 0.0_f64;
+    let mut worst_wns = f64::MAX;
+    let mut total_tns = 0.0_f64;
+    let mut failing_count = 0_u32;
+    let mut clock_domains = vec![];
+
+    if let Some(clocks) = fmax_obj {
+        for (name, freq_data) in clocks {
+            let achieved = freq_data.get("achieved").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let constraint = freq_data.get("constraint").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+            // Compute slack: positive = met, negative = violated
+            // WNS in ns: (1/constraint - 1/achieved) * 1000 when both > 0
+            let wns = if constraint > 0.0 && achieved > 0.0 {
+                (1000.0 / constraint) - (1000.0 / achieved)
+            } else {
+                0.0
+            };
+
+            if wns < worst_wns {
+                worst_wns = wns;
+            }
+            if wns < 0.0 {
+                total_tns += wns;
+                failing_count += 1;
+            }
+            if achieved > best_fmax {
+                best_fmax = achieved;
+                best_constraint = constraint;
+            }
+
+            let period = if constraint > 0.0 { 1000.0 / constraint } else { 0.0 };
+
+            clock_domains.push(ClockDomain {
+                name: name.clone(),
+                period_ns: period,
+                frequency_mhz: achieved,
+                source: String::new(),
+                clock_type: "primary".into(),
+                wns_ns: wns,
+                path_count: 0,
+            });
+        }
+    }
+
+    if worst_wns == f64::MAX {
+        worst_wns = 0.0;
+    }
+
+    // Extract critical paths
+    let mut critical_paths = vec![];
+    if let Some(crit_arr) = json.pointer("/critical_paths").and_then(|v| v.as_array()) {
+        for (rank, cp) in crit_arr.iter().enumerate() {
+            let from = cp.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let to = cp.get("to").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+            // Sum delays along the path
+            let mut total_delay = 0.0_f64;
+            let mut logic_levels = 0_u32;
+            if let Some(path_items) = cp.get("path").and_then(|v| v.as_array()) {
+                for item in path_items {
+                    total_delay += item.get("delay").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let ptype = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    if ptype == "cell" || ptype == "logic" {
+                        logic_levels += 1;
+                    }
+                }
+            }
+
+            critical_paths.push(CriticalPath {
+                rank: (rank + 1) as u32,
+                from,
+                to,
+                slack_ns: 0.0,
+                required_ns: 0.0,
+                delay_ns: total_delay,
+                logic_levels,
+                clock: String::new(),
+                path_type: "setup".into(),
+            });
+        }
+    }
+
+    let total_paths = clock_domains.iter().map(|c| c.path_count).sum::<u32>().max(
+        critical_paths.len() as u32,
+    );
 
     Ok(TimingReport {
-        fmax_mhz: fmax,
-        target_mhz: 125.0,
-        wns_ns: 0.0,
-        tns_ns: 0.0,
+        fmax_mhz: best_fmax,
+        target_mhz: best_constraint,
+        wns_ns: worst_wns,
+        tns_ns: total_tns,
         whs_ns: 0.0,
         ths_ns: 0.0,
-        failing_paths: 0,
-        total_paths: 0,
-        clock_domains: vec![],
-        critical_paths: vec![],
+        failing_paths: failing_count,
+        total_paths,
+        clock_domains,
+        critical_paths,
     })
 }
 
@@ -363,12 +446,56 @@ Target Period : 10.000
         let content = r#"{"fmax": {"clk": {"achieved": 155.25, "constraint": 125.0}}}"#;
         let report = parse_nextpnr_timing(content).unwrap();
         assert!((report.fmax_mhz - 155.25).abs() < 0.01);
+        assert!((report.target_mhz - 125.0).abs() < 0.01);
+        assert!(report.wns_ns > 0.0, "timing met, WNS should be positive");
+        assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.clock_domains.len(), 1);
+        assert_eq!(report.clock_domains[0].name, "clk");
     }
 
     #[test]
     fn test_parse_nextpnr_timing_invalid_json() {
         let result = parse_nextpnr_timing("not json");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_nextpnr_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/oss/report.json");
+        let report = parse_nextpnr_timing(content).unwrap();
+        assert!((report.fmax_mhz - 188.42).abs() < 0.01, "fmax={}", report.fmax_mhz);
+        assert!((report.target_mhz - 125.0).abs() < 0.01);
+        assert!(report.wns_ns > 0.0, "timing met, WNS should be positive");
+        assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.clock_domains.len(), 1);
+        assert!(!report.critical_paths.is_empty(), "should have critical paths");
+        assert!(report.critical_paths[0].delay_ns > 0.0, "critical path should have delay");
+    }
+
+    #[test]
+    fn test_parse_nextpnr_timing_multiple_clocks() {
+        let content = r#"{
+            "fmax": {
+                "clk_fast": {"achieved": 200.0, "constraint": 250.0},
+                "clk_slow": {"achieved": 50.0, "constraint": 25.0}
+            }
+        }"#;
+        let report = parse_nextpnr_timing(content).unwrap();
+        // Best fmax is 200 MHz
+        assert!((report.fmax_mhz - 200.0).abs() < 0.01);
+        assert_eq!(report.clock_domains.len(), 2);
+        // clk_fast fails (200 < 250), so failing_paths = 1
+        assert_eq!(report.failing_paths, 1);
+        assert!(report.wns_ns < 0.0, "WNS should be negative for failing clock");
+    }
+
+    #[test]
+    fn test_parse_nextpnr_timing_empty_json() {
+        let report = parse_nextpnr_timing("{}").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+        assert_eq!(report.target_mhz, 0.0);
+        assert!(report.clock_domains.is_empty());
+        assert!(report.critical_paths.is_empty());
     }
 
     #[test]

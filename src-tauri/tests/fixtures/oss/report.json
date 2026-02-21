@@ -1,0 +1,102 @@
+{
+  "utilisation": {
+    "TRELLIS_SLICE": {
+      "available": 41820,
+      "used": 1890
+    },
+    "TRELLIS_IO": {
+      "available": 365,
+      "used": 10
+    },
+    "DCCA": {
+      "available": 56,
+      "used": 1
+    },
+    "DP16KD": {
+      "available": 208,
+      "used": 0
+    },
+    "MULT18X18D": {
+      "available": 156,
+      "used": 0
+    },
+    "EHXPLLL": {
+      "available": 4,
+      "used": 0
+    },
+    "CCU2C": {
+      "available": 20910,
+      "used": 12
+    }
+  },
+  "fmax": {
+    "clk": {
+      "achieved": 188.42,
+      "constraint": 125.0
+    }
+  },
+  "critical_paths": [
+    {
+      "from": "prescaler[0]",
+      "to": "prescaler[23]",
+      "path": [
+        {
+          "budget": 0.0,
+          "delay": 0.465,
+          "from": { "cell": "prescaler_0__i0", "port": "F0" },
+          "to": { "cell": "prescaler_0__i0", "port": "COUT" },
+          "type": "cell",
+          "net": "prescaler_0__i0_COUT"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.01,
+          "from": { "cell": "prescaler_0__i0", "port": "COUT" },
+          "to": { "cell": "prescaler_2__i1", "port": "CIN" },
+          "type": "net",
+          "net": "prescaler_0__i0_COUT"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.175,
+          "from": { "cell": "prescaler_2__i1", "port": "CIN" },
+          "to": { "cell": "prescaler_2__i1", "port": "COUT" },
+          "type": "cell",
+          "net": "prescaler_2__i1_COUT"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.01,
+          "from": { "cell": "prescaler_2__i1", "port": "COUT" },
+          "to": { "cell": "prescaler_4__i2", "port": "CIN" },
+          "type": "net",
+          "net": "prescaler_2__i1_COUT"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.175,
+          "from": { "cell": "prescaler_4__i2", "port": "CIN" },
+          "to": { "cell": "prescaler_4__i2", "port": "COUT" },
+          "type": "cell",
+          "net": "prescaler_4__i2_COUT"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.392,
+          "from": { "cell": "prescaler_22__i11", "port": "CIN" },
+          "to": { "cell": "prescaler_22__i11", "port": "F1" },
+          "type": "cell",
+          "net": "tick_N_62"
+        },
+        {
+          "budget": 0.0,
+          "delay": 0.836,
+          "from": { "cell": "prescaler_22__i11", "port": "F1" },
+          "to": { "cell": "prescaler_23__i12", "port": "D0" },
+          "type": "net",
+          "net": "tick_N_62"
+        }
+      ]
+    }
+  ]
+}
