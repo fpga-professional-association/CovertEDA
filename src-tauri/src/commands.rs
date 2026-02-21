@@ -1553,12 +1553,17 @@ fn find_examples_dir() -> Option<PathBuf> {
         }
     }
 
-    // Production: next to executable
+    // Production: next to executable or in Tauri resource paths
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let prod_path = exe_dir.join("examples");
             if prod_path.is_dir() {
                 return Some(prod_path);
+            }
+            // NSIS installer places resources under _up_/
+            let nsis_path = exe_dir.join("_up_").join("examples");
+            if nsis_path.is_dir() {
+                return Some(nsis_path);
             }
         }
     }

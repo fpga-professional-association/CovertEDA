@@ -11,6 +11,7 @@ dist/
 /src-tauri/WixTools/
 /src-tauri/gen/
 /src-tauri/examples/
+/src-tauri/_bundled_examples/
 
 # OS
 .DS_Store
