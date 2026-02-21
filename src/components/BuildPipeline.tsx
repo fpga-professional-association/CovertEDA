@@ -147,101 +147,205 @@ const VIVADO_STAGE_OPTIONS: Record<string, StageOption[]> = {
   ],
 };
 
-const OSS_STAGE_OPTIONS: Record<string, StageOption[]> = {
+// ── Shared PnR options (used across all nextpnr variants) ──
+const SHARED_PNR_PRIMARY: StageOption[] = [
+  { key: "pnr_freq", label: "Target Frequency (MHz)", type: "text", tier: "primary", defaultValue: "12.0",
+    tooltip: "Target clock frequency in MHz. Applied as default constraint to all clocks." },
+  { key: "pnr_seed", label: "Placement Seed", type: "text", tier: "primary", defaultValue: "1",
+    tooltip: "Seed value for the random number generator. Different seeds produce different placements — useful for timing exploration." },
+  { key: "pnr_placer", label: "Placer Algorithm", type: "select", choices: ["heap", "sa"], tier: "primary", defaultValue: "heap",
+    tooltip: "Placement algorithm. HeAP (analytical) is faster and generally better. SA (simulated annealing) is the legacy algorithm." },
+  { key: "pnr_router", label: "Router Algorithm", type: "select", choices: ["router1", "router2"], tier: "primary", defaultValue: "router1",
+    tooltip: "Routing algorithm. router1 is the original maze-based router. router2 is newer and generally faster for larger designs." },
+  { key: "pnr_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
+    tooltip: "nextpnr output verbosity. Quiet shows only errors/warnings. Verbose enables detailed debug output." },
+];
+
+const SHARED_PNR_ADVANCED: StageOption[] = [
+  { key: "pnr_timing_allow_fail", label: "Allow Timing Failure", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Continue and produce output even when timing constraints are not met." },
+  { key: "pnr_no_tmdriv", label: "Disable Timing-Driven", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Disable timing-driven placement. Placement will only optimize wirelength, ignoring timing paths." },
+  { key: "pnr_randomize_seed", label: "Randomize Seed", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Use a random seed instead of the specified seed. Good for exploring the solution space." },
+  { key: "pnr_parallel_refine", label: "Parallel Refinement", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Enable experimental parallelized engine for placement refinement." },
+  { key: "pnr_tmg_ripup", label: "Timing-Driven Ripup", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Enable experimental timing-driven ripup in the router. Improves timing at cost of runtime." },
+  { key: "pnr_detailed_timing", label: "Detailed Timing Report", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Append detailed per-net timing data to the JSON report." },
+  { key: "pnr_threads", label: "Threads", type: "text", tier: "advanced", defaultValue: "",
+    tooltip: "Number of threads for parallel operations. Leave empty for auto-detection." },
+  { key: "pnr_heap_alpha", label: "HeAP Alpha", type: "text", tier: "advanced", defaultValue: "0.1",
+    tooltip: "HeAP placer alpha: trade-off between wirelength (0) and spreading (1). Default 0.1." },
+  { key: "pnr_heap_beta", label: "HeAP Beta (Density)", type: "text", tier: "advanced", defaultValue: "0.9",
+    tooltip: "HeAP placer max density. 1.0 = pack tight. Lower values spread logic more. Default 0.9." },
+  { key: "pnr_heap_critexp", label: "HeAP Crit Exponent", type: "text", tier: "advanced", defaultValue: "2",
+    tooltip: "HeAP criticality exponent for timing-driven weighting. Higher = more aggressive timing focus." },
+  { key: "pnr_heap_timingweight", label: "HeAP Timing Weight", type: "text", tier: "advanced", defaultValue: "10",
+    tooltip: "HeAP timing weight factor. Higher = more aggressive timing optimization vs wirelength." },
+];
+
+// ── Shared yosys synth options (work across all architectures) ──
+const SHARED_SYNTH_PRIMARY: StageOption[] = [
+  { key: "syn_noflatten", label: "Preserve Hierarchy", type: "boolean", tier: "primary", defaultValue: "false",
+    tooltip: "Don't flatten the design hierarchy. Useful to see per-module utilization stats." },
+  { key: "syn_abc9_timing", label: "ABC9 Target (ps)", type: "text", tier: "primary", defaultValue: "",
+    tooltip: "Target clock period in picoseconds for ABC9 optimization. E.g. 8000 = 125 MHz." },
+  { key: "syn_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
+    tooltip: "Yosys output verbosity. Quiet suppresses all but errors; verbose adds detailed log headers." },
+];
+
+const SHARED_SYNTH_ADVANCED: StageOption[] = [
+  { key: "syn_noabc9", label: "Disable ABC9", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Fall back to legacy ABC mapping instead of ABC9." },
+  { key: "syn_abc2", label: "ABC2 Double Pass", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Run an additional ABC optimization pass before LUT mapping." },
+  { key: "syn_dff", label: "ABC DFF Mode", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Run ABC/ABC9 in DFF-aware mode. Can sometimes remove unnecessary flip-flops." },
+  { key: "syn_retime", label: "Retiming", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Run ABC with retiming to balance combinational stages." },
+  { key: "syn_nobram", label: "Disable Block RAM", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Don't infer block RAM. Memories implemented with LUT RAM or flip-flops." },
+  { key: "syn_nolutram", label: "Disable LUT RAM", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Don't infer distributed LUT RAM." },
+  { key: "syn_nodsp", label: "Disable DSP", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Don't map multipliers to DSP blocks." },
+  { key: "syn_no_rw_check", label: "No R/W Collision Check", type: "boolean", tier: "advanced", defaultValue: "false",
+    tooltip: "Mark memory read ports as don't-care on simultaneous read/write." },
+  { key: "syn_defines", label: "Verilog Defines", type: "text", tier: "advanced", defaultValue: "",
+    tooltip: "Space-separated Verilog preprocessor defines passed to yosys with -D." },
+];
+
+// ── ECP5-specific options ──
+const OSS_ECP5_STAGE_OPTIONS: Record<string, StageOption[]> = {
   synth: [
-    // ── Primary: common yosys synth_ecp5 options ──
     { key: "syn_nowidelut", label: "Area Optimize (-nowidelut)", type: "boolean", tier: "primary", defaultValue: "false",
-      tooltip: "Prevent PFU muxes from implementing wide (>4-input) LUTs. Improves routability and reduces area at cost of delay." },
-    { key: "syn_noflatten", label: "Preserve Hierarchy", type: "boolean", tier: "primary", defaultValue: "false",
-      tooltip: "Don't flatten the design hierarchy. Useful to see per-module utilization stats. Slight area overhead." },
-    { key: "syn_abc9_timing", label: "ABC9 Target (ps)", type: "text", tier: "primary", defaultValue: "",
-      tooltip: "Target clock period in picoseconds for ABC9 optimization. Tells ABC9 to recover area without missing timing. E.g. 8000 = 125 MHz." },
-    { key: "syn_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
-      tooltip: "Yosys output verbosity. Quiet suppresses all but errors; verbose adds detailed log headers." },
-    // ── Advanced: all synth_ecp5 flags ──
-    { key: "syn_noabc9", label: "Disable ABC9", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Fall back to legacy ABC mapping instead of ABC9. Not recommended — ABC9 produces faster and smaller netlists." },
-    { key: "syn_abc2", label: "ABC2 Double Pass", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Run an additional ABC optimization pass before LUT mapping for modest area savings. Conflicts with ABC9." },
-    { key: "syn_dff", label: "ABC DFF Mode", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Run ABC/ABC9 in DFF-aware mode. Can sometimes remove unnecessary flip-flops." },
-    { key: "syn_retime", label: "Retiming", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Run ABC with retiming to move flip-flops and balance combinational stages. Cannot be combined with ABC9." },
-    { key: "syn_nobram", label: "Disable Block RAM", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Don't infer ECP5 block RAM (DP16KD). Memories implemented with LUT RAM or flip-flops." },
-    { key: "syn_nolutram", label: "Disable LUT RAM", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Don't infer distributed LUT RAM. Memories implemented entirely from flip-flops (combine with -nobram for full effect)." },
-    { key: "syn_nodsp", label: "Disable DSP", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Don't map multipliers to MULT18X18D DSP blocks. Implements multipliers as shift/add logic." },
+      tooltip: "Prevent PFU muxes from implementing wide (>4-input) LUTs." },
+    ...SHARED_SYNTH_PRIMARY,
+    ...SHARED_SYNTH_ADVANCED,
     { key: "syn_noccu2", label: "Disable Carry Chains", type: "boolean", tier: "advanced", defaultValue: "false",
       tooltip: "Don't use CCU2C carry-chain cells. For debugging carry-chain routing issues." },
     { key: "syn_nodffe", label: "Disable Clock-Enable FFs", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Don't use flip-flops with clock enable (DFFE). For debugging clock enable issues." },
-    { key: "syn_no_rw_check", label: "No R/W Collision Check", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Mark memory read ports as don't-care on simultaneous read/write. Enables better memory optimization." },
-    { key: "syn_defines", label: "Verilog Defines", type: "text", tier: "advanced", defaultValue: "",
-      tooltip: "Space-separated Verilog preprocessor defines passed to yosys with -D. E.g. 'SIM=1 DEBUG'." },
+      tooltip: "Don't use flip-flops with clock enable (DFFE)." },
   ],
   pnr: [
-    // ── Primary: common nextpnr-ecp5 options ──
-    { key: "pnr_freq", label: "Target Frequency (MHz)", type: "text", tier: "primary", defaultValue: "12.0",
-      tooltip: "Target clock frequency in MHz. Applied as default constraint to all clocks. Default is 12 MHz if no SDC constraints." },
-    { key: "pnr_seed", label: "Placement Seed", type: "text", tier: "primary", defaultValue: "1",
-      tooltip: "Seed value for the random number generator. Different seeds produce different placements — useful for timing exploration." },
-    { key: "pnr_placer", label: "Placer Algorithm", type: "select", choices: ["heap", "sa"], tier: "primary", defaultValue: "heap",
-      tooltip: "Placement algorithm. HeAP (analytical) is faster and generally better. SA (simulated annealing) is the legacy algorithm." },
-    { key: "pnr_router", label: "Router Algorithm", type: "select", choices: ["router1", "router2"], tier: "primary", defaultValue: "router1",
-      tooltip: "Routing algorithm. router1 is the original maze-based router. router2 is newer and generally faster for larger designs." },
-    { key: "pnr_verbosity", label: "Verbosity", type: "select", choices: ["quiet", "normal", "verbose"], tier: "primary", defaultValue: "normal",
-      tooltip: "nextpnr output verbosity. Quiet shows only errors/warnings. Verbose enables detailed debug output." },
-    // ── Advanced: all nextpnr-ecp5 flags ──
-    { key: "pnr_timing_allow_fail", label: "Allow Timing Failure", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Continue and produce output even when timing constraints are not met. Design may not work at target frequency." },
-    { key: "pnr_no_tmdriv", label: "Disable Timing-Driven", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Disable timing-driven placement. Placement will only optimize wirelength, ignoring timing paths." },
-    { key: "pnr_randomize_seed", label: "Randomize Seed", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Use a random seed instead of the specified seed. Good for exploring the solution space." },
-    { key: "pnr_parallel_refine", label: "Parallel Refinement", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Enable experimental parallelized engine for placement refinement. May improve runtime on multi-core systems." },
-    { key: "pnr_tmg_ripup", label: "Timing-Driven Ripup", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Enable experimental timing-driven ripup in the router. Improves timing at cost of runtime." },
+    ...SHARED_PNR_PRIMARY,
+    ...SHARED_PNR_ADVANCED,
     { key: "pnr_no_promote_globals", label: "No Global Promotion", type: "boolean", tier: "advanced", defaultValue: "false",
       tooltip: "Disable automatic promotion of high-fanout clocks/resets to the global routing network." },
     { key: "pnr_lpf_allow_unconstrained", label: "Allow Unconstrained I/O", type: "boolean", tier: "advanced", defaultValue: "false",
       tooltip: "Don't error when I/O pins are not constrained in the LPF file." },
-    { key: "pnr_detailed_timing", label: "Detailed Timing Report", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Append detailed per-net timing data to the JSON report." },
-    { key: "pnr_threads", label: "Threads", type: "text", tier: "advanced", defaultValue: "",
-      tooltip: "Number of threads for parallel operations. Leave empty for auto-detection." },
-    { key: "pnr_heap_alpha", label: "HeAP Alpha", type: "text", tier: "advanced", defaultValue: "0.1",
-      tooltip: "HeAP placer alpha: trade-off between wirelength (0) and spreading (1). Default 0.1." },
-    { key: "pnr_heap_beta", label: "HeAP Beta (Density)", type: "text", tier: "advanced", defaultValue: "0.9",
-      tooltip: "HeAP placer max density. 1.0 = pack tight. Lower values spread logic more. Default 0.9." },
-    { key: "pnr_heap_critexp", label: "HeAP Crit Exponent", type: "text", tier: "advanced", defaultValue: "2",
-      tooltip: "HeAP criticality exponent for timing-driven weighting. Higher = more aggressive timing focus." },
-    { key: "pnr_heap_timingweight", label: "HeAP Timing Weight", type: "text", tier: "advanced", defaultValue: "10",
-      tooltip: "HeAP timing weight factor. Higher = more aggressive timing optimization vs wirelength." },
   ],
   pack: [
-    // ── Primary: ecppack bitstream options ──
     { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary", defaultValue: "true",
-      tooltip: "Enable ECP5 built-in bitstream compression to reduce file size. Recommended for production." },
+      tooltip: "Enable ECP5 built-in bitstream compression." },
     { key: "bit_spimode", label: "SPI Mode", type: "select", choices: ["fast-read", "dual-spi", "qspi"], tier: "primary", defaultValue: "",
-      tooltip: "SPI flash read mode for configuration. fast-read uses 1 data line, dual-spi uses 2, qspi uses 4 for faster boot." },
+      tooltip: "SPI flash read mode for configuration." },
     { key: "bit_freq", label: "Config Clock (MHz)", type: "select", choices: ["2.4", "4.8", "9.7", "19.4", "38.8", "62.0"], tier: "primary", defaultValue: "",
-      tooltip: "MCCLK configuration clock frequency. Higher values speed up FPGA configuration from flash." },
+      tooltip: "MCCLK configuration clock frequency." },
     { key: "bit_svf", label: "Generate SVF (JTAG)", type: "boolean", tier: "primary", defaultValue: "false",
-      tooltip: "Generate SVF file for JTAG programming with tools like OpenOCD." },
-    // ── Advanced: ecppack advanced options ──
+      tooltip: "Generate SVF file for JTAG programming." },
     { key: "bit_background", label: "Background Reconfig", type: "boolean", tier: "advanced", defaultValue: "false",
-      tooltip: "Enable background reconfiguration. FPGA can be reprogrammed while current design continues running." },
+      tooltip: "Enable background reconfiguration." },
     { key: "bit_usercode", label: "User Code", type: "text", tier: "advanced", defaultValue: "",
-      tooltip: "32-bit USERCODE value embedded in the bitstream. Can be read back from the device. E.g. 0xDEADBEEF." },
+      tooltip: "32-bit USERCODE value embedded in the bitstream." },
     { key: "bit_bootaddr", label: "Boot Address", type: "text", tier: "advanced", defaultValue: "",
-      tooltip: "Next boot address for multi-boot. Must be 64K-aligned (e.g. 0x00100000). Enables multi-boot feature." },
+      tooltip: "Next boot address for multi-boot (64K-aligned)." },
     { key: "bit_svf_rowsize", label: "SVF Row Size (bits)", type: "text", tier: "advanced", defaultValue: "8000",
-      tooltip: "SVF row size in bits for JTAG programming. Must be a multiple of 8. Default 8000." },
+      tooltip: "SVF row size in bits for JTAG programming." },
   ],
+};
+
+// ── iCE40-specific options ──
+const OSS_ICE40_STAGE_OPTIONS: Record<string, StageOption[]> = {
+  synth: [
+    { key: "syn_nowidelut", label: "No Wide LUT", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Don't use SB_LUT4 cascading for wide LUTs." },
+    ...SHARED_SYNTH_PRIMARY,
+    ...SHARED_SYNTH_ADVANCED,
+    { key: "syn_nocarry", label: "Disable Carry Logic", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't use SB_CARRY cells. Arithmetic implemented with LUTs only." },
+  ],
+  pnr: [
+    ...SHARED_PNR_PRIMARY,
+    ...SHARED_PNR_ADVANCED,
+    { key: "pnr_promote_logic", label: "Promote Logic", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Enable promotion of logic to global buffers for high-fanout signals." },
+    { key: "pnr_pcf_allow_unconstrained", label: "Allow Unconstrained I/O", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't error when I/O pins are not constrained in the PCF file." },
+  ],
+  pack: [
+    // icepack has minimal options — mostly just input/output files
+    { key: "bit_header", label: "Include File Header", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Include a file header comment in the output .bin file." },
+  ],
+};
+
+// ── Gowin-specific options ──
+const OSS_GOWIN_STAGE_OPTIONS: Record<string, StageOption[]> = {
+  synth: [
+    { key: "syn_nowidelut", label: "No Wide LUT", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Don't cascade LUTs for wide functions." },
+    ...SHARED_SYNTH_PRIMARY,
+    ...SHARED_SYNTH_ADVANCED,
+    { key: "syn_noalu", label: "Disable ALU Mapping", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't use Gowin ALU primitives for arithmetic." },
+  ],
+  pnr: [
+    ...SHARED_PNR_PRIMARY,
+    ...SHARED_PNR_ADVANCED,
+  ],
+  pack: [
+    // gowin_pack options are minimal
+    { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Enable bitstream compression if supported by the device." },
+  ],
+};
+
+// ── Nexus-specific options ──
+const OSS_NEXUS_STAGE_OPTIONS: Record<string, StageOption[]> = {
+  synth: [
+    { key: "syn_nowidelut", label: "No Wide LUT", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Don't cascade LUTs for wide functions." },
+    ...SHARED_SYNTH_PRIMARY,
+    ...SHARED_SYNTH_ADVANCED,
+    { key: "syn_nodffe", label: "Disable Clock-Enable FFs", type: "boolean", tier: "advanced", defaultValue: "false",
+      tooltip: "Don't use flip-flops with clock enable." },
+  ],
+  pnr: [
+    ...SHARED_PNR_PRIMARY,
+    ...SHARED_PNR_ADVANCED,
+  ],
+  pack: [
+    // prjoxide bitstream options
+    { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary", defaultValue: "false",
+      tooltip: "Enable bitstream compression." },
+  ],
+};
+
+// Default fallback (used when architecture not yet detected)
+const OSS_STAGE_OPTIONS = OSS_ECP5_STAGE_OPTIONS;
+
+/** Detect OSS architecture family from a device string */
+function detectOssArch(device: string): "ecp5" | "ice40" | "gowin" | "nexus" | "gatemate" | "machxo2" {
+  const d = device.toUpperCase();
+  if (d.startsWith("LFE5U")) return "ecp5";
+  if (d.startsWith("ICE40")) return "ice40";
+  if (d.startsWith("GW")) return "gowin";
+  if (d.startsWith("LIFCL")) return "nexus";
+  if (d.startsWith("CCGM")) return "gatemate";
+  if (d.startsWith("LCMXO2")) return "machxo2";
+  return "ecp5";
+}
+
+const OSS_ARCH_OPTIONS: Record<string, Record<string, StageOption[]>> = {
+  ecp5: OSS_ECP5_STAGE_OPTIONS,
+  ice40: OSS_ICE40_STAGE_OPTIONS,
+  gowin: OSS_GOWIN_STAGE_OPTIONS,
+  nexus: OSS_NEXUS_STAGE_OPTIONS,
+  gatemate: OSS_NEXUS_STAGE_OPTIONS, // reuse nexus options (similar tool flow)
+  machxo2: OSS_ECP5_STAGE_OPTIONS,   // MachXO2 uses same ecppack flow
 };
 
 interface BuildPipelineProps {
@@ -257,6 +361,8 @@ interface BuildPipelineProps {
   onOptionsChange: (options: Record<string, string>) => void;
   saveStatus?: "saved" | "saving" | "unsaved";
   changedFromCommit?: string[];
+  /** Current device string — used to select arch-specific options for OSS backend */
+  deviceString?: string;
 }
 
 function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; onChange: (v: string) => void }) {
@@ -343,6 +449,7 @@ function PStep({
   onOptionChange,
   onRunTo,
   backendId,
+  deviceString,
 }: {
   s: PipelineStage;
   i: number;
@@ -359,6 +466,7 @@ function PStep({
   onOptionChange: (key: string, val: string) => void;
   onRunTo: () => void;
   backendId: string;
+  deviceString?: string;
 }) {
   const { C, MONO } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -372,13 +480,17 @@ function PStep({
 
   const col = { done: C.ok, run: C.accent, pending: C.t3 }[st];
 
+  // For OSS backend, select architecture-specific options based on device string
+  const ossArch = deviceString ? detectOssArch(deviceString) : "ecp5";
+  const ossOptions = OSS_ARCH_OPTIONS[ossArch] ?? OSS_STAGE_OPTIONS;
+
   const STAGE_OPTIONS_MAP: Record<string, Record<string, StageOption[]>> = {
     radiant: RADIANT_STAGE_OPTIONS,
     diamond: RADIANT_STAGE_OPTIONS,
     quartus: QUARTUS_STAGE_OPTIONS,
     vivado: VIVADO_STAGE_OPTIONS,
-    oss: OSS_STAGE_OPTIONS,
-    opensource: OSS_STAGE_OPTIONS,
+    oss: ossOptions,
+    opensource: ossOptions,
   };
   const allStageOptions = STAGE_OPTIONS_MAP[backendId] ?? RADIANT_STAGE_OPTIONS;
   const myOpts = allStageOptions[s.id] ?? [];
@@ -582,6 +694,7 @@ export default memo(function BuildPipeline({
   onOptionsChange,
   saveStatus,
   changedFromCommit,
+  deviceString,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
   const B = backend;
@@ -733,6 +846,7 @@ export default memo(function BuildPipeline({
             onOptionChange={handleOptionChange}
             onRunTo={() => runToStage(i)}
             backendId={B.id}
+            deviceString={deviceString}
           />
         ))}
         {allDone && (

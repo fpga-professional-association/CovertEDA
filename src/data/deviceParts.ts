@@ -294,6 +294,12 @@ export const OSS_DEVICES: DeviceFamily[] = [
       "LIFCL-17-BG256", "LIFCL-40-BG256", "LIFCL-40-BG400",
     ],
   },
+  {
+    family: "GateMate (experimental)",
+    parts: [
+      "CCGM1A1-QFN48", "CCGM1A2-QFN48", "CCGM1A4-BGA324", "CCGM1A8-BGA324", "CCGM1A16-BGA324",
+    ],
+  },
 ];
 
 // Map backend ID to device families
@@ -303,6 +309,7 @@ export const DEVICE_MAP: Record<string, DeviceFamily[]> = {
   quartus: QUARTUS_DEVICES,
   vivado: VIVADO_DEVICES,
   oss: OSS_DEVICES,
+  opensource: OSS_DEVICES,
 };
 
 // Flatten all parts for a backend into a searchable list

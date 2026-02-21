@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, PowerReportData, DrcReportData, IoBankData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
-import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
+import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
 import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar, Select } from "./components/shared";
@@ -112,7 +112,16 @@ function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAdd
   const [genState, setGenState] = useState<"idle" | "preview" | "running" | "done" | "error">("idle");
   const [genOutput, setGenOutput] = useState<string[]>([]);
 
-  const catalog = backendId === "quartus" ? QUARTUS_IP_CATALOG : backendId === "opensource" ? OSS_IP_CATALOG : RADIANT_IP_CATALOG;
+  const catalog = useMemo(() => {
+    if (backendId === "quartus") return QUARTUS_IP_CATALOG;
+    if (backendId === "opensource") {
+      const d = device.toUpperCase();
+      if (d.startsWith("ICE40")) return ICE40_IP_CATALOG;
+      if (d.startsWith("GW")) return GOWIN_IP_CATALOG;
+      return OSS_IP_CATALOG; // ECP5 default + Nexus/GateMate/MachXO2
+    }
+    return RADIANT_IP_CATALOG;
+  }, [backendId, device]);
 
   const filtered = useMemo(() => {
     if (!ipSearch) return catalog;
@@ -1818,6 +1827,7 @@ export default function App() {
                   onOptionsChange={setBuildOptions}
                   saveStatus={buildSaveStatus}
                   changedFromCommit={changedFromCommit}
+                  deviceString={project?.device ?? ""}
                 />
                 {buildDone && realFiles && (
                   <BuildArtifacts

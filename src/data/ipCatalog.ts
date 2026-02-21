@@ -538,4 +538,242 @@ export const OSS_IP_CATALOG: IpCore[] = [
   },
 ];
 
+/** iCE40-specific primitives (SB_* cells) */
+export const ICE40_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "SB_RAM256x16",
+    category: "Memory",
+    description: "iCE40 256x16 single-port block RAM primitive",
+    families: ["iCE40"],
+    template: `SB_RAM256x16 bram_inst (\n  .RDATA(rdata),\n  .RADDR(raddr),\n  .RCLK(rclk),\n  .RCLKE(1'b1),\n  .RE(re),\n  .WDATA(wdata),\n  .WADDR(waddr),\n  .WCLK(wclk),\n  .WCLKE(1'b1),\n  .WE(we)\n);`,
+  },
+  {
+    name: "SB_RAM40_4K",
+    category: "Memory",
+    description: "iCE40 4Kbit block RAM with configurable aspect ratio",
+    families: ["iCE40"],
+    params: [
+      { key: "READ_MODE", label: "Read Mode", type: "select", default: "0", choices: ["0", "1", "2", "3"] },
+      { key: "WRITE_MODE", label: "Write Mode", type: "select", default: "0", choices: ["0", "1", "2", "3"] },
+    ],
+    template: `SB_RAM40_4K #(\n  .READ_MODE({READ_MODE}),\n  .WRITE_MODE({WRITE_MODE})\n) bram_inst (\n  .RDATA(rdata),\n  .RADDR(raddr),\n  .RCLK(rclk),\n  .RCLKE(1'b1),\n  .RE(re),\n  .WDATA(wdata),\n  .WADDR(waddr),\n  .MASK(16'hFFFF),\n  .WCLK(wclk),\n  .WCLKE(1'b1),\n  .WE(we)\n);`,
+  },
+  {
+    name: "SB_SPRAM256KA",
+    category: "Memory",
+    description: "iCE40 UltraPlus 256Kbit single-port RAM (hard IP)",
+    families: ["iCE40"],
+    template: `SB_SPRAM256KA spram_inst (\n  .ADDRESS(addr),\n  .DATAIN(datain),\n  .MASKWREN(4'b1111),\n  .WREN(wren),\n  .CHIPSELECT(1'b1),\n  .CLOCK(clk),\n  .STANDBY(1'b0),\n  .SLEEP(1'b0),\n  .POWEROFF(1'b1),\n  .DATAOUT(dataout)\n);`,
+  },
+
+  // Clock
+  {
+    name: "SB_PLL40_CORE",
+    category: "Clock",
+    description: "iCE40 PLL core for frequency synthesis",
+    families: ["iCE40"],
+    params: [
+      { key: "DIVR", label: "Reference Divider", type: "number", default: "0", min: 0, max: 15 },
+      { key: "DIVF", label: "Feedback Divider", type: "number", default: "63", min: 0, max: 127 },
+      { key: "DIVQ", label: "Output Divider", type: "number", default: "4", min: 0, max: 7 },
+    ],
+    template: `SB_PLL40_CORE #(\n  .DIVR({DIVR}),\n  .DIVF({DIVF}),\n  .DIVQ({DIVQ}),\n  .FILTER_RANGE(3'b001),\n  .FEEDBACK_PATH("SIMPLE")\n) pll_inst (\n  .REFERENCECLK(clk_in),\n  .PLLOUTCORE(clk_out),\n  .LOCK(pll_lock),\n  .RESETB(1'b1),\n  .BYPASS(1'b0)\n);`,
+  },
+  {
+    name: "SB_HFOSC",
+    category: "Clock",
+    description: "iCE40 UltraPlus 48 MHz high-frequency oscillator",
+    families: ["iCE40"],
+    params: [
+      { key: "CLKHF_DIV", label: "Clock Divider", type: "select", default: "0b00", choices: ["0b00", "0b01", "0b10", "0b11"] },
+    ],
+    template: `SB_HFOSC #(\n  .CLKHF_DIV("{CLKHF_DIV}")\n) hfosc_inst (\n  .CLKHFEN(1'b1),\n  .CLKHFPU(1'b1),\n  .CLKHF(clk_48mhz)\n);`,
+  },
+  {
+    name: "SB_LFOSC",
+    category: "Clock",
+    description: "iCE40 UltraPlus 10 kHz low-frequency oscillator",
+    families: ["iCE40"],
+    template: `SB_LFOSC lfosc_inst (\n  .CLKLFEN(1'b1),\n  .CLKLFPU(1'b1),\n  .CLKLF(clk_10khz)\n);`,
+  },
+
+  // I/O
+  {
+    name: "SB_IO",
+    category: "I/O",
+    description: "iCE40 configurable I/O buffer",
+    families: ["iCE40"],
+    params: [
+      { key: "PIN_TYPE", label: "Pin Type", type: "text", default: "6'b010100" },
+    ],
+    template: `SB_IO #(\n  .PIN_TYPE({PIN_TYPE})\n) io_inst (\n  .PACKAGE_PIN(pad),\n  .D_IN_0(data_in),\n  .D_OUT_0(data_out),\n  .OUTPUT_ENABLE(oe)\n);`,
+  },
+  {
+    name: "SB_GB",
+    category: "I/O",
+    description: "iCE40 global buffer for clock distribution",
+    families: ["iCE40"],
+    template: `SB_GB gb_inst (\n  .USER_SIGNAL_TO_GLOBAL_BUFFER(clk_in),\n  .GLOBAL_BUFFER_OUTPUT(clk_global)\n);`,
+  },
+
+  // Misc
+  {
+    name: "SB_CARRY",
+    category: "Misc",
+    description: "iCE40 carry chain cell for efficient arithmetic",
+    families: ["iCE40"],
+  },
+  {
+    name: "SB_MAC16",
+    category: "DSP",
+    description: "iCE40 UltraPlus 16-bit multiply-accumulate DSP block",
+    families: ["iCE40"],
+    template: `SB_MAC16 #(\n  .A_SIGNED(1'b1),\n  .B_SIGNED(1'b1)\n) mac_inst (\n  .A(a),\n  .B(b),\n  .O(result),\n  .CLK(clk),\n  .CE(1'b1)\n);`,
+  },
+
+  // Interface (soft cores)
+  {
+    name: "UART TX/RX",
+    category: "Interface",
+    description: "Simple UART transmitter and receiver (soft core)",
+    families: ["iCE40"],
+    params: [
+      { key: "CLK_FREQ", label: "Clock Frequency", type: "number", default: "12000000", unit: "Hz" },
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400"] },
+    ],
+  },
+  {
+    name: "SPI Master",
+    category: "Interface",
+    description: "SPI master controller (soft core)",
+    families: ["iCE40"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 32, unit: "bits" },
+    ],
+  },
+  {
+    name: "SB_I2C",
+    category: "Interface",
+    description: "iCE40 UltraPlus hard I2C controller",
+    families: ["iCE40"],
+  },
+  {
+    name: "SB_SPI",
+    category: "Interface",
+    description: "iCE40 UltraPlus hard SPI controller",
+    families: ["iCE40"],
+  },
+];
+
+/** Gowin-specific primitives (GW_* cells for Apicula-supported devices) */
+export const GOWIN_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "SP",
+    category: "Memory",
+    description: "Gowin single-port SRAM primitive",
+    families: ["Gowin"],
+    params: [
+      { key: "READ_MODE", label: "Read Mode", type: "select", default: "0", choices: ["0", "1"] },
+      { key: "WRITE_MODE", label: "Write Mode", type: "select", default: "0", choices: ["0", "1"] },
+    ],
+  },
+  {
+    name: "DPB",
+    category: "Memory",
+    description: "Gowin dual-port block RAM primitive",
+    families: ["Gowin"],
+  },
+  {
+    name: "SDPB",
+    category: "Memory",
+    description: "Gowin semi-dual-port block RAM",
+    families: ["Gowin"],
+  },
+
+  // DSP
+  {
+    name: "MULT9X9",
+    category: "DSP",
+    description: "Gowin 9x9 multiplier",
+    families: ["Gowin"],
+  },
+  {
+    name: "MULT18X18",
+    category: "DSP",
+    description: "Gowin 18x18 signed multiplier",
+    families: ["Gowin"],
+  },
+  {
+    name: "ALU54D",
+    category: "DSP",
+    description: "Gowin 54-bit ALU block",
+    families: ["Gowin"],
+  },
+
+  // Clock
+  {
+    name: "rPLL",
+    category: "Clock",
+    description: "Gowin reconfigurable PLL for clock synthesis",
+    families: ["Gowin"],
+    params: [
+      { key: "IDIV_SEL", label: "Input Divider", type: "number", default: "0", min: 0, max: 63 },
+      { key: "FBDIV_SEL", label: "Feedback Divider", type: "number", default: "0", min: 0, max: 63 },
+      { key: "ODIV_SEL", label: "Output Divider", type: "select", default: "8", choices: ["2", "4", "8", "16", "32", "48", "64", "80", "96", "112", "128"] },
+    ],
+    template: `rPLL #(\n  .IDIV_SEL({IDIV_SEL}),\n  .FBDIV_SEL({FBDIV_SEL}),\n  .ODIV_SEL({ODIV_SEL}),\n  .FCLKIN("25")\n) pll_inst (\n  .CLKIN(clk_in),\n  .CLKOUT(clk_out),\n  .LOCK(pll_lock),\n  .RESET(1'b0),\n  .RESET_P(1'b0),\n  .CLKFB(1'b0),\n  .FBDSEL(6'b0),\n  .IDSEL(6'b0),\n  .ODSEL(6'b0)\n);`,
+  },
+  {
+    name: "OSCH",
+    category: "Clock",
+    description: "Gowin internal oscillator",
+    families: ["Gowin"],
+    params: [
+      { key: "FREQ_DIV", label: "Frequency Divider", type: "number", default: "100", min: 2, max: 128 },
+    ],
+  },
+
+  // I/O
+  {
+    name: "IBUF/OBUF",
+    category: "I/O",
+    description: "Gowin I/O buffer primitives",
+    families: ["Gowin"],
+  },
+  {
+    name: "TLVDS_OBUF",
+    category: "I/O",
+    description: "Gowin true LVDS output buffer",
+    families: ["Gowin"],
+  },
+
+  // Misc
+  {
+    name: "GSR",
+    category: "Misc",
+    description: "Gowin global set/reset network",
+    families: ["Gowin"],
+  },
+
+  // Interface (soft cores)
+  {
+    name: "UART TX/RX",
+    category: "Interface",
+    description: "Simple UART transmitter and receiver (soft core)",
+    families: ["Gowin"],
+    params: [
+      { key: "CLK_FREQ", label: "Clock Frequency", type: "number", default: "27000000", unit: "Hz" },
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400"] },
+    ],
+  },
+  {
+    name: "SPI Master",
+    category: "Interface",
+    description: "SPI master controller (soft core)",
+    families: ["Gowin"],
+  },
+];
+
 export const IP_CATEGORIES = ["Memory", "DSP", "Interface", "Clock", "I/O", "Misc"] as const;
