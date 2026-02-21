@@ -181,7 +181,7 @@ export default function StartScreen({
   const hasLicense = licenseResult && licenseResult.features.length > 0;
 
   // Placeholder backends not yet implemented — show as "IN DEVELOPMENT"
-  const PLACEHOLDER_IDS = new Set(["libero", "ace", "gowin", "efinity", "quicklogic", "flexlogix"]);
+  const PLACEHOLDER_IDS = new Set(["gowin", "efinity", "quicklogic", "flexlogix"]);
 
   return (
     <div

@@ -1128,10 +1128,8 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
         })
         .collect();
 
-    // Append placeholder vendors (not yet implemented)
+    // Append placeholder vendors (not yet implemented in Rust backend)
     let placeholders = [
-        ("libero", "Microchip Libero SoC"),
-        ("ace", "Achronix ACE"),
         ("gowin", "GOWIN EDA"),
         ("efinity", "Efinix Efinity"),
         ("quicklogic", "QuickLogic Aurora"),
