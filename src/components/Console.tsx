@@ -74,6 +74,15 @@ export default memo(function Console({
 
   const logRef = useRef<HTMLDivElement>(null);
   const wasAtBottom = useRef(true);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    const text = logs.map((l) => `${linePrefixes[l.t] || ""}${l.m}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [logs]);
 
   const filteredLogs = useMemo(() => {
     if (!search) return logs;
@@ -141,6 +150,9 @@ export default memo(function Console({
         )}
         <span style={{ flex: 1 }} />
         {logs.length} lines
+        <Btn small onClick={handleCopy}>
+          {copied ? "Copied!" : "Copy"}
+        </Btn>
         <Btn small onClick={onClear}>
           Clear
         </Btn>
