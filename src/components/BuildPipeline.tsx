@@ -1,7 +1,7 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
-import { Badge, Select } from "./shared";
+import { Badge, Btn, Select } from "./shared";
 import { Zap, Check } from "./Icons";
 
 type StageOption = {
@@ -494,6 +494,20 @@ export default memo(function BuildPipeline({
   const B = backend;
   const allDone = !building && buildStep >= B.pipeline.length && buildStep >= 0;
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ block: "end" });
+  }, [logs.length]);
+
+  const handleCopy = useCallback(() => {
+    const text = logs.map((l) => l.m).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [logs]);
 
   const panel: React.CSSProperties = {
     background: C.s1,
@@ -664,6 +678,17 @@ export default memo(function BuildPipeline({
           {"\u25B6"} {activeStage !== null && B.pipeline[activeStage]
             ? B.pipeline[activeStage].label
             : "Build Output"}
+          <span style={{ flex: 1 }} />
+          {logs.length > 0 && (
+            <>
+              <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
+                {logs.length} lines
+              </span>
+              <Btn small onClick={handleCopy}>
+                {copied ? "Copied!" : "Copy"}
+              </Btn>
+            </>
+          )}
         </div>
         <div
           style={{
@@ -694,6 +719,7 @@ export default memo(function BuildPipeline({
               Running...
             </div>
           )}
+          <div ref={logEndRef} />
         </div>
       </div>
     </div>
