@@ -398,4 +398,144 @@ export const QUARTUS_IP_CATALOG: IpCore[] = [
   { name: "Virtual JTAG", category: "Misc", description: "Custom JTAG interface for on-chip debug", families: ["Cyclone V", "Cyclone 10", "Arria 10", "Stratix 10", "Agilex"] },
 ];
 
+/** OSS CAD Suite — soft-core primitives and Yosys-synthesizable modules for ECP5 and iCE40. */
+export const OSS_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "Sync FIFO",
+    category: "Memory",
+    description: "Single-clock synchronous FIFO (synthesizable Verilog)",
+    families: ["ECP5", "iCE40"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 256, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "number", default: "16", min: 4, max: 65536 },
+    ],
+    template: `// Sync FIFO — {DATA_WIDTH}×{DEPTH}\nmodule sync_fifo #(\n  parameter DATA_WIDTH = {DATA_WIDTH},\n  parameter DEPTH = {DEPTH}\n) (\n  input  wire clk, rst,\n  input  wire wr_en, rd_en,\n  input  wire [DATA_WIDTH-1:0] din,\n  output reg  [DATA_WIDTH-1:0] dout,\n  output wire full, empty\n);`,
+  },
+  {
+    name: "DP16KD",
+    category: "Memory",
+    description: "ECP5 dual-port 16Kbit block RAM primitive",
+    families: ["ECP5"],
+    params: [
+      { key: "DATA_WIDTH_A", label: "Port A Width", type: "select", default: "18", choices: ["1", "2", "4", "9", "18", "36"] },
+      { key: "DATA_WIDTH_B", label: "Port B Width", type: "select", default: "18", choices: ["1", "2", "4", "9", "18", "36"] },
+    ],
+    template: `DP16KD #(\n  .DATA_WIDTH_A({DATA_WIDTH_A}),\n  .DATA_WIDTH_B({DATA_WIDTH_B})\n) bram_inst (\n  .DIA(dia), .ADA(ada), .CEA(cea), .CLKA(clka),\n  .DIB(dib), .ADB(adb), .CEB(ceb), .CLKB(clkb),\n  .DOA(doa), .DOB(dob)\n);`,
+  },
+  {
+    name: "PDPW16KD",
+    category: "Memory",
+    description: "ECP5 pseudo dual-port wide 16Kbit block RAM",
+    families: ["ECP5"],
+  },
+
+  // DSP
+  {
+    name: "MULT18X18D",
+    category: "DSP",
+    description: "ECP5 18×18 signed multiplier with pipeline registers",
+    families: ["ECP5"],
+    params: [
+      { key: "REG_INPUTA_CLK", label: "Input A Reg", type: "select", default: "NONE", choices: ["NONE", "CLK0", "CLK1", "CLK2", "CLK3"] },
+      { key: "REG_INPUTB_CLK", label: "Input B Reg", type: "select", default: "NONE", choices: ["NONE", "CLK0", "CLK1", "CLK2", "CLK3"] },
+    ],
+    template: `MULT18X18D #(\n  .REG_INPUTA_CLK("{REG_INPUTA_CLK}"),\n  .REG_INPUTB_CLK("{REG_INPUTB_CLK}")\n) mult_inst (\n  .A(a), .B(b), .P(p)\n);`,
+  },
+  {
+    name: "ALU54B",
+    category: "DSP",
+    description: "ECP5 54-bit ALU for wide arithmetic",
+    families: ["ECP5"],
+  },
+
+  // Interface
+  {
+    name: "UART TX/RX",
+    category: "Interface",
+    description: "Simple UART transmitter and receiver (soft core)",
+    families: ["ECP5", "iCE40"],
+    params: [
+      { key: "CLK_FREQ", label: "Clock Frequency", type: "number", default: "25000000", unit: "Hz" },
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"] },
+    ],
+  },
+  {
+    name: "SPI Master",
+    category: "Interface",
+    description: "SPI master controller (soft core)",
+    families: ["ECP5", "iCE40"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 32, unit: "bits" },
+      { key: "CPOL", label: "Clock Polarity", type: "select", default: "0", choices: ["0", "1"] },
+      { key: "CPHA", label: "Clock Phase", type: "select", default: "0", choices: ["0", "1"] },
+    ],
+  },
+  {
+    name: "I2C Master",
+    category: "Interface",
+    description: "I2C master controller (soft core)",
+    families: ["ECP5", "iCE40"],
+  },
+
+  // Clock
+  {
+    name: "EHXPLLL",
+    category: "Clock",
+    description: "ECP5 PLL primitive for clock generation and frequency synthesis",
+    families: ["ECP5"],
+    params: [
+      { key: "CLKI_DIV", label: "Input Divider", type: "number", default: "1", min: 1, max: 128 },
+      { key: "CLKFB_DIV", label: "Feedback Divider", type: "number", default: "1", min: 1, max: 128 },
+      { key: "CLKOP_DIV", label: "Output Divider", type: "number", default: "1", min: 1, max: 128 },
+    ],
+    template: `EHXPLLL #(\n  .CLKI_DIV({CLKI_DIV}),\n  .CLKFB_DIV({CLKFB_DIV}),\n  .CLKOP_DIV({CLKOP_DIV})\n) pll_inst (\n  .CLKI(clk_in),\n  .CLKOP(clk_out),\n  .LOCK(pll_lock)\n);`,
+  },
+  {
+    name: "DCCA",
+    category: "Clock",
+    description: "ECP5 dedicated clock network access buffer",
+    families: ["ECP5"],
+    template: `DCCA dcc_inst (\n  .CLKI(clk_in),\n  .CLKO(clk_buffered),\n  .CE(1'b1)\n);`,
+  },
+  {
+    name: "Clock Divider",
+    category: "Clock",
+    description: "Parameterizable clock divider (soft logic)",
+    families: ["ECP5", "iCE40"],
+    params: [
+      { key: "DIV_FACTOR", label: "Division Factor", type: "number", default: "2", min: 2, max: 65536 },
+    ],
+  },
+
+  // I/O
+  {
+    name: "TRELLIS_IO",
+    category: "I/O",
+    description: "ECP5 I/O buffer primitive with configurable direction and standards",
+    families: ["ECP5"],
+    params: [
+      { key: "DIR", label: "Direction", type: "select", default: "INPUT", choices: ["INPUT", "OUTPUT", "BIDIR"] },
+    ],
+    template: `TRELLIS_IO #(\n  .DIR("{DIR}")\n) io_inst (\n  .B(pad),\n  .I(data_out),\n  .O(data_in),\n  .T(tristate)\n);`,
+  },
+  { name: "LVDS", category: "I/O", description: "ECP5 LVDS differential I/O buffer", families: ["ECP5"] },
+  { name: "ODDRX1F", category: "I/O", description: "ECP5 DDR output register", families: ["ECP5"] },
+  { name: "IDDRX1F", category: "I/O", description: "ECP5 DDR input register", families: ["ECP5"] },
+
+  // Misc
+  { name: "CCU2C", category: "Misc", description: "ECP5 carry-chain unit for efficient arithmetic", families: ["ECP5"] },
+  { name: "GSR", category: "Misc", description: "ECP5 global set/reset network", families: ["ECP5"] },
+  {
+    name: "CDC Synchronizer",
+    category: "Misc",
+    description: "Clock domain crossing synchronizer (2-FF, soft core)",
+    families: ["ECP5", "iCE40"],
+    params: [
+      { key: "STAGES", label: "Sync Stages", type: "number", default: "2", min: 2, max: 4 },
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "1", min: 1, max: 64, unit: "bits" },
+    ],
+  },
+];
+
 export const IP_CATEGORIES = ["Memory", "DSP", "Interface", "Clock", "I/O", "Misc"] as const;

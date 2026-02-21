@@ -204,6 +204,11 @@ pub struct PinConstraint {
 // ── I/O Banking ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IoReport {
+    pub banks: Vec<IoBank>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IoBank {
     pub id: String,
     pub vccio: String,

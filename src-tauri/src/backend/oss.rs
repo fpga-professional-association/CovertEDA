@@ -347,17 +347,17 @@ fi
 mkdir -p build
 
 echo "=== Yosys Synthesis ==="
-{yosys} -p "synth_{family} -top {top_module} -json build/out.json" "${{SRC_FILES[@]}}"
+{yosys} -p "synth_{family} -top {top_module} -json build/out.json" "${{SRC_FILES[@]}}" 2>&1 | tee build/synth.log
 
 echo "=== nextpnr Place & Route ==="
 {nextpnr} --{size} \
     --json build/out.json \
     --lpf constraints/pins.lpf \
     --textcfg build/out.config \
-    --report build/report.json
+    --report build/report.json 2>&1 | tee build/pnr.log
 
 echo "=== ecppack Bitstream ==="
-{ecppack} --compress build/out.config --bit build/out.bit
+{ecppack} --compress build/out.config --bit build/out.bit 2>&1 | tee build/bitstream.log
 
 echo "=== Done ==="
 "#,
@@ -395,8 +395,96 @@ echo "=== Done ==="
         Ok(None)
     }
 
-    fn parse_drc_report(&self, _impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
-        Ok(None)
+    fn parse_drc_report(&self, impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
+        // Parse warnings/errors from yosys synth.log and nextpnr pnr.log
+        let synth_log = impl_dir.join("build").join("synth.log");
+        let pnr_log = impl_dir.join("build").join("pnr.log");
+
+        let mut items = Vec::new();
+        let mut errors = 0u32;
+        let mut warnings = 0u32;
+        let mut info_count = 0u32;
+
+        for (log_path, source) in [(synth_log, "yosys"), (pnr_log, "nextpnr")] {
+            if let Ok(content) = std::fs::read_to_string(&log_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("Warning:") || trimmed.contains("] Warning:") {
+                        warnings += 1;
+                        let msg = trimmed
+                            .splitn(2, "Warning:")
+                            .nth(1)
+                            .unwrap_or(trimmed)
+                            .trim()
+                            .to_string();
+                        items.push(DrcItem {
+                            severity: DrcSeverity::Warning,
+                            code: format!("{}-W", source.to_uppercase()),
+                            message: msg,
+                            location: source.to_string(),
+                            action: "Review warning".to_string(),
+                        });
+                    } else if trimmed.starts_with("ERROR:")
+                        || trimmed.starts_with("Error:")
+                        || trimmed.contains("] ERROR:")
+                    {
+                        errors += 1;
+                        let msg = trimmed
+                            .splitn(2, "rror:")
+                            .nth(1)
+                            .unwrap_or(trimmed)
+                            .trim()
+                            .to_string();
+                        items.push(DrcItem {
+                            severity: DrcSeverity::Error,
+                            code: format!("{}-E", source.to_uppercase()),
+                            message: msg,
+                            location: source.to_string(),
+                            action: "Fix error".to_string(),
+                        });
+                    } else if trimmed.starts_with("Info:") || trimmed.contains("] Info:") {
+                        // Only capture notable info messages, skip routine ones
+                        if trimmed.contains("constraint") || trimmed.contains("unplaced") {
+                            info_count += 1;
+                            let msg = trimmed
+                                .splitn(2, "Info:")
+                                .nth(1)
+                                .unwrap_or(trimmed)
+                                .trim()
+                                .to_string();
+                            items.push(DrcItem {
+                                severity: DrcSeverity::Info,
+                                code: format!("{}-I", source.to_uppercase()),
+                                message: msg,
+                                location: source.to_string(),
+                                action: "Review".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        if items.is_empty() && errors == 0 && warnings == 0 {
+            // No issues found — still return a clean report
+            return Ok(Some(DrcReport {
+                errors: 0,
+                critical_warnings: 0,
+                warnings: 0,
+                info: 0,
+                waived: 0,
+                items: vec![],
+            }));
+        }
+
+        Ok(Some(DrcReport {
+            errors,
+            critical_warnings: 0,
+            warnings,
+            info: info_count,
+            waived: 0,
+            items,
+        }))
     }
 
     fn read_constraints(&self, constraint_file: &Path) -> BackendResult<Vec<PinConstraint>> {

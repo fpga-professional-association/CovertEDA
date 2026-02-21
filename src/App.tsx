@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
-import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
+import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, PowerReportData, DrcReportData, IoBankData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
+import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
 import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar, Select } from "./components/shared";
@@ -34,8 +34,14 @@ import {
   getFileTreeMapped,
   getTimingReport,
   getUtilizationReport,
+  getPowerReport,
+  getDrcReport,
+  getIoReport,
   mapTimingReport,
   mapUtilizationReport,
+  mapPowerReport,
+  mapDrcReport,
+  mapIoReport,
   getRuntimeBackends,
   getAppConfig,
   deleteFile,
@@ -106,7 +112,7 @@ function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAdd
   const [genState, setGenState] = useState<"idle" | "preview" | "running" | "done" | "error">("idle");
   const [genOutput, setGenOutput] = useState<string[]>([]);
 
-  const catalog = backendId === "quartus" ? QUARTUS_IP_CATALOG : RADIANT_IP_CATALOG;
+  const catalog = backendId === "quartus" ? QUARTUS_IP_CATALOG : backendId === "opensource" ? OSS_IP_CATALOG : RADIANT_IP_CATALOG;
 
   const filtered = useMemo(() => {
     if (!ipSearch) return catalog;
@@ -620,6 +626,9 @@ export default function App() {
   const [viewingFile, setViewingFile] = useState<FileContent | null>(null);
   const [realTimingReport, setRealTimingReport] = useState<TimingReportData | null>(null);
   const [realUtilReport, setRealUtilReport] = useState<UtilizationReportData | null>(null);
+  const [realPowerReport, setRealPowerReport] = useState<PowerReportData | null>(null);
+  const [realDrcReport, setRealDrcReport] = useState<DrcReportData | null>(null);
+  const [realIoReport, setRealIoReport] = useState<{ title: string; generated: string; banks: IoBankData[] } | null>(null);
   const [buildDone, setBuildDone] = useState(false);
   const [activeStage, setActiveStage] = useState<number | null>(null);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
@@ -746,7 +755,12 @@ export default function App() {
           f.path?.includes(implDir) &&
           (f.n.endsWith(".twr") || f.n.endsWith(".mrp") || f.n.endsWith(".bit") || f.n.endsWith(".jed"))
         );
-        if (hasImpl) {
+        // Also detect OSS builds (build/ directory with report.json or .bit)
+        const hasOssBuild = files.some((f) =>
+          f.path?.includes("/build/") &&
+          (f.n === "report.json" || f.n.endsWith(".bit") || f.n === "out.config")
+        );
+        if (hasImpl || hasOssBuild) {
           setBuildDone(true);
           setBStep(4); // Mark all stages done
           const bName = matchingBackend?.name ?? "Radiant";
@@ -755,6 +769,15 @@ export default function App() {
             .catch(() => {});
           getUtilizationReport(backendId, dir)
             .then((r) => setRealUtilReport(mapUtilizationReport(r)))
+            .catch(() => {});
+          getPowerReport(backendId, dir)
+            .then((r) => { if (r) setRealPowerReport(mapPowerReport(r)); })
+            .catch(() => {});
+          getDrcReport(backendId, dir)
+            .then((r) => { if (r) setRealDrcReport(mapDrcReport(r)); })
+            .catch(() => {});
+          getIoReport(backendId, dir)
+            .then((r) => { if (r) setRealIoReport(mapIoReport(r)); })
             .catch(() => {});
           // Check if sources are newer than build outputs
           checkSourcesStale(dir).then(setSourcesStale).catch(() => {});
@@ -797,6 +820,9 @@ export default function App() {
     setViewingFile(null);
     setRealTimingReport(null);
     setRealUtilReport(null);
+    setRealPowerReport(null);
+    setRealDrcReport(null);
+    setRealIoReport(null);
     setBuildDone(false);
     setActiveStage(null);
   }, []);
@@ -1022,9 +1048,15 @@ export default function App() {
           Promise.all([
             getTimingReport(bid, projectDir).then((r) => mapTimingReport(r, B.name)).catch(() => null),
             getUtilizationReport(bid, projectDir).then((r) => mapUtilizationReport(r)).catch(() => null),
-          ]).then(([timingR, utilR]) => {
+            getPowerReport(bid, projectDir).then((r) => r ? mapPowerReport(r) : null).catch(() => null),
+            getDrcReport(bid, projectDir).then((r) => r ? mapDrcReport(r) : null).catch(() => null),
+            getIoReport(bid, projectDir).then((r) => r ? mapIoReport(r) : null).catch(() => null),
+          ]).then(([timingR, utilR, powerR, drcR, ioR]) => {
             if (timingR) setRealTimingReport(timingR);
             if (utilR) setRealUtilReport(utilR);
+            if (powerR) setRealPowerReport(powerR);
+            if (drcR) setRealDrcReport(drcR);
+            if (ioR) setRealIoReport(ioR);
             // Enrich build record with report data
             const enriched: BuildRecord = { ...record };
             if (timingR) {
@@ -1135,6 +1167,9 @@ export default function App() {
     setBStep(-1);
     setRealTimingReport(null);
     setRealUtilReport(null);
+    setRealPowerReport(null);
+    setRealDrcReport(null);
+    setRealIoReport(null);
     setSourcesStale(false);
     try {
       const removed = await cleanBuild(projectDir);
@@ -1805,9 +1840,9 @@ export default function App() {
                 reports={{
                   timing: realTimingReport,
                   utilization: realUtilReport,
-                  power: null,
-                  drc: null,
-                  io: null,
+                  power: realPowerReport,
+                  drc: realDrcReport,
+                  io: realIoReport,
                 }}
                 device={project?.device ?? B.defaultDev}
                 projectDir={projectDir}

@@ -734,6 +734,14 @@ pub fn clean_build(project_dir: String) -> Result<u32, String> {
         }
     }
 
+    // Remove OSS build/ directory
+    let oss_build = project_path.join("build");
+    if oss_build.exists() && oss_build.is_dir() {
+        if std::fs::remove_dir_all(&oss_build).is_ok() {
+            removed += 1;
+        }
+    }
+
     // Remove build artifacts in project root
     let artifacts = [
         ".coverteda_build.tcl",
@@ -755,23 +763,26 @@ pub fn clean_build(project_dir: String) -> Result<u32, String> {
 pub fn check_sources_stale(project_dir: String) -> Result<bool, String> {
     let project_path = PathBuf::from(&project_dir);
 
-    // Find newest build output timestamp in impl1/
+    // Find newest build output timestamp in impl1/ or build/ (OSS)
     let impl_dir = project_path.join("impl1");
-    if !impl_dir.exists() {
-        return Ok(false); // No build outputs — not stale, just not built
-    }
+    let oss_dir = project_path.join("build");
 
-    let build_exts = ["twr", "bit", "mrp", "par", "jed", "sof"];
+    let build_exts = ["twr", "bit", "mrp", "par", "jed", "sof", "config", "json", "log"];
     let mut newest_output: Option<std::time::SystemTime> = None;
-    if let Ok(entries) = std::fs::read_dir(&impl_dir) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if build_exts.contains(&ext) {
-                    if let Ok(meta) = path.metadata() {
-                        if let Ok(mtime) = meta.modified() {
-                            if newest_output.map_or(true, |t| mtime > t) {
-                                newest_output = Some(mtime);
+    for search_dir in [&impl_dir, &oss_dir] {
+        if !search_dir.exists() {
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(search_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if build_exts.contains(&ext) {
+                        if let Ok(meta) = path.metadata() {
+                            if let Ok(mtime) = meta.modified() {
+                                if newest_output.map_or(true, |t| mtime > t) {
+                                    newest_output = Some(mtime);
+                                }
                             }
                         }
                     }
@@ -798,7 +809,7 @@ pub fn check_sources_stale(project_dir: String) -> Result<bool, String> {
                 let path = entry.path();
                 if path.is_dir() {
                     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                    if !name.starts_with("impl") && !name.starts_with(".") {
+                    if !name.starts_with("impl") && name != "build" && !name.starts_with(".") {
                         scan_sources(&path, exts, newest);
                     }
                 } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -883,6 +894,129 @@ pub fn get_utilization_report(
     backend
         .parse_utilization_report(&PathBuf::from(&impl_dir))
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_power_report(
+    state: State<'_, AppState>,
+    backend_id: String,
+    impl_dir: String,
+) -> Result<Option<PowerReport>, String> {
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend
+        .parse_power_report(&PathBuf::from(&impl_dir))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_drc_report(
+    state: State<'_, AppState>,
+    backend_id: String,
+    impl_dir: String,
+) -> Result<Option<DrcReport>, String> {
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend
+        .parse_drc_report(&PathBuf::from(&impl_dir))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_io_report(
+    state: State<'_, AppState>,
+    backend_id: String,
+    project_dir: String,
+) -> Result<Option<IoReport>, String> {
+    let project_path = PathBuf::from(&project_dir);
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+
+    // Find constraint files in common locations
+    let ext = backend.constraint_ext();
+    let search_dirs = [
+        project_path.join("constraints"),
+        project_path.join("src"),
+        project_path.clone(),
+    ];
+
+    let mut all_constraints = Vec::new();
+    for dir in &search_dirs {
+        if !dir.exists() {
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.extension().map(|e| e == ext).unwrap_or(false) {
+                    if let Ok(pins) = backend.read_constraints(&path) {
+                        all_constraints.extend(pins);
+                    }
+                }
+            }
+        }
+    }
+
+    if all_constraints.is_empty() {
+        return Ok(None);
+    }
+
+    // Group by I/O standard (acts as "bank" for grouping)
+    let mut groups: std::collections::HashMap<String, Vec<PinConstraint>> =
+        std::collections::HashMap::new();
+    for c in &all_constraints {
+        groups
+            .entry(c.io_standard.clone())
+            .or_default()
+            .push(c.clone());
+    }
+
+    let banks: Vec<IoBank> = groups
+        .into_iter()
+        .map(|(io_std, pins)| {
+            let vccio = match io_std.as_str() {
+                "LVCMOS33" => "3.3V",
+                "LVCMOS25" => "2.5V",
+                "LVCMOS18" => "1.8V",
+                "LVCMOS15" => "1.5V",
+                "LVCMOS12" => "1.2V",
+                "LVTTL" => "3.3V",
+                "SSTL15" => "1.5V",
+                "SSTL18" => "1.8V",
+                "SSTL135" => "1.35V",
+                "LVDS" | "LVDS25" => "2.5V",
+                _ => "3.3V",
+            };
+            let bank_pins: Vec<IoBankPin> = pins
+                .iter()
+                .map(|p| IoBankPin {
+                    pin: p.pin.clone(),
+                    net: p.net.clone(),
+                    direction: if p.direction.is_empty() {
+                        "BIDIR".to_string()
+                    } else {
+                        p.direction.clone()
+                    },
+                })
+                .collect();
+            let count = bank_pins.len() as u32;
+            IoBank {
+                id: io_std,
+                vccio: vccio.to_string(),
+                used: count,
+                total: count,
+                pins: bank_pins,
+            }
+        })
+        .collect();
+
+    Ok(Some(IoReport { banks }))
 }
 
 #[tauri::command]
@@ -1625,18 +1759,20 @@ pub fn list_bundled_examples() -> Result<Vec<BundledExample>, String> {
 pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String, String> {
     let project_path = PathBuf::from(&project_dir);
 
-    // Search in both Radiant (impl1/) and Quartus (output_files/) directories
+    // Search in vendor output dirs and OSS build/ directory
     let search_dirs: Vec<PathBuf> = vec![
         project_path.join("impl1"),
         project_path.join("output_files"),
+        project_path.join("build"),
     ];
 
     // Map report type to file extensions/patterns
+    // Includes vendor-specific patterns and OSS log file names
     let patterns: Vec<&str> = match report_type.as_str() {
-        "synth" => vec!["srr", "srp", "syn.rpt"],
-        "map" => vec!["mrp", "map.rpt"],
-        "par" => vec!["par", "fit.rpt"],
-        "bitstream" => vec!["bgn"],
+        "synth" => vec!["srr", "srp", "syn.rpt", "synth.log"],
+        "map" => vec!["mrp", "map.rpt", "synth.log"],
+        "par" => vec!["par", "fit.rpt", "pnr.log"],
+        "bitstream" => vec!["bgn", "bitstream.log"],
         "timing" => vec!["twr", "sta.rpt"],
         "fit" => vec!["fit.rpt", "par"],
         "sta" => vec!["sta.rpt", "twr"],

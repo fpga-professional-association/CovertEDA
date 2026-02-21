@@ -159,6 +159,55 @@ export async function getRawReport(projectDir: string, reportType: string): Prom
   return invoke<string>("get_raw_report", { projectDir, reportType });
 }
 
+// ── Power / DRC / I/O report types ──
+
+interface RustPowerReport {
+  total_mw: number;
+  junction_temp_c: number;
+  ambient_temp_c: number;
+  theta_ja: number;
+  confidence: string;
+  breakdown: { category: string; mw: number; percentage: number }[];
+  by_rail: { rail: string; mw: number }[];
+}
+
+interface RustDrcReport {
+  errors: number;
+  critical_warnings: number;
+  warnings: number;
+  info: number;
+  waived: number;
+  items: {
+    severity: string;
+    code: string;
+    message: string;
+    location: string;
+    action: string;
+  }[];
+}
+
+interface RustIoReport {
+  banks: {
+    id: string;
+    vccio: string;
+    used: number;
+    total: number;
+    pins: { pin: string; net: string; direction: string }[];
+  }[];
+}
+
+export async function getPowerReport(backendId: string, implDir: string) {
+  return invoke<RustPowerReport | null>("get_power_report", { backendId, implDir });
+}
+
+export async function getDrcReport(backendId: string, implDir: string) {
+  return invoke<RustDrcReport | null>("get_drc_report", { backendId, implDir });
+}
+
+export async function getIoReport(backendId: string, projectDir: string) {
+  return invoke<RustIoReport | null>("get_io_report", { backendId, projectDir });
+}
+
 // ── Runtime backend loading ──
 
 interface RustBackendInfo {
@@ -213,6 +262,7 @@ export async function getRuntimeBackends(): Promise<RuntimeBackend[]> {
 import type {
   ProjectConfig, RecentProject, DetectedTool, LicenseCheckResult,
   FileContent, ProjectFile, TimingReportData, UtilizationReportData,
+  PowerReportData, DrcReportData, IoBankData,
   RuntimeBackend, PipelineStage, ExampleProject,
 } from "../types";
 import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META, EXAMPLE_PROJECTS } from "../data/mockData";
@@ -624,6 +674,65 @@ export function mapUtilizationReport(r: RustResourceReport): UtilizationReportDa
       ff: m.ff,
       ebr: m.ebr,
       pct: `${m.percentage.toFixed(1)}%`,
+    })),
+  };
+}
+
+const POWER_COLORS = ["#f59e0b", "#ef4444", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
+
+export function mapPowerReport(r: RustPowerReport): PowerReportData {
+  return {
+    title: "Power Estimation",
+    generated: new Date().toISOString(),
+    junction: `${r.junction_temp_c.toFixed(1)}\u00B0C`,
+    ambient: `${r.ambient_temp_c.toFixed(1)}\u00B0C`,
+    theta_ja: `${r.theta_ja.toFixed(1)}\u00B0C/W`,
+    total: `${r.total_mw.toFixed(1)} mW`,
+    confidence: r.confidence,
+    breakdown: r.breakdown.map((b, i) => ({
+      cat: b.category,
+      mw: Math.round(b.mw * 10) / 10,
+      pct: Math.round(b.percentage),
+      color: POWER_COLORS[i % POWER_COLORS.length],
+    })),
+    byRail: r.by_rail.map((rail) => ({
+      rail: rail.rail,
+      mw: Math.round(rail.mw * 10) / 10,
+    })),
+  };
+}
+
+export function mapDrcReport(r: RustDrcReport): DrcReportData {
+  return {
+    title: "Design Rule Checks",
+    generated: new Date().toISOString(),
+    summary: {
+      errors: r.errors,
+      critWarns: r.critical_warnings,
+      warnings: r.warnings,
+      info: r.info,
+      waived: r.waived,
+    },
+    items: r.items.map((item) => ({
+      sev: item.severity,
+      code: item.code,
+      msg: item.message,
+      loc: item.location || "\u2014",
+      action: item.action,
+    })),
+  };
+}
+
+export function mapIoReport(r: RustIoReport): { title: string; generated: string; banks: IoBankData[] } {
+  return {
+    title: "I/O Pin Assignments",
+    generated: new Date().toISOString(),
+    banks: r.banks.map((b) => ({
+      id: b.id,
+      vccio: b.vccio,
+      used: b.used,
+      total: b.total,
+      pins: b.pins.map((p) => `${p.pin} ${p.net} ${p.direction}`),
     })),
   };
 }

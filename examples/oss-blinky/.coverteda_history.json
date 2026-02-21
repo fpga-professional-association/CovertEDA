@@ -28,5 +28,23 @@
     ],
     "warnings": 0,
     "errors": 1
+  },
+  {
+    "id": "b-1771693375009",
+    "timestamp": "2026-02-21T17:02:55.009Z",
+    "duration": 5,
+    "status": "success",
+    "backend": "OSS",
+    "device": "LFE5U-85F-6BG381C",
+    "stages": [
+      "synth",
+      "pnr",
+      "pack"
+    ],
+    "warnings": 0,
+    "errors": 0,
+    "fmaxMhz": 206.4,
+    "ffUsed": 33,
+    "ffTotal": 83640
   }
 ]

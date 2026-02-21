@@ -192,9 +192,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_registry_new_has_six_backends() {
+    fn test_registry_new_has_seven_backends() {
         let reg = BackendRegistry::new();
-        assert_eq!(reg.list().len(), 6);
+        assert_eq!(reg.list().len(), 7);
     }
 
     #[test]
