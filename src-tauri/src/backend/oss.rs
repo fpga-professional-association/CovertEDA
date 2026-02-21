@@ -333,11 +333,19 @@ impl FpgaBackend for OssBackend {
 # Device: {device}
 # Top: {top_module}
 set -e
+shopt -s nullglob
 
 {source_env}cd {project_dir}
 
+# Collect source files (Verilog and SystemVerilog)
+SRC_FILES=( src/*.v src/*.sv )
+if [ ${{#SRC_FILES[@]}} -eq 0 ]; then
+    echo "ERROR: No source files found (*.v, *.sv) in src/" >&2
+    exit 1
+fi
+
 echo "=== Yosys Synthesis ==="
-{yosys} -p "synth_{family} -top {top_module} -json build/out.json" src/*.v src/*.sv
+{yosys} -p "synth_{family} -top {top_module} -json build/out.json" "${{SRC_FILES[@]}}"
 
 echo "=== nextpnr Place & Route ==="
 {nextpnr} --{size} \

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "b-1771692725121",
+    "timestamp": "2026-02-21T16:52:05.121Z",
+    "duration": 0,
+    "status": "failed",
+    "backend": "OSS",
+    "device": "LFE5U-85F-6BG381C",
+    "stages": [
+      "synth",
+      "pnr",
+      "pack"
+    ],
+    "warnings": 0,
+    "errors": 1
+  }
+]
