@@ -274,6 +274,7 @@ export type Section =
   | "console"
   | "license"
   | "history"
+  | "programmer"
   | "docs";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream";
@@ -328,27 +329,6 @@ export interface RuntimeBackend {
   constrExt: string;
   pipeline: PipelineStage[];
   available: boolean;
-}
-
-// ── Example Projects ──
-export interface ExampleProject {
-  name: string;
-  description: string;
-  backendId: string;
-  device: string;
-  topModule: string;
-  path: string;
-}
-
-// ── Project Templates ──
-export interface ProjectTemplate {
-  name: string;
-  description: string;
-  category: "Basic" | "Interface" | "DSP" | "Memory" | "SoC";
-  backendId: string;
-  device: string;
-  topModule: string;
-  files: { name: string; content: string }[];
 }
 
 // ── Tool Detection ──

@@ -1580,6 +1580,220 @@ fn uuid_v4() -> String {
     format!("{:x}", t)
 }
 
+// ═══════════════════════════════════════════
+// ── PROGRAMMER COMMANDS ──
+// ═══════════════════════════════════════════
+
+#[tauri::command]
+pub fn detect_programmer_cables(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::programmer::Cable>, String> {
+    // Currently Radiant-only (pgrcmd)
+    let radiant = crate::backend::radiant::RadiantBackend::new();
+    let install_dir = radiant
+        .install_dir()
+        .ok_or("Radiant not installed — cannot scan for programmer cables")?;
+
+    let pgrcmd = crate::programmer::find_pgrcmd(install_dir)
+        .ok_or("pgrcmd not found in Radiant installation")?;
+
+    // Write a scan XCF to a temp file
+    let xcf_content = crate::programmer::generate_scan_xcf();
+    let xcf_path = std::env::temp_dir().join(".coverteda_scan.xcf");
+    std::fs::write(&xcf_path, &xcf_content)
+        .map_err(|e| format!("Failed to write scan XCF: {}", e))?;
+
+    let xcf_arg = wsl_to_windows_path(&xcf_path);
+    let pgrcmd_str = pgrcmd.display().to_string();
+
+    // Determine license env
+    let mut env_vars: HashMap<String, String> = HashMap::new();
+    if let Some(lic_path) = radiant.find_license() {
+        env_vars.insert("LM_LICENSE_FILE".into(), wsl_to_windows_path(&lic_path));
+    }
+
+    let mut cmd = std::process::Command::new(&pgrcmd_str);
+    cmd.arg("-infile").arg(&xcf_arg);
+    for (key, val) in &env_vars {
+        cmd.env(key, val);
+    }
+
+    // Suppress console window on Windows
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = cmd.output().map_err(|e| format!("Failed to run pgrcmd: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}\n{}", stdout, stderr);
+
+    let _ = std::fs::remove_file(&xcf_path);
+
+    // Force-drop the lock to satisfy the borrow checker
+    drop(state);
+
+    Ok(crate::programmer::parse_cable_scan_output(&combined))
+}
+
+#[tauri::command]
+pub fn find_bitstreams(
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let current = state.current_project.lock().map_err(|e| e.to_string())?;
+    let (project_dir, config) = current
+        .as_ref()
+        .ok_or("No project is open")?;
+
+    let bitstreams = crate::programmer::find_bitstreams(project_dir, &config.impl_dir);
+    Ok(bitstreams.into_iter().map(|p| p.display().to_string()).collect())
+}
+
+#[tauri::command]
+pub fn program_device(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    bitstream: String,
+    device: String,
+    cable_port: String,
+    operation: String,
+) -> Result<String, String> {
+    let radiant = crate::backend::radiant::RadiantBackend::new();
+    let install_dir = radiant
+        .install_dir()
+        .ok_or("Radiant not installed")?;
+
+    let pgrcmd = crate::programmer::find_pgrcmd(install_dir)
+        .ok_or("pgrcmd not found")?;
+
+    let bitstream_win = wsl_to_windows_path(&PathBuf::from(&bitstream));
+    let xcf_content = crate::programmer::generate_program_xcf(
+        &bitstream_win,
+        &device,
+        &cable_port,
+        &operation,
+    );
+
+    let xcf_path = std::env::temp_dir().join(".coverteda_program.xcf");
+    std::fs::write(&xcf_path, &xcf_content)
+        .map_err(|e| format!("Failed to write program XCF: {}", e))?;
+
+    let xcf_arg = wsl_to_windows_path(&xcf_path);
+    let pgrcmd_str = pgrcmd.display().to_string();
+
+    let mut env_vars: HashMap<String, String> = HashMap::new();
+    if let Some(lic_path) = radiant.find_license() {
+        env_vars.insert("LM_LICENSE_FILE".into(), wsl_to_windows_path(&lic_path));
+    }
+
+    let prog_id = uuid_v4();
+    let prog_id_clone = prog_id.clone();
+
+    // Force-drop the lock
+    drop(state);
+
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+
+        let _ = app_handle.emit("program:stdout", serde_json::json!({
+            "progId": &prog_id_clone,
+            "line": format!("Programming {} with {}", &device, &bitstream),
+        }));
+        let _ = app_handle.emit("program:stdout", serde_json::json!({
+            "progId": &prog_id_clone,
+            "line": format!("Cable: {}", &cable_port),
+        }));
+        let _ = app_handle.emit("program:stdout", serde_json::json!({
+            "progId": &prog_id_clone,
+            "line": format!("Spawning: {} -infile {}", &pgrcmd_str, &xcf_arg),
+        }));
+
+        let mut cmd = Command::new(&pgrcmd_str);
+        cmd.arg("-infile")
+            .arg(&xcf_arg)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        for (key, val) in &env_vars {
+            cmd.env(key, val);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        match cmd.spawn() {
+            Ok(mut child) => {
+                let stderr_handle = child.stderr.take().map(|stderr| {
+                    let app_h = app_handle.clone();
+                    let pid = prog_id_clone.clone();
+                    std::thread::spawn(move || {
+                        let reader = std::io::BufReader::new(stderr);
+                        for line in reader.lines().flatten() {
+                            let _ = app_h.emit("program:stdout", serde_json::json!({
+                                "progId": &pid,
+                                "line": &line,
+                            }));
+                        }
+                    })
+                });
+
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = std::io::BufReader::new(stdout);
+                    for line in reader.lines().flatten() {
+                        let _ = app_handle.emit("program:stdout", serde_json::json!({
+                            "progId": &prog_id_clone,
+                            "line": &line,
+                        }));
+                    }
+                }
+
+                if let Some(h) = stderr_handle {
+                    let _ = h.join();
+                }
+
+                match child.wait() {
+                    Ok(status) => {
+                        let success = status.success();
+                        let msg = if success {
+                            "Programming complete".to_string()
+                        } else {
+                            format!("Programming failed: {}", status)
+                        };
+                        let _ = app_handle.emit("program:finished", serde_json::json!({
+                            "progId": &prog_id_clone,
+                            "success": success,
+                            "message": &msg,
+                        }));
+                    }
+                    Err(e) => {
+                        let _ = app_handle.emit("program:finished", serde_json::json!({
+                            "progId": &prog_id_clone,
+                            "success": false,
+                            "message": format!("Wait error: {}", e),
+                        }));
+                    }
+                }
+                let _ = std::fs::remove_file(&xcf_path);
+            }
+            Err(e) => {
+                let _ = app_handle.emit("program:finished", serde_json::json!({
+                    "progId": &prog_id_clone,
+                    "success": false,
+                    "message": format!("Failed to spawn pgrcmd: {}", e),
+                }));
+            }
+        }
+    });
+
+    Ok(prog_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1704,105 +1918,6 @@ mod tests {
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature, "long_feature");
     }
-}
-
-// ── Bundled Example Projects ──
-
-#[derive(serde::Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct BundledExample {
-    pub name: String,
-    pub description: String,
-    pub backend_id: String,
-    pub device: String,
-    pub top_module: String,
-    pub path: String,
-}
-
-/// Find the examples/ directory containing bundled example projects.
-/// In dev mode, checks CWD-relative paths (project root).
-/// In production, checks next to the executable.
-fn find_examples_dir() -> Option<PathBuf> {
-    // Dev mode: check relative to CWD (project root)
-    if let Ok(cwd) = std::env::current_dir() {
-        // CWD=src-tauri/ → ../examples = project root
-        let parent_path = cwd.join("..").join("examples");
-        if parent_path.is_dir() {
-            return Some(parent_path.canonicalize().unwrap_or(parent_path));
-        }
-        // CWD=project root
-        let dev_path = cwd.join("examples");
-        if dev_path.is_dir() {
-            return Some(dev_path);
-        }
-    }
-
-    // Production: next to executable or in Tauri resource paths
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let prod_path = exe_dir.join("examples");
-            if prod_path.is_dir() {
-                return Some(prod_path);
-            }
-            // NSIS installer places resources under _up_/
-            let nsis_path = exe_dir.join("_up_").join("examples");
-            if nsis_path.is_dir() {
-                return Some(nsis_path);
-            }
-        }
-    }
-
-    None
-}
-
-#[tauri::command]
-pub fn list_bundled_examples() -> Result<Vec<BundledExample>, String> {
-    let examples_dir = match find_examples_dir() {
-        Some(d) => d,
-        None => return Ok(vec![]),
-    };
-
-    let mut results = Vec::new();
-
-    let entries = std::fs::read_dir(&examples_dir)
-        .map_err(|e| format!("Cannot read examples dir: {}", e))?;
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let config_path = path.join(".coverteda");
-        if !config_path.exists() {
-            continue;
-        }
-        let content = match std::fs::read_to_string(&config_path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let config: crate::project::ProjectConfig = match serde_json::from_str(&content) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        let abs_path = match path.canonicalize() {
-            Ok(p) => p.display().to_string(),
-            Err(_) => path.display().to_string(),
-        };
-
-        results.push(BundledExample {
-            name: config.name,
-            description: config.description.unwrap_or_default(),
-            backend_id: config.backend_id,
-            device: config.device,
-            top_module: config.top_module,
-            path: abs_path,
-        });
-    }
-
-    // Sort by name for consistent ordering
-    results.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(results)
 }
 
 // ── Raw report file reading ──

@@ -10,7 +10,6 @@ import {
   ProjectFile,
   ProjectConfig,
   RecentProject,
-  ExampleProject,
   TimingReportData,
   UtilizationReportData,
   PowerReportData,
@@ -1662,41 +1661,3 @@ export const MOCK_PROJECT_CONFIG: ProjectConfig = {
   updatedAt: new Date().toISOString(),
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 11. EXAMPLE_PROJECTS — bundled examples for the start screen
-// ═══════════════════════════════════════════════════════════════
-
-export const EXAMPLE_PROJECTS: ExampleProject[] = [
-  {
-    name: "8-Bit Counter",
-    description: "Simple 8-bit counter with async reset and LED outputs. Beginner sequential logic example targeting Lattice CertusPro-NX.",
-    backendId: "radiant",
-    device: "LIFCL-40-7BG400I",
-    topModule: "counter",
-    path: "examples/radiant-counter",
-  },
-  {
-    name: "UART Transmitter",
-    description: "UART TX with FSM, parameterized baud rate, and shift register. Intermediate digital design example.",
-    backendId: "radiant",
-    device: "LIFCL-40-7BG400I",
-    topModule: "uart_tx",
-    path: "examples/radiant-uart-tx",
-  },
-  {
-    name: "PWM Generator",
-    description: "Counter-based PWM with adjustable duty cycle input. Beginner combinational + sequential logic for Intel Cyclone V.",
-    backendId: "quartus",
-    device: "5CSEMA5F31C6",
-    topModule: "pwm_gen",
-    path: "examples/quartus-pwm",
-  },
-  {
-    name: "SPI Master",
-    description: "SPI Mode 0 master controller with configurable clock divider and full-duplex shift register. Intermediate protocol design.",
-    backendId: "quartus",
-    device: "5CSEMA5F31C6",
-    topModule: "spi_master",
-    path: "examples/quartus-spi",
-  },
-];

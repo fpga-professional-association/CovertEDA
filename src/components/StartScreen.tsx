@@ -1,56 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RecentProject, ProjectConfig, BackendMeta, ExampleProject, DetectedTool, LicenseCheckResult } from "../types";
+import { RecentProject, ProjectConfig, BackendMeta, DetectedTool, LicenseCheckResult } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
 import { Chip, Zap, Key, Settings } from "./Icons";
 import { BACKEND_META } from "../data/mockData";
-
-const DEFAULT_EXAMPLES: ExampleProject[] = [
-  {
-    name: "8-Bit Counter",
-    description: "Simple 8-bit counter with async reset and LED outputs. Beginner sequential logic for Lattice CertusPro-NX.",
-    backendId: "radiant",
-    device: "LIFCL-40-7BG400I",
-    topModule: "counter",
-    path: "examples/radiant-counter",
-  },
-  {
-    name: "UART Transmitter",
-    description: "UART TX with FSM, parameterized baud rate, and shift register. Intermediate digital design example.",
-    backendId: "radiant",
-    device: "LIFCL-40-7BG400I",
-    topModule: "uart_tx",
-    path: "examples/radiant-uart-tx",
-  },
-  {
-    name: "PWM Generator",
-    description: "Counter-based PWM with adjustable duty cycle input. Beginner combinational + sequential logic for Intel Cyclone V.",
-    backendId: "quartus",
-    device: "5CSEMA5F31C6",
-    topModule: "pwm_gen",
-    path: "examples/quartus-pwm",
-  },
-  {
-    name: "SPI Master",
-    description: "SPI Mode 0 master with configurable clock divider and full-duplex shift register. Intermediate protocol design.",
-    backendId: "quartus",
-    device: "5CSEMA5F31C6",
-    topModule: "spi_master",
-    path: "examples/quartus-spi",
-  },
-];
-import { PROJECT_TEMPLATES, TEMPLATE_CATEGORIES } from "../data/projectTemplates";
 import {
   getRecentProjects,
   openProject,
-  createProject,
   checkProjectDir,
   pickDirectory,
   removeRecentProject,
   detectTools,
   refreshTools,
   checkLicenses,
-  getBundledExamples,
 } from "../hooks/useTauri";
 import NewProjectWizard from "./NewProjectWizard";
 
@@ -79,16 +41,11 @@ export default function StartScreen({
 }) {
   const { C, MONO, SANS } = useTheme();
   const [recents, setRecents] = useState<RecentProject[]>([]);
-  const [tauriExamples, setTauriExamples] = useState<ExampleProject[] | null>(null);
-  const examples = tauriExamples && tauriExamples.length > 0 ? tauriExamples : DEFAULT_EXAMPLES;
   const [tools, setTools] = useState<DetectedTool[]>([]);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDir, setWizardDir] = useState<string | undefined>();
   const [hover, setHover] = useState<string | null>(null);
-  const [templateFilter, setTemplateFilter] = useState<string>("All");
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showExamples, setShowExamples] = useState(false);
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const dragging = useRef(false);
@@ -114,9 +71,6 @@ export default function StartScreen({
 
   useEffect(() => {
     getRecentProjects().then(setRecents).catch(() => {});
-    getBundledExamples().then((ex) => {
-      if (ex.length > 0) setTauriExamples(ex);
-    }).catch(() => {});
     detectTools().then(setTools).catch(() => {});
     checkLicenses().then(setLicenseResult).catch(() => {});
   }, []);
@@ -149,24 +103,6 @@ export default function StartScreen({
     e.stopPropagation();
     await removeRecentProject(path);
     setRecents((prev) => prev.filter((p) => p.path !== path));
-  };
-
-  const handleExampleClick = async (ex: ExampleProject) => {
-    try {
-      // Check if the project already has a .coverteda file
-      const existing = await checkProjectDir(ex.path);
-      if (existing) {
-        // Must call openProject to register as current_project in backend (for start_build)
-        const config = await openProject(ex.path);
-        onOpenProject(ex.path, config);
-      } else {
-        // Create the project config (also registers current_project)
-        const config = await createProject(ex.path, ex.name, ex.backendId, ex.device, ex.topModule);
-        onOpenProject(ex.path, config);
-      }
-    } catch (err) {
-      console.error("Failed to open example:", err);
-    }
   };
 
   const card: React.CSSProperties = {
@@ -449,166 +385,8 @@ export default function StartScreen({
           />
         </div>
 
-        {/* Right: Templates + Examples + Recent Projects */}
+        {/* Right: Recent Projects */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, paddingLeft: 16 }}>
-          {/* Project Templates */}
-          <div style={{ marginBottom: 20 }}>
-            <div
-              onClick={() => setShowTemplates((p) => !p)}
-              style={{
-                fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO,
-                marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              }}
-            >
-              <span style={{ fontSize: 8, transition: "transform .15s", transform: showTemplates ? "rotate(90deg)" : "rotate(0deg)" }}>
-                {"\u25B6"}
-              </span>
-              PROJECT TEMPLATES
-              <span style={{ fontSize: 8, color: C.t3, fontWeight: 400 }}>
-                ({PROJECT_TEMPLATES.length} designs)
-              </span>
-            </div>
-            {showTemplates && (
-              <>
-                <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
-                  {["All", ...TEMPLATE_CATEGORIES].map((cat) => (
-                    <span
-                      key={cat}
-                      onClick={() => setTemplateFilter(cat)}
-                      style={{
-                        padding: "2px 8px", borderRadius: 3, cursor: "pointer",
-                        fontSize: 8, fontFamily: MONO, fontWeight: 600,
-                        border: `1px solid ${templateFilter === cat ? C.accent : C.b1}`,
-                        color: templateFilter === cat ? C.accent : C.t3,
-                        background: templateFilter === cat ? `${C.accent}15` : "transparent",
-                      }}
-                    >
-                      {cat}
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
-                  {PROJECT_TEMPLATES
-                    .filter((t) => templateFilter === "All" || t.category === templateFilter)
-                    .map((t) => {
-                      const bm = backendMeta(t.backendId);
-                      return (
-                        <div
-                          key={t.name}
-                          onMouseEnter={() => setHover(`tpl:${t.name}`)}
-                          onMouseLeave={() => setHover(null)}
-                          onClick={() => {
-                            setWizardDir(undefined);
-                            setWizardOpen(true);
-                          }}
-                          style={{
-                            padding: "10px 12px", borderRadius: 6, cursor: "pointer",
-                            background: hover === `tpl:${t.name}` ? C.s2 : C.s1,
-                            border: `1px solid ${hover === `tpl:${t.name}` ? bm.color : C.b1}`,
-                            transition: "all .15s",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: C.t1 }}>{t.name}</span>
-                            <Badge color={bm.color}>{bm.short}</Badge>
-                            <span style={{
-                              fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
-                              background: `${C.cyan}15`, color: C.cyan, fontWeight: 600,
-                            }}>
-                              {t.category}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 8, color: C.t3, lineHeight: 1.4 }}>
-                            {t.description}
-                          </div>
-                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
-                              {t.device}
-                            </span>
-                            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
-                              {t.files.length} file{t.files.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Example Projects */}
-          <div style={{ marginBottom: 20 }}>
-            <div
-              onClick={() => setShowExamples((p) => !p)}
-              style={{
-                fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO,
-                marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              }}
-            >
-              <span style={{ fontSize: 8, transition: "transform .15s", transform: showExamples ? "rotate(90deg)" : "rotate(0deg)" }}>
-                {"\u25B6"}
-              </span>
-              EXAMPLE PROJECTS
-              <span style={{ fontSize: 8, color: C.t3, fontWeight: 400 }}>
-                ({examples.length} designs)
-              </span>
-            </div>
-            {showExamples && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 2 }}>
-                  Location: <span style={{ color: C.t2 }}>CovertEDA/examples/</span>
-                </div>
-                {examples.map((ex) => {
-                  const bm = backendMeta(ex.backendId);
-                  return (
-                    <div
-                      key={ex.path}
-                      onClick={() => handleExampleClick(ex)}
-                      onMouseEnter={() => setHover(`ex:${ex.path}`)}
-                      onMouseLeave={() => setHover(null)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "10px 14px",
-                        borderRadius: 6,
-                        background: hover === `ex:${ex.path}` ? C.s2 : C.s1,
-                        border: `1px solid ${hover === `ex:${ex.path}` ? bm.color : C.b1}`,
-                        cursor: "pointer",
-                        transition: "all .15s",
-                      }}
-                    >
-                      <span style={{ color: bm.color, fontSize: 16, width: 20, textAlign: "center" }}>
-                        {bm.icon}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>
-                            {ex.name}
-                          </span>
-                          <Badge color={bm.color}>{bm.short}</Badge>
-                        </div>
-                        <div style={{ fontSize: 9, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
-                          {ex.description}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-                          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-                            {ex.device}
-                          </span>
-                          <span style={{ fontSize: 8, color: C.b2 }}>{"\u2022"}</span>
-                          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-                            {ex.path}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
           <div
             onClick={() => setShowRecents((p) => !p)}
             style={{

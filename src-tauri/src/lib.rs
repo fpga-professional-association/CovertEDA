@@ -5,6 +5,7 @@ pub mod files;
 pub mod git;
 pub mod parser;
 pub mod process;
+pub mod programmer;
 pub mod project;
 pub mod types;
 
@@ -63,7 +64,9 @@ pub fn run() {
             commands::generate_ip_script,
             commands::execute_ip_generate,
             commands::write_text_file,
-            commands::list_bundled_examples,
+            commands::detect_programmer_cables,
+            commands::find_bitstreams,
+            commands::program_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

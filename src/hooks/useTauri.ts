@@ -263,9 +263,9 @@ import type {
   ProjectConfig, RecentProject, DetectedTool, LicenseCheckResult,
   FileContent, ProjectFile, TimingReportData, UtilizationReportData,
   PowerReportData, DrcReportData, IoBankData,
-  RuntimeBackend, PipelineStage, ExampleProject,
+  RuntimeBackend, PipelineStage,
 } from "../types";
-import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META, EXAMPLE_PROJECTS } from "../data/mockData";
+import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META } from "../data/mockData";
 
 // ── Rust type interfaces (snake_case from serde) ──
 
@@ -329,11 +329,6 @@ interface RustResourceReport {
     ebr: number;
     percentage: number;
   }[];
-}
-
-export async function getBundledExamples(): Promise<ExampleProject[]> {
-  if (!isTauri) return EXAMPLE_PROJECTS;
-  return invoke<ExampleProject[]>("list_bundled_examples");
 }
 
 export async function getRecentProjects(): Promise<RecentProject[]> {
@@ -735,4 +730,31 @@ export function mapIoReport(r: RustIoReport): { title: string; generated: string
       pins: b.pins.map((p) => `${p.pin} ${p.net} ${p.direction}`),
     })),
   };
+}
+
+// ── Programmer commands ──
+
+export interface ProgrammerCable {
+  index: number;
+  name: string;
+  port: string;
+}
+
+export async function detectProgrammerCables(): Promise<ProgrammerCable[]> {
+  if (!isTauri) return [];
+  return invoke<ProgrammerCable[]>("detect_programmer_cables");
+}
+
+export async function findBitstreams(): Promise<string[]> {
+  if (!isTauri) return [];
+  return invoke<string[]>("find_bitstreams");
+}
+
+export async function programDevice(
+  bitstream: string,
+  device: string,
+  cablePort: string,
+  operation: string,
+): Promise<string> {
+  return invoke<string>("program_device", { bitstream, device, cablePort, operation });
 }

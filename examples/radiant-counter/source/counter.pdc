@@ -1,3 +1,0 @@
-# Physical Design Constraints for 8-Bit Counter
-# Target: LIFCL-40-7BG400I (CertusPro-NX)
-# No pin assignments — Radiant will auto-place I/O
