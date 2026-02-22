@@ -100,12 +100,14 @@ function cellInput(
   C: ReturnType<typeof useTheme>["C"],
   MONO: string,
   width?: number,
+  autoFocus?: boolean,
 ) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onClick={(e) => e.stopPropagation()}
+      autoFocus={autoFocus}
       style={{
         fontSize: 8, fontFamily: MONO, background: C.bg,
         color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 2,
@@ -504,13 +506,22 @@ function quickHash(s: string): number {
   return h;
 }
 
+// ── Grid navigation constants ──
+const PIN_COLS = ["net", "pin", "dir", "ioStandard", "drive", "pull", "slew", "openDrain", "schmitt", "bank", "diffPair"] as const;
+type CellAddr = { row: number; col: number };
+
 export default function ConstraintEditor({ backendId, device, constraintFile }: ConstraintEditorProps) {
   const { C, MONO } = useTheme();
   const [tab, setTab] = useState<ConstraintTab>("pins");
   const [pins, setPins] = useState<PinAssignment[]>([]);
   const [timing, setTiming] = useState<TimingConstraint[]>([]);
   const [search, setSearch] = useState("");
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [selected, setSelected] = useState<CellAddr | null>(null);
+  const [editingCell, setEditingCell] = useState<CellAddr | null>(null);
+  const [clipboard, setClipboard] = useState<PinAssignment[] | null>(null);
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const gridRef = useRef<HTMLDivElement>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showAddTiming, setShowAddTiming] = useState(false);
   const [newPin, setNewPin] = useState<PinAssignment>({
@@ -621,7 +632,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
 
   const removePin = useCallback((idx: number) => {
     setPins((prev) => prev.filter((_, i) => i !== idx));
-    setEditingIdx(null);
+    setEditingCell(null);
+    setSelected(null);
     setDirty(true);
   }, []);
 
@@ -640,8 +652,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
     }
     setValidationError(null);
     setPins((prev) => [...prev, { ...newPin, net: newPin.net.trim(), pin: newPin.pin.trim() }]);
-    setNewPin({ net: "", pin: "", dir: "input", ioStandard: "LVCMOS33", pull: "None", slew: "Slow", locked: false });
-    setShowAdd(false);
+    setNewPin({ net: "", pin: "", dir: newPin.dir, ioStandard: newPin.ioStandard, pull: "None", slew: "Slow", locked: false });
+    // Keep form open for rapid multi-pin entry — just clear net+pin
     setDirty(true);
   }, [newPin, pins]);
 
@@ -670,6 +682,180 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
     setShowAddTiming(false);
     setDirty(true);
   }, [newTiming]);
+
+  // ── Cell-level click handler ──
+  const handleCellClick = useCallback((rowIdx: number, colIdx: number, e: React.MouseEvent) => {
+    if (e.shiftKey && selectionAnchor !== null) {
+      const start = Math.min(selectionAnchor, rowIdx);
+      const end = Math.max(selectionAnchor, rowIdx);
+      const newSel = new Set<number>();
+      for (let r = start; r <= end; r++) newSel.add(r);
+      setSelectedRows(newSel);
+    } else {
+      setSelectionAnchor(rowIdx);
+      setSelectedRows(new Set());
+    }
+    setSelected({ row: rowIdx, col: colIdx });
+    setEditingCell(null);
+  }, [selectionAnchor]);
+
+  // ── Grid keyboard handler ──
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    const inInput = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
+
+    if (!selected && !inInput) {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        setSelected({ row: 0, col: 0 });
+        return;
+      }
+    }
+    if (!selected) return;
+
+    const { row, col } = selected;
+    const maxRow = filtered.length - 1;
+    const maxCol = PIN_COLS.length - 1;
+
+    // Escape exits edit mode
+    if (editingCell && e.key === "Escape") {
+      e.preventDefault();
+      setEditingCell(null);
+      gridRef.current?.focus();
+      return;
+    }
+
+    // When editing, let input handle most keys; intercept Tab/Enter
+    if (editingCell && inInput) {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setEditingCell(null);
+        if (e.shiftKey) {
+          if (col > 0) setSelected({ row, col: col - 1 });
+          else if (row > 0) setSelected({ row: row - 1, col: maxCol });
+        } else {
+          if (col < maxCol) setSelected({ row, col: col + 1 });
+          else if (row < maxRow) setSelected({ row: row + 1, col: 0 });
+        }
+        gridRef.current?.focus();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        setEditingCell(null);
+        if (row < maxRow) setSelected({ row: row + 1, col });
+        gridRef.current?.focus();
+        return;
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault();
+        if (e.shiftKey) {
+          const nr = Math.max(0, row - 1);
+          setSelected({ row: nr, col });
+          setSelectedRows(prev => { const n = new Set(prev); n.add(nr); n.add(row); return n; });
+        } else {
+          setSelected({ row: Math.max(0, row - 1), col });
+          setSelectedRows(new Set());
+          setSelectionAnchor(null);
+        }
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        if (e.shiftKey) {
+          const nr = Math.min(maxRow, row + 1);
+          setSelected({ row: nr, col });
+          setSelectedRows(prev => { const n = new Set(prev); n.add(nr); n.add(row); return n; });
+        } else {
+          setSelected({ row: Math.min(maxRow, row + 1), col });
+          setSelectedRows(new Set());
+          setSelectionAnchor(null);
+        }
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        setSelected({ row, col: Math.max(0, col - 1) });
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        setSelected({ row, col: Math.min(maxCol, col + 1) });
+        break;
+      case "Tab":
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (col > 0) setSelected({ row, col: col - 1 });
+          else if (row > 0) setSelected({ row: row - 1, col: maxCol });
+        } else {
+          if (col < maxCol) setSelected({ row, col: col + 1 });
+          else if (row < maxRow) setSelected({ row: row + 1, col: 0 });
+        }
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (row < maxRow) setSelected({ row: row + 1, col });
+        break;
+      case "F2":
+        e.preventDefault();
+        setEditingCell({ row, col });
+        break;
+      case "Delete":
+      case "Backspace": {
+        e.preventDefault();
+        const field = PIN_COLS[col];
+        const realIdx = pins.indexOf(filtered[row]);
+        if (realIdx >= 0) {
+          if (field === "openDrain" || field === "schmitt") updatePin(realIdx, field, false);
+          else if (field === "net" || field === "pin" || field === "drive" || field === "diffPair" || field === "bank") updatePin(realIdx, field, "");
+          else if (field === "pull") updatePin(realIdx, field, "None");
+          else if (field === "slew") updatePin(realIdx, field, "Slow");
+        }
+        break;
+      }
+      case "c":
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const rows = selectedRows.size > 0
+            ? Array.from(selectedRows).sort().map(r => filtered[r]).filter(Boolean)
+            : [filtered[row]].filter(Boolean);
+          setClipboard(rows.map(p => ({ ...p })));
+        }
+        break;
+      case "v":
+        if ((e.ctrlKey || e.metaKey) && clipboard && clipboard.length > 0) {
+          e.preventDefault();
+          const realIdx = pins.indexOf(filtered[row]);
+          if (realIdx >= 0) {
+            const deduped = clipboard.map(p => {
+              let newNet = p.net;
+              let suf = 1;
+              while (pins.some(x => x.net === newNet)) { newNet = `${p.net}_${suf}`; suf++; }
+              return { ...p, net: newNet };
+            });
+            setPins(prev => { const n = [...prev]; n.splice(realIdx + 1, 0, ...deduped); return n; });
+            setDirty(true);
+          }
+        }
+        break;
+      default:
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const field = PIN_COLS[col];
+          if (field === "openDrain" || field === "schmitt") {
+            if (e.key === " ") {
+              e.preventDefault();
+              const realIdx = pins.indexOf(filtered[row]);
+              if (realIdx >= 0) updatePin(realIdx, field, !(filtered[row][field] ?? false));
+            }
+          } else {
+            e.preventDefault();
+            setEditingCell({ row, col });
+          }
+        }
+        break;
+    }
+  }, [selected, editingCell, filtered, pins, clipboard, selectedRows, updatePin]);
 
   // Generate constraints text per backend
   const generateConstraintText = useMemo(() => {
@@ -808,6 +994,12 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
     backendId === "quartus" ? "QSF" : backendId === "vivado" ? "XDC" : "PCF";
 
   const fileName = filePath ? filePath.split("/").pop()?.split("\\").pop() ?? filePath : null;
+
+  // Cell selection helpers
+  const isCellSel = (r: number, c: number) => selected?.row === r && selected?.col === c;
+  const isCellEdit = (r: number, c: number) => editingCell?.row === r && editingCell?.col === c;
+  const cellSel = (r: number, c: number): React.CSSProperties =>
+    isCellSel(r, c) ? { outline: `2px solid ${C.accent}`, outlineOffset: -1 } : {};
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
@@ -975,7 +1167,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
 
           {/* Spreadsheet Table */}
           {pins.length > 0 && (
-            <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 320px)", border: `1px solid ${C.b1}`, borderRadius: 4 }}>
+            <div ref={gridRef} tabIndex={0} onKeyDown={handleKeyDown}
+              style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 320px)", border: `1px solid ${C.b1}`, borderRadius: 4, outline: "none" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                 <thead>
                   <tr>
@@ -997,15 +1190,15 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                 <tbody>
                   {filtered.map((p, i) => {
                     const realIdx = pins.indexOf(p);
-                    const editing = editingIdx === realIdx;
+                    const rowSel = selectedRows.has(i) || selected?.row === i;
                     return (
                       <tr
                         key={i}
-                        onClick={() => setEditingIdx(editing ? null : realIdx)}
                         style={{
                           borderBottom: `1px solid ${C.b1}15`,
                           cursor: "pointer",
-                          background: editing ? `${C.accent}08` : i % 2 === 0 ? "transparent" : `${C.bg}50`,
+                          background: selectedRows.has(i) ? `${C.accent}10` :
+                            i % 2 === 0 ? "transparent" : `${C.bg}50`,
                         }}
                       >
                         {/* Lock */}
@@ -1015,23 +1208,27 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             onClick={(e) => e.stopPropagation()}
                             style={{ accentColor: C.accent }} />
                         </td>
-                        {/* Net */}
-                        <td style={{ ...cellStyle, color: C.t1, fontWeight: 600 }}>
-                          {editing
-                            ? cellInput(p.net, (v) => updatePin(realIdx, "net", v), C, MONO, 85)
-                            : p.net
-                          }
+                        {/* Net (col 0) */}
+                        <td style={{ ...cellStyle, color: C.t1, fontWeight: 600, ...cellSel(i, 0) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 0, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 0 })}>
+                          {isCellEdit(i, 0)
+                            ? cellInput(p.net, (v) => updatePin(realIdx, "net", v), C, MONO, 85, true)
+                            : p.net}
                         </td>
-                        {/* Pin */}
-                        <td style={{ ...cellStyle, color: C.accent, fontWeight: 600 }}>
-                          {editing
-                            ? cellInput(p.pin, (v) => updatePin(realIdx, "pin", v), C, MONO, 40)
-                            : p.pin
-                          }
+                        {/* Pin (col 1) */}
+                        <td style={{ ...cellStyle, color: C.accent, fontWeight: 600, ...cellSel(i, 1) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 1, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 1 })}>
+                          {isCellEdit(i, 1)
+                            ? cellInput(p.pin, (v) => updatePin(realIdx, "pin", v), C, MONO, 40, true)
+                            : p.pin}
                         </td>
-                        {/* Dir */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* Dir (col 2) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 2) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 2, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 2 })}>
+                          {isCellEdit(i, 2) ? (
                             <Select compact value={p.dir}
                               onChange={(v) => updatePin(realIdx, "dir", v)}
                               options={[{ value: "input", label: "IN" }, { value: "output", label: "OUT" }, { value: "inout", label: "IO" }]} />
@@ -1045,9 +1242,11 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             </span>
                           )}
                         </td>
-                        {/* I/O Standard */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* I/O Standard (col 3) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 3) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 3, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 3 })}>
+                          {isCellEdit(i, 3) ? (
                             <Select compact value={p.ioStandard}
                               onChange={(v) => updatePin(realIdx, "ioStandard", v)}
                               options={standards.map((s) => ({ value: s, label: s }))} />
@@ -1055,9 +1254,11 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             <span style={{ color: C.t2 }}>{p.ioStandard}</span>
                           )}
                         </td>
-                        {/* Drive */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* Drive (col 4) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 4) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 4, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 4 })}>
+                          {isCellEdit(i, 4) ? (
                             <Select compact value={p.drive ?? ""}
                               onChange={(v) => updatePin(realIdx, "drive", v)}
                               options={[{ value: "", label: "-" }, ...drives.map((d) => ({ value: d, label: d }))]}
@@ -1066,9 +1267,11 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             <span style={{ color: C.t3 }}>{p.drive ?? "-"}</span>
                           )}
                         </td>
-                        {/* Pull */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* Pull (col 5) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 5) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 5, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 5 })}>
+                          {isCellEdit(i, 5) ? (
                             <Select compact value={p.pull ?? "None"}
                               onChange={(v) => updatePin(realIdx, "pull", v)}
                               options={PULL_OPTIONS.map((o) => ({ value: o, label: o }))} />
@@ -1078,9 +1281,11 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             </span>
                           )}
                         </td>
-                        {/* Slew */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* Slew (col 6) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 6) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 6, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 6 })}>
+                          {isCellEdit(i, 6) ? (
                             <Select compact value={p.slew ?? "Slow"}
                               onChange={(v) => updatePin(realIdx, "slew", v)}
                               options={SLEW_OPTIONS.map((o) => ({ value: o, label: o }))} />
@@ -1088,23 +1293,27 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             <span style={{ color: C.t3 }}>{p.slew ?? "Slow"}</span>
                           )}
                         </td>
-                        {/* Open Drain */}
-                        <td style={cellStyle}>
+                        {/* Open Drain (col 7) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 7) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 7, e); }}>
                           <input type="checkbox" checked={p.openDrain ?? false}
                             onChange={(e) => { e.stopPropagation(); updatePin(realIdx, "openDrain", e.target.checked); }}
                             onClick={(e) => e.stopPropagation()}
                             style={{ accentColor: C.accent }} />
                         </td>
-                        {/* Schmitt */}
-                        <td style={cellStyle}>
+                        {/* Schmitt (col 8) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 8) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 8, e); }}>
                           <input type="checkbox" checked={p.schmitt ?? false}
                             onChange={(e) => { e.stopPropagation(); updatePin(realIdx, "schmitt", e.target.checked); }}
                             onClick={(e) => e.stopPropagation()}
                             style={{ accentColor: C.accent }} />
                         </td>
-                        {/* Bank */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing ? (
+                        {/* Bank (col 9) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 9) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 9, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 9 })}>
+                          {isCellEdit(i, 9) ? (
                             <Select compact value={p.bank ?? ""}
                               onChange={(v) => updatePin(realIdx, "bank", v)}
                               options={[{ value: "", label: "-" }, ...BANK_NUMBERS.map((b) => ({ value: b, label: b }))]}
@@ -1113,16 +1322,17 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                             <span style={{ color: C.t3 }}>{p.bank ?? "-"}</span>
                           )}
                         </td>
-                        {/* Diff Pair */}
-                        <td style={cellStyle} onClick={(e) => editing && e.stopPropagation()}>
-                          {editing
-                            ? cellInput(p.diffPair ?? "", (v) => updatePin(realIdx, "diffPair", v), C, MONO, 50)
-                            : <span style={{ color: p.diffPair ? C.purple : C.t3 }}>{p.diffPair ?? "-"}</span>
-                          }
+                        {/* Diff Pair (col 10) */}
+                        <td style={{ ...cellStyle, ...cellSel(i, 10) }}
+                          onClick={(e) => { e.stopPropagation(); handleCellClick(i, 10, e); }}
+                          onDoubleClick={() => setEditingCell({ row: i, col: 10 })}>
+                          {isCellEdit(i, 10)
+                            ? cellInput(p.diffPair ?? "", (v) => updatePin(realIdx, "diffPair", v), C, MONO, 50, true)
+                            : <span style={{ color: p.diffPair ? C.purple : C.t3 }}>{p.diffPair ?? "-"}</span>}
                         </td>
                         {/* Actions */}
                         <td style={cellStyle}>
-                          {editing && (
+                          {rowSel && (
                             <span
                               onClick={(e) => { e.stopPropagation(); removePin(realIdx); }}
                               style={{ color: C.err, cursor: "pointer", fontSize: 7, fontWeight: 600 }}
@@ -1140,7 +1350,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
           )}
 
           <div style={{ marginTop: 8, fontSize: 7, fontFamily: MONO, color: C.t3 }}>
-            Click a row to edit. Columns: Lock, Net, Pin, Direction, I/O Standard, Drive Strength, Pull Mode, Slew Rate, Open Drain, Schmitt Trigger, Bank, Differential Pair.
+            Click a cell to select, double-click or F2 to edit. Arrow keys navigate, Tab moves right, Enter moves down, Escape cancels edit. Ctrl+C copies rows, Ctrl+V pastes. Shift+Click or Shift+Arrow to select multiple rows.
           </div>
         </div>
       )}

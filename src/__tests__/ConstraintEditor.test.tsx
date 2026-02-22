@@ -53,8 +53,8 @@ describe("ConstraintEditor", () => {
 
     // Fill in net name but leave pin empty
     const inputs = screen.getAllByRole("textbox");
-    // The first input in the add form is the net name
-    const netInput = inputs[0];
+    // inputs[0] is the search filter, inputs[1] is the net name in the add form
+    const netInput = inputs[1];
     fireEvent.change(netInput, { target: { value: "clk" } });
 
     fireEvent.click(screen.getByText("Add"));
@@ -84,5 +84,26 @@ describe("ConstraintEditor", () => {
   it("shows QSF format badge for quartus backend", () => {
     renderWithTheme(<ConstraintEditor backendId="quartus" device="10CL025YU256C8G" />);
     expect(screen.getByText("QSF")).toBeInTheDocument();
+  });
+
+  it("shows keyboard navigation hint text", () => {
+    renderWithTheme(<ConstraintEditor backendId="radiant" device="LIFCL-40" />);
+    expect(screen.getByText(/Arrow keys navigate/)).toBeInTheDocument();
+  });
+
+  it("successfully adds a pin with both net and pin filled", async () => {
+    renderWithTheme(<ConstraintEditor backendId="radiant" device="LIFCL-40" />);
+    fireEvent.click(screen.getByText("+ Add Pin"));
+
+    const inputs = screen.getAllByRole("textbox");
+    // inputs[0]=search, inputs[1]=net, inputs[2]=pin
+    fireEvent.change(inputs[1], { target: { value: "clk" } });
+    fireEvent.change(inputs[2], { target: { value: "A5" } });
+    fireEvent.click(screen.getByText("Add"));
+
+    await waitFor(() => {
+      expect(screen.getByText("clk")).toBeInTheDocument();
+      expect(screen.getByText("A5")).toBeInTheDocument();
+    });
   });
 });
