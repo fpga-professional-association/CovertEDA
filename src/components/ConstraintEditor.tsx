@@ -118,6 +118,129 @@ function cellInput(
   );
 }
 
+// ── Autocomplete Input ──
+function AutoInput({
+  value,
+  onChange,
+  suggestions,
+  C,
+  MONO,
+  width,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+  C: ReturnType<typeof useTheme>["C"];
+  MONO: string;
+  width?: number;
+  autoFocus?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hIdx, setHIdx] = useState(-1);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = useMemo(() => {
+    if (!value) return suggestions.slice(0, 12);
+    const q = value.toLowerCase();
+    return suggestions.filter((s) => s.toLowerCase().includes(q) && s !== value).slice(0, 12);
+  }, [value, suggestions]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (!open || filtered.length === 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHIdx((p) => Math.min(p + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHIdx((p) => Math.max(p - 1, 0)); }
+    else if (e.key === "Enter" && hIdx >= 0) { e.preventDefault(); onChange(filtered[hIdx]); setOpen(false); }
+    else if (e.key === "Escape") { setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHIdx(-1); }}
+        onFocus={() => setOpen(true)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        onKeyDown={handleKey}
+        autoFocus={autoFocus}
+        style={{
+          fontSize: 8, fontFamily: MONO, background: C.bg,
+          color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 2,
+          padding: "1px 4px", outline: "none", width: width ?? 50,
+          boxSizing: "border-box" as const,
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, zIndex: 999,
+          background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 3,
+          marginTop: 1, maxHeight: 150, overflowY: "auto", minWidth: width ?? 50,
+          boxShadow: "0 3px 8px rgba(0,0,0,0.35)",
+        }}>
+          {filtered.map((s, idx) => (
+            <div
+              key={s}
+              onMouseEnter={() => setHIdx(idx)}
+              onMouseLeave={() => setHIdx(-1)}
+              onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); }}
+              style={{
+                padding: "2px 6px", fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                color: hIdx === idx ? C.accent : C.t1,
+                background: hIdx === idx ? C.s3 : "transparent",
+                cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              {s}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Generate pattern-based net name suggestions from existing pins */
+function generateNetSuggestions(existingNets: string[]): string[] {
+  const suggestions = new Set<string>(existingNets);
+
+  // Detect bus patterns like name[N] or name_N and suggest next indices
+  const busPattern = /^(.+?)[\[_](\d+)\]?$/;
+  const busGroups = new Map<string, number[]>();
+
+  for (const net of existingNets) {
+    const m = net.match(busPattern);
+    if (m) {
+      const base = m[1];
+      const idx = parseInt(m[2], 10);
+      if (!busGroups.has(base)) busGroups.set(base, []);
+      busGroups.get(base)!.push(idx);
+    }
+  }
+
+  for (const [base, indices] of busGroups) {
+    const maxIdx = Math.max(...indices);
+    const useBracket = existingNets.some((n) => n.startsWith(`${base}[`));
+    // Suggest next few indices beyond the current max
+    for (let i = 0; i <= maxIdx + 3; i++) {
+      const name = useBracket ? `${base}[${i}]` : `${base}_${i}`;
+      suggestions.add(name);
+    }
+  }
+
+  return [...suggestions].sort();
+}
+
 // ── Constraint file extension per backend ──
 function constraintExt(backendId: string): string {
   if (backendId === "radiant" || backendId === "diamond") return "pdc";
@@ -625,6 +748,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
     );
   }, [pins, search]);
 
+  const netSuggestions = useMemo(() => generateNetSuggestions(pins.map((p) => p.net)), [pins]);
+
   const updatePin = useCallback((idx: number, field: keyof PinAssignment, value: string | boolean) => {
     setPins((prev) => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
     setDirty(true);
@@ -1122,7 +1247,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
             }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>NET NAME</span>
-                {cellInput(newPin.net, (v) => { setNewPin((p) => ({ ...p, net: v })); setValidationError(null); }, C, MONO)}
+                <AutoInput value={newPin.net} onChange={(v) => { setNewPin((p) => ({ ...p, net: v })); setValidationError(null); }}
+                  suggestions={netSuggestions} C={C} MONO={MONO} autoFocus />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>PIN</span>
@@ -1213,7 +1339,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                           onClick={(e) => { e.stopPropagation(); handleCellClick(i, 0, e); }}
                           onDoubleClick={() => setEditingCell({ row: i, col: 0 })}>
                           {isCellEdit(i, 0)
-                            ? cellInput(p.net, (v) => updatePin(realIdx, "net", v), C, MONO, 85, true)
+                            ? <AutoInput value={p.net} onChange={(v) => updatePin(realIdx, "net", v)}
+                                suggestions={netSuggestions} C={C} MONO={MONO} width={85} autoFocus />
                             : p.net}
                         </td>
                         {/* Pin (col 1) */}

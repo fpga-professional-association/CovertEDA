@@ -270,7 +270,6 @@ export type Section =
   | "ai"
   | "regmap"
   | "constraints"
-  | "resources"
   | "console"
   | "license"
   | "history"

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTheme } from "../context/ThemeContext";
-import { Btn, Badge } from "./shared";
+import { Btn, Badge, Select } from "./shared";
 import { Download, Refresh, Play, Stop } from "./Icons";
 import {
   detectProgrammerCables,
@@ -133,14 +133,8 @@ export default function Programmer({ device }: ProgrammerProps) {
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600,
-    textTransform: "uppercase" as const, marginBottom: 4,
-  };
-
-  const selectStyle: React.CSSProperties = {
-    fontSize: 8, fontFamily: MONO, background: C.bg, color: C.t1,
-    border: `1px solid ${C.b1}`, borderRadius: 3, padding: "4px 8px",
-    outline: "none", width: "100%", boxSizing: "border-box" as const,
+    fontSize: 9, fontFamily: MONO, color: C.t3, fontWeight: 600,
+    textTransform: "uppercase" as const, marginBottom: 6, letterSpacing: 0.5,
   };
 
   const logColor = (t: LogEntry["t"]) => {
@@ -156,39 +150,55 @@ export default function Programmer({ device }: ProgrammerProps) {
 
   const fileName = (path: string) => path.split("/").pop()?.split("\\").pop() ?? path;
 
+  const cableOptions = useMemo(() =>
+    cables.length === 0
+      ? [{ value: "", label: "No cables detected" }]
+      : cables.map((c) => ({ value: c.port, label: `${c.name} (${c.port})` })),
+    [cables]);
+
+  const bitstreamOptions = useMemo(() =>
+    bitstreams.length === 0
+      ? [{ value: "", label: "No bitstreams found" }]
+      : bitstreams.map((bs) => ({ value: bs, label: fileName(bs) })),
+    [bitstreams]);
+
+  const operationOptions = [
+    { value: "PROGRAM", label: "Program SRAM" },
+    { value: "PROGRAM_FLASH", label: "Program Flash" },
+    { value: "VERIFY", label: "Verify" },
+    { value: "ERASE", label: "Erase" },
+  ];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Download />
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Device Programmer</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Device Programmer</span>
         <Badge color={C.accent}>{device}</Badge>
         {programming && <Badge color={C.warn}>Programming...</Badge>}
       </div>
 
       {/* Configuration Panel */}
       <div style={panelP}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {/* Left: Cable */}
           <div>
             <div style={labelStyle}>Programmer Cable</div>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <select
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Select
                 value={selectedCable}
-                onChange={(e) => setSelectedCable(e.target.value)}
-                style={{ ...selectStyle, flex: 1 }}
-              >
-                {cables.length === 0 && <option value="">No cables detected</option>}
-                {cables.map((c) => (
-                  <option key={c.port} value={c.port}>{c.name} ({c.port})</option>
-                ))}
-              </select>
+                onChange={setSelectedCable}
+                options={cableOptions}
+                placeholder="No cables detected"
+                style={{ flex: 1 }}
+              />
               <Btn small onClick={handleScan} disabled={scanning}>
                 <Refresh /> {scanning ? "Scanning..." : "Scan"}
               </Btn>
             </div>
             {cables.length === 0 && (
-              <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 4 }}>
+              <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 6 }}>
                 Click "Scan" to detect connected programmer cables.
               </div>
             )}
@@ -197,23 +207,20 @@ export default function Programmer({ device }: ProgrammerProps) {
           {/* Right: Bitstream */}
           <div>
             <div style={labelStyle}>Bitstream File</div>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <select
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Select
                 value={selectedBitstream}
-                onChange={(e) => setSelectedBitstream(e.target.value)}
-                style={{ ...selectStyle, flex: 1 }}
-              >
-                {bitstreams.length === 0 && <option value="">No bitstreams found</option>}
-                {bitstreams.map((bs) => (
-                  <option key={bs} value={bs}>{fileName(bs)}</option>
-                ))}
-              </select>
+                onChange={setSelectedBitstream}
+                options={bitstreamOptions}
+                placeholder="No bitstreams found"
+                style={{ flex: 1 }}
+              />
               <Btn small onClick={handleRefreshBitstreams}>
                 <Refresh />
               </Btn>
             </div>
             {bitstreams.length > 0 && selectedBitstream && (
-              <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 4, wordBreak: "break-all" }}>
+              <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 6, wordBreak: "break-all" }}>
                 {selectedBitstream}
               </div>
             )}
@@ -221,19 +228,14 @@ export default function Programmer({ device }: ProgrammerProps) {
         </div>
 
         {/* Operation + Program Button */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
           <div>
             <div style={labelStyle}>Operation</div>
-            <select
+            <Select
               value={operation}
-              onChange={(e) => setOperation(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="PROGRAM">Program SRAM</option>
-              <option value="PROGRAM_FLASH">Program Flash</option>
-              <option value="VERIFY">Verify</option>
-              <option value="ERASE">Erase</option>
-            </select>
+              onChange={setOperation}
+              options={operationOptions}
+            />
           </div>
           <div style={{ flex: 1 }} />
           <Btn
@@ -248,26 +250,26 @@ export default function Programmer({ device }: ProgrammerProps) {
       </div>
 
       {/* Output Log */}
-      <div style={panelP}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.t1 }}>Output</span>
+      <div style={{ ...panelP, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Output</span>
           <Badge color={C.t3}>{logs.length} lines</Badge>
           <div style={{ flex: 1 }} />
           <Btn small onClick={() => setLogs([])}>Clear</Btn>
         </div>
         <div style={{
           background: C.bg, borderRadius: 4, border: `1px solid ${C.b1}`,
-          padding: "8px 10px", maxHeight: "calc(100vh - 480px)", overflowY: "auto",
+          padding: "8px 10px", flex: 1, overflowY: "auto",
           minHeight: 120,
         }}>
           {logs.length === 0 && (
-            <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, padding: "20px 0", textAlign: "center" }}>
+            <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, padding: "20px 0", textAlign: "center" }}>
               No output yet. Scan for cables and program a device to see output here.
             </div>
           )}
           {logs.map((entry, i) => (
             <div key={i} style={{
-              fontSize: 8, fontFamily: MONO, lineHeight: 1.6,
+              fontSize: 9, fontFamily: MONO, lineHeight: 1.7,
               color: logColor(entry.t), whiteSpace: "pre-wrap", wordBreak: "break-all",
             }}>
               {entry.t === "cmd" ? `> ${entry.m}` : entry.m}
@@ -278,7 +280,7 @@ export default function Programmer({ device }: ProgrammerProps) {
       </div>
 
       {/* Hints */}
-      <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, lineHeight: 1.6, flexShrink: 0 }}>
         Supports Lattice Radiant pgrcmd for Nexus/CertusPro-NX devices.
         Connect a USB programmer cable, scan for cables, select a bitstream from the last build, and click "Program Device".
       </div>

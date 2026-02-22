@@ -102,7 +102,7 @@ describe("ConstraintEditor", () => {
     fireEvent.click(screen.getByText("Add"));
 
     await waitFor(() => {
-      expect(screen.getByText("clk")).toBeInTheDocument();
+      expect(screen.getAllByText("clk").length).toBeGreaterThan(0);
       expect(screen.getByText("A5")).toBeInTheDocument();
     });
   });

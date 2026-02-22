@@ -534,19 +534,15 @@ export default function ReportViewer({
             {t.l}
           </button>
         ))}
-        {/* Export buttons — available on all data tabs */}
-        {canExport && (
-          <>
-            <div style={{ flex: 1 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-              {exportMsg && (
-                <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
-              )}
-              <Btn small onClick={() => exportReport("csv")}><Download /> CSV</Btn>
-              <Btn small onClick={() => exportReport("json")}><Download /> JSON</Btn>
-            </div>
-          </>
-        )}
+        {/* Export buttons — always visible */}
+        <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {exportMsg && (
+            <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
+          )}
+          <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
+          <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>
+        </div>
       </div>
 
       {/* ── Constraint warnings banner ── */}
@@ -641,10 +637,21 @@ export default function ReportViewer({
               </div>
 
               {/* Clock Domains */}
-              <Collapsible title={<>Clock Domains <Badge color={t.clocks.length === 0 ? C.warn : C.t3}>{t.clocks.length === 0 ? "NONE — may be unconstrained" : `${t.clocks.length} clock(s)`}</Badge></>} icon={<Clock />} defaultOpen={t.clocks.length === 0}>
+              <Collapsible title={<>Clock Domains <Badge color={t.clocks.length === 0 ? C.warn : C.t3}>{t.clocks.length === 0 ? "unconstrained" : `${t.clocks.length} clock(s)`}</Badge></>} icon={<Clock />} defaultOpen={t.clocks.length === 0}>
                 {t.clocks.length === 0 ? (
-                  <div style={{ padding: "10px 0", fontSize: 10, fontFamily: MONO, color: C.warn }}>
-                    {"\u26A0"} No constrained clocks found. Add SDC constraints (create_clock) to get accurate timing.
+                  <div style={{ fontSize: 10, fontFamily: MONO }}>
+                    <div style={{ color: C.warn, marginBottom: 8 }}>
+                      {"\u26A0"} No constrained clocks found. Add SDC/PDC constraints (create_clock) for accurate timing analysis.
+                    </div>
+                    {t.summary.fmax && parseFloat(t.summary.fmax) > 0 && (
+                      <div style={{ padding: "10px 12px", background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ color: C.t3 }}>Tool-inferred Fmax:</span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: C.ok }}>{t.summary.fmax}</span>
+                        {t.summary.target && parseFloat(t.summary.target) > 0 && (
+                          <span style={{ color: C.t3 }}>target: {t.summary.target}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>

@@ -3,9 +3,9 @@ import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, File
 import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
 import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
-import { Btn, NavBtn, ResourceBar, Select } from "./components/shared";
+import { Btn, NavBtn, Select } from "./components/shared";
 import {
-  Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Gauge, Term, Key, Settings,
+  Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Term, Key, Settings,
   Play, Stop, Search, Clock, Download,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
@@ -617,7 +617,7 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [bStep, setBStep] = useState(-1);
-  const [stageResults, setStageResults] = useState<Record<number, "success" | "failed">>({});
+  const [_stageResults, setStageResults] = useState<Record<number, "success" | "failed">>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsRef = useRef<LogEntry[]>([]);
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1413,7 +1413,6 @@ export default function App() {
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
     { label: "Constraints", category: "View", desc: "Pin assignments", action: () => navClick("constraints") },
     { label: "Build History", category: "View", desc: "Previous builds, trends, Fmax tracking", action: () => navClick("history") },
-    { label: "Resources", category: "View", desc: "Utilization overview", action: () => navClick("resources") },
     { label: "License Status", category: "View", desc: "FlexLM license info", action: () => navClick("license") },
     { label: "AI Assistant", category: "View", desc: "FPGA design help", action: () => navClick("ai") },
     // Zoom
@@ -1577,7 +1576,6 @@ export default function App() {
             <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
             <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
-            <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} tooltip="Resources — utilization overview with bar charts" />
             <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
@@ -1866,48 +1864,6 @@ export default function App() {
               />
             )}
 
-            {/* Resources Quick View */}
-            {sec === "resources" && !viewingFile && (
-              <div style={panelP}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: C.t1,
-                    marginBottom: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                  }}
-                >
-                  <Gauge />
-                  Utilization {"\u2014"}{" "}
-                  <span style={{ color: B.color }}>{project?.device ?? B.defaultDev}</span>
-                </div>
-                {realUtilReport ? (
-                  realUtilReport.summary.flatMap((cat) =>
-                    cat.items.filter((i) => i.total > 0).map((i, idx) => (
-                      <ResourceBar key={idx} label={i.r} used={i.used} total={i.total} />
-                    ))
-                  )
-                ) : (
-                  <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
-                    Run a build to see utilization data.
-                  </div>
-                )}
-                <div style={{ marginTop: 10 }}>
-                  <Btn
-                    small
-                    onClick={() => {
-                      setSec("reports");
-                      setRptTab("util");
-                    }}
-                  >
-                    Open Full Utilization Report {"\u2192"}
-                  </Btn>
-                </div>
-              </div>
-            )}
 
             {/* Console */}
             {sec === "console" && !viewingFile && (

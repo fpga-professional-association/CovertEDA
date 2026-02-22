@@ -70,11 +70,63 @@ const FILE_EXT_TOOLTIPS: Record<string, string> = {
   ".cfg": "Configuration file — tool or project settings",
   ".ini": "INI settings — tool configuration",
   ".gitignore": "Git Ignore — patterns for files excluded from version control",
+  // Lattice / vendor specific
+  ".pfl": "Programming File List — Lattice programmer cable/device configuration",
+  ".xcf": "XML Configuration File — Lattice pgrcmd programmer settings",
+  ".acepro": "Achronix ACE Project — Speedster FPGA project definition",
+  ".acxbit": "Achronix Bitstream — Speedster FPGA configuration binary",
+  // General source
+  ".c": "C source — firmware, testbench, or HLS input",
+  ".h": "C/C++ header — type definitions and function declarations",
+  ".cpp": "C++ source — firmware, SystemC, or HLS input",
+  ".hpp": "C++ header — template and class declarations",
+  ".rs": "Rust source — backend, build script, or plugin code",
+  ".py": "Python script — automation, scripting, or cocotb testbench",
+  ".ts": "TypeScript source — frontend application code",
+  ".tsx": "TypeScript React — frontend UI component",
+  ".js": "JavaScript source — scripts or configuration",
+  ".jsx": "JavaScript React — frontend UI component",
+  ".css": "CSS stylesheet — frontend styling",
+  ".html": "HTML — web page or documentation template",
+  ".scss": "SCSS stylesheet — compiled CSS with variables/nesting",
+  // Data & config
+  ".xml": "XML — configuration, IP definitions, or project metadata",
+  ".yml": "YAML config — CI/CD pipelines, tool settings",
+  ".yaml": "YAML config — CI/CD pipelines, tool settings",
+  ".env": "Environment file — local environment variables",
+  ".lock": "Lock file — dependency version lock",
+  // Build
+  ".mem": "Memory init file — block RAM initialization data (hex)",
+  ".coe": "Coefficient file — Xilinx block RAM/ROM initialization",
+  ".mif": "Memory Initialization File — Intel/Altera RAM init",
+  ".hex": "Intel HEX — firmware or memory image",
+  ".elf": "ELF binary — embedded processor firmware",
+  ".do": "ModelSim do file — simulation automation script",
+  ".f": "File list — Verilog source file list for compilation",
+  ".prj": "Project file — source file list (ISE/Diamond format)",
+  ".ucf": "User Constraints File — legacy Xilinx ISE constraints",
+  ".ngc": "Netlist — Xilinx ISE synthesized core netlist",
+  ".dcp": "Design Checkpoint — Vivado incremental compile snapshot",
+  ".xci": "Xilinx Core Instance — IP core configuration",
+  ".ip": "IP definition — IP core parameters and generation settings",
+  ".qip": "Quartus IP File — Intel IP core reference",
+  ".qsys": "Platform Designer — Intel FPGA system integration file",
+  // Simulation
+  ".vcd": "Value Change Dump — simulation waveform data",
+  ".fst": "Fast Signal Trace — compressed waveform (GTKWave)",
+  ".ghw": "GHDL Waveform — VHDL simulation output",
+  ".saif": "Switching Activity — power estimation input from simulation",
   // Docs
   ".md": "Markdown — documentation or README",
   ".txt": "Text file — notes or documentation",
   ".log": "Log file — build or tool execution output",
   ".csv": "CSV data — tabular report data export",
+  ".pdf": "PDF document — datasheet, reference manual, or report",
+  ".png": "PNG image — diagram, schematic, or screenshot",
+  ".svg": "SVG vector — schematic, block diagram, or icon",
+  // Makefile
+  "makefile": "Makefile — build automation rules",
+  "Makefile": "Makefile — build automation rules",
 };
 
 function fileTypeTooltip(filename: string, ty?: string): string {
@@ -83,6 +135,8 @@ function fileTypeTooltip(filename: string, ty?: string): string {
   for (const ext of [".sta.rpt", ".fit.rpt", ".map.rpt", ".asm.rpt"]) {
     if (lower.endsWith(ext) && FILE_EXT_TOOLTIPS[ext]) return FILE_EXT_TOOLTIPS[ext];
   }
+  // Try exact filename match (e.g. Makefile)
+  if (FILE_EXT_TOOLTIPS[lower]) return FILE_EXT_TOOLTIPS[lower];
   const dot = lower.lastIndexOf(".");
   if (dot >= 0) {
     const ext = lower.slice(dot);

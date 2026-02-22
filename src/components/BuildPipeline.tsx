@@ -348,6 +348,135 @@ const OSS_ARCH_OPTIONS: Record<string, Record<string, StageOption[]>> = {
   machxo2: OSS_ECP5_STAGE_OPTIONS,   // MachXO2 uses same ecppack flow
 };
 
+// ── Strategy Presets ──
+// One-click preset buttons that apply curated option values across all stages.
+type StrategyPreset = { label: string; tooltip: string; options: Record<string, string> };
+
+const RADIANT_PRESETS: StrategyPreset[] = [
+  {
+    label: "Timing",
+    tooltip: "Maximize Fmax: high effort, timing-driven, path-based routing",
+    options: {
+      syn_optimization: "Timing",
+      syn_retiming: "true",
+      syn_resource_sharing: "true",
+      map_effort: "High",
+      par_effort: "High",
+      par_path_based: "ON",
+      par_timing_driven: "true",
+    },
+  },
+  {
+    label: "Area",
+    tooltip: "Minimize resource usage: area-optimized synthesis, standard PAR",
+    options: {
+      syn_optimization: "Area",
+      syn_retiming: "false",
+      syn_resource_sharing: "true",
+      map_effort: "Standard",
+      map_area_opt: "true",
+      par_effort: "Standard",
+      par_path_based: "OFF",
+      par_timing_driven: "true",
+    },
+  },
+  {
+    label: "Power",
+    tooltip: "Reduce dynamic power: balanced synthesis, lower routing effort",
+    options: {
+      syn_optimization: "Balanced",
+      syn_retiming: "false",
+      syn_resource_sharing: "true",
+      map_effort: "Standard",
+      par_effort: "Standard",
+      par_path_based: "OFF",
+      par_timing_driven: "true",
+    },
+  },
+];
+
+const QUARTUS_PRESETS: StrategyPreset[] = [
+  {
+    label: "Timing",
+    tooltip: "Maximize performance: aggressive optimization, physical synthesis",
+    options: {
+      syn_optimization_mode: "Aggressive Performance",
+      syn_timing_driven: "true",
+      syn_retiming: "true",
+      fit_effort: "Standard Fit",
+      fit_phys_synth: "true",
+      fit_router_timing: "Maximum",
+    },
+  },
+  {
+    label: "Area",
+    tooltip: "Minimize area: aggressive area optimization",
+    options: {
+      syn_optimization_mode: "Aggressive Area",
+      syn_timing_driven: "true",
+      syn_retiming: "false",
+      fit_effort: "Auto Fit",
+      fit_phys_synth: "false",
+      fit_power_opt: "Off",
+    },
+  },
+  {
+    label: "Power",
+    tooltip: "Reduce power: extra power optimization effort",
+    options: {
+      syn_optimization_mode: "High Power Effort",
+      syn_timing_driven: "true",
+      syn_retiming: "false",
+      fit_effort: "Auto Fit",
+      fit_phys_synth: "false",
+      fit_power_opt: "Extra Effort",
+    },
+  },
+];
+
+const VIVADO_PRESETS: StrategyPreset[] = [
+  {
+    label: "Timing",
+    tooltip: "Maximize Fmax: performance-explore strategies, post-route physopt",
+    options: {
+      syn_strategy: "Flow_PerfOptimized_high",
+      syn_retiming: "true",
+      impl_strategy: "Performance_ExplorePostRoutePhysOpt",
+      impl_phys_opt: "AggressiveExplore",
+      impl_post_route_phys: "AggressiveExplore",
+    },
+  },
+  {
+    label: "Area",
+    tooltip: "Minimize area: area-explore strategies",
+    options: {
+      syn_strategy: "Flow_AreaOptimized_high",
+      syn_retiming: "false",
+      impl_strategy: "Area_Explore",
+      impl_phys_opt: "None",
+      impl_post_route_phys: "None",
+    },
+  },
+  {
+    label: "Power",
+    tooltip: "Reduce power: power-optimized implementation",
+    options: {
+      syn_strategy: "Default",
+      syn_retiming: "false",
+      impl_strategy: "Power_DefaultOpt",
+      impl_phys_opt: "None",
+      impl_post_route_phys: "None",
+    },
+  },
+];
+
+const BACKEND_PRESETS: Record<string, StrategyPreset[]> = {
+  radiant: RADIANT_PRESETS,
+  diamond: RADIANT_PRESETS,
+  quartus: QUARTUS_PRESETS,
+  vivado: VIVADO_PRESETS,
+};
+
 interface BuildPipelineProps {
   backend: RuntimeBackend;
   building: boolean;
@@ -704,7 +833,7 @@ export default memo(function BuildPipeline({
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ block: "end" });
+    logEndRef.current?.scrollIntoView?.({ block: "end" });
   }, [logs.length]);
 
   const handleCopy = useCallback(() => {
@@ -760,6 +889,12 @@ export default memo(function BuildPipeline({
     onOptionsChange({ ...buildOptions, [key]: val });
   }, [buildOptions, onOptionsChange]);
 
+  const presets = BACKEND_PRESETS[B.id] ?? [];
+
+  const applyPreset = useCallback((preset: StrategyPreset) => {
+    onOptionsChange({ ...buildOptions, ...preset.options });
+  }, [buildOptions, onOptionsChange]);
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
       {/* Left column: Build Pipeline */}
@@ -804,6 +939,20 @@ export default memo(function BuildPipeline({
             </span>
           )}
         </div>
+        {/* Strategy presets */}
+        {presets.length > 0 && !building && (
+          <div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>
+              Strategy:
+            </span>
+            {presets.map((p) => (
+              <Btn key={p.label} small onClick={() => applyPreset(p)} style={{ fontSize: 7 }}>
+                {p.label === "Timing" ? "\u26A1" : p.label === "Area" ? "\u25A3" : "\u2197"}{" "}
+                {p.label}
+              </Btn>
+            ))}
+          </div>
+        )}
         {/* Changed from last commit */}
         {changedFromCommit && changedFromCommit.length > 0 && (
           <div style={{
