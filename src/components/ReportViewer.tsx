@@ -138,7 +138,7 @@ function Collapsible({ title, icon, defaultOpen = false, children }: {
         {icon}
         <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{title}</span>
       </div>
-      {open && <div style={{ padding: "0 14px 14px" }}>{children}</div>}
+      {open && <div style={{ padding: "0 14px 14px", maxHeight: 400, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>{children}</div>}
     </div>
   );
 }
@@ -730,8 +730,8 @@ export default function ReportViewer({
           const u = REPORTS.utilization!;
           return (
             <>
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "sticky", top: -14, background: "inherit", zIndex: 1, paddingTop: 2, paddingBottom: 4 }}>
                   <Gauge />
                   <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Resource Utilization</span>
                   <Badge color={C.accent}>{u.device}</Badge>
@@ -795,7 +795,7 @@ export default function ReportViewer({
           const pw = REPORTS.power!;
           return (
             <>
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.warnDim})` }}>
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.warnDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                   <Bolt />
                   <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Power Estimation</span>
@@ -862,7 +862,7 @@ export default function ReportViewer({
           return (
             <>
               {/* Summary cards panel */}
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})` }}>
+              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                   <Warn />
                   <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Design Rule Checks</span>
@@ -917,8 +917,8 @@ export default function ReportViewer({
         {rptTab === "io" && REPORTS.io && REPORTS.utilization && (() => {
           const io = REPORTS.io!;
           return (
-            <div style={panelP}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ ...panelP, maxHeight: 600, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "sticky", top: -14, background: C.s1, zIndex: 1, paddingTop: 2, paddingBottom: 4 }}>
                 <Pin />
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
                 <Badge color={C.accent}>{REPORTS.utilization!.device}</Badge>

@@ -33,16 +33,9 @@ import {
   readBuildLog,
   openProject,
   getFileTreeMapped,
-  getTimingReport,
-  getUtilizationReport,
-  getPowerReport,
-  getDrcReport,
   getIoReport,
-  mapTimingReport,
-  mapUtilizationReport,
-  mapPowerReport,
-  mapDrcReport,
   mapIoReport,
+  autoLoadReports,
   getRuntimeBackends,
   getAppConfig,
   deleteFile,
@@ -641,6 +634,7 @@ export default function App() {
   const [realDrcReport, setRealDrcReport] = useState<DrcReportData | null>(null);
   const [realIoReport, setRealIoReport] = useState<{ title: string; generated: string; banks: IoBankData[] } | null>(null);
   const [buildDone, setBuildDone] = useState(false);
+  const [buildFailed, setBuildFailed] = useState(false);
   const [activeStage, setActiveStage] = useState<number | null>(null);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
@@ -766,30 +760,28 @@ export default function App() {
           f.path?.includes(implDir) &&
           (f.n.endsWith(".twr") || f.n.endsWith(".mrp") || f.n.endsWith(".bit") || f.n.endsWith(".jed"))
         );
-        // Also detect OSS builds (build/ directory with report.json or .bit)
+        // Also detect OSS builds (build/ directory with any build artifacts or logs)
         const hasOssBuild = files.some((f) =>
           f.path?.includes("/build/") &&
-          (f.n === "report.json" || f.n.endsWith(".bit") || f.n === "out.config")
+          (f.n === "report.json" || f.n.endsWith(".bit") || f.n.endsWith(".bin")
+           || f.n === "out.config" || f.n === "synth.log" || f.n === "pnr.log"
+           || f.n === "out.json" || f.n === "bitstream.log")
         );
         if (hasImpl || hasOssBuild) {
           setBuildDone(true);
           setBStep(4); // Mark all stages done
           const bName = matchingBackend?.name ?? "Radiant";
-          getTimingReport(backendId, dir)
-            .then((r) => setRealTimingReport(mapTimingReport(r, bName)))
-            .catch(() => {});
-          getUtilizationReport(backendId, dir)
-            .then((r) => setRealUtilReport(mapUtilizationReport(r)))
-            .catch(() => {});
-          getPowerReport(backendId, dir)
-            .then((r) => { if (r) setRealPowerReport(mapPowerReport(r)); })
-            .catch(() => {});
-          getDrcReport(backendId, dir)
-            .then((r) => { if (r) setRealDrcReport(mapDrcReport(r)); })
-            .catch(() => {});
+          console.log("[Reports] Loading existing reports for", backendId, dir);
+          // Use auto-detection to bypass backend ID issues
+          autoLoadReports(dir, bName).then((reports) => {
+            if (reports.timing) setRealTimingReport(reports.timing);
+            if (reports.utilization) setRealUtilReport(reports.utilization);
+            if (reports.power) setRealPowerReport(reports.power);
+            if (reports.drc) setRealDrcReport(reports.drc);
+          }).catch((e) => console.warn("[Reports] auto-load failed:", e));
           getIoReport(backendId, dir)
             .then((r) => { if (r) setRealIoReport(mapIoReport(r)); })
-            .catch(() => {});
+            .catch((e) => console.warn("[Reports] io load:", e));
           // Check if sources are newer than build outputs
           checkSourcesStale(dir).then(setSourcesStale).catch(() => {});
         }
@@ -946,6 +938,34 @@ export default function App() {
             { module: "count", lut: 48, ff: 8, ebr: 0, pct: "100.0%" },
           ],
         });
+        setRealDrcReport({
+          title: "Design Rule Checks",
+          generated: new Date().toISOString(),
+          summary: { errors: 0, critWarns: 0, warnings: 2, info: 1, waived: 0 },
+          items: [
+            { sev: "warning", code: "YOSYS-W", msg: "Module has unconnected port", loc: "yosys", action: "Review warning" },
+            { sev: "warning", code: "NEXTPNR-W", msg: "No timing constraints defined", loc: "nextpnr", action: "Review warning" },
+            { sev: "info", code: "NEXTPNR-I", msg: "All cells placed successfully", loc: "nextpnr", action: "Review" },
+          ],
+        });
+        setRealPowerReport({
+          title: "Power Estimation",
+          generated: new Date().toISOString(),
+          junction: "25.0\u00B0C",
+          ambient: "25.0\u00B0C",
+          theta_ja: "0.0\u00B0C/W",
+          total: "50.5 mW",
+          confidence: "Estimate",
+          breakdown: [
+            { cat: "Static", mw: 50, pct: 99, color: "#f59e0b" },
+            { cat: "Logic (LUTs)", mw: 0.48, pct: 0.95, color: "#ef4444" },
+            { cat: "Registers (FFs)", mw: 0.04, pct: 0.08, color: "#3b82f6" },
+          ],
+          byRail: [
+            { rail: "VCCIO", mw: 15.2 },
+            { rail: "VCCINT", mw: 35.3 },
+          ],
+        });
         // Set mock file tree for build artifacts
         setRealFiles([
           { n: "source", d: 0, ty: "folder", open: true },
@@ -979,6 +999,21 @@ export default function App() {
     setTimeout(advanceStage, 300);
   }, []);
 
+  // Load all reports from disk using auto-detection (no backend ID needed)
+  const loadReportsFromDisk = useCallback((dir: string, backendName: string) => {
+    if (!isTauri || !dir) return;
+    autoLoadReports(dir, backendName).then((reports) => {
+      if (reports.timing) setRealTimingReport(reports.timing);
+      if (reports.utilization) setRealUtilReport(reports.utilization);
+      if (reports.power) setRealPowerReport(reports.power);
+      if (reports.drc) setRealDrcReport(reports.drc);
+    }).catch((e) => console.warn("[Reports] auto-load failed:", e));
+    // I/O report still needs backend-specific parsing
+    getIoReport(bid, dir)
+      .then((r) => { if (r) setRealIoReport(mapIoReport(r)); })
+      .catch(() => {});
+  }, [bid]);
+
   const doRunBuild = useCallback(async () => {
     // Clean up any stale listeners from previous builds
     if (buildCleanup.current) {
@@ -993,6 +1028,7 @@ export default function App() {
     logsRef.current = [];
     setSec("build");
     setBuildDone(false);
+    setBuildFailed(false);
     setActiveStage(null);
     setSourcesStale(false);
 
@@ -1058,46 +1094,35 @@ export default function App() {
 
         if (data.status === "success") {
           setBuildDone(true);
-          getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
-          // Fetch reports and save build record with data
-          Promise.all([
-            getTimingReport(bid, projectDir).then((r) => mapTimingReport(r, B.name)).catch(() => null),
-            getUtilizationReport(bid, projectDir).then((r) => mapUtilizationReport(r)).catch(() => null),
-            getPowerReport(bid, projectDir).then((r) => r ? mapPowerReport(r) : null).catch(() => null),
-            getDrcReport(bid, projectDir).then((r) => r ? mapDrcReport(r) : null).catch(() => null),
-            getIoReport(bid, projectDir).then((r) => r ? mapIoReport(r) : null).catch(() => null),
-          ]).then(([timingR, utilR, powerR, drcR, ioR]) => {
-            if (timingR) setRealTimingReport(timingR);
-            if (utilR) setRealUtilReport(utilR);
-            if (powerR) setRealPowerReport(powerR);
-            if (drcR) setRealDrcReport(drcR);
-            if (ioR) setRealIoReport(ioR);
-            // Enrich build record with report data
-            const enriched: BuildRecord = { ...record };
-            if (timingR) {
-              const fmax = parseFloat(timingR.summary.fmax);
-              if (!isNaN(fmax)) enriched.fmaxMhz = fmax;
-            }
-            if (utilR) {
-              for (const cat of utilR.summary) {
-                for (const item of cat.items) {
-                  if (item.r.toUpperCase().includes("LUT") || item.r.toUpperCase().includes("SLICE")) {
-                    enriched.lutUsed = item.used;
-                    enriched.lutTotal = item.total;
-                  }
-                  if (item.r.toUpperCase().includes("FF") || item.r.toUpperCase().includes("REGISTER")) {
-                    enriched.ffUsed = item.used;
-                    enriched.ffTotal = item.total;
-                  }
+        } else {
+          setBuildFailed(true);
+        }
+        getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+        // Load reports using auto-detection (bypasses backend ID issues)
+        loadReportsFromDisk(projectDir, B.name);
+        // Also save build record with report enrichment
+        autoLoadReports(projectDir, B.name).then((reports) => {
+          const enriched: BuildRecord = { ...record };
+          if (reports.timing) {
+            const fmax = parseFloat(reports.timing.summary.fmax);
+            if (!isNaN(fmax)) enriched.fmaxMhz = fmax;
+          }
+          if (reports.utilization) {
+            for (const cat of reports.utilization.summary) {
+              for (const item of cat.items) {
+                if (item.r.toUpperCase().includes("LUT") || item.r.toUpperCase().includes("SLICE")) {
+                  enriched.lutUsed = item.used;
+                  enriched.lutTotal = item.total;
+                }
+                if (item.r.toUpperCase().includes("FF") || item.r.toUpperCase().includes("REGISTER")) {
+                  enriched.ffUsed = item.used;
+                  enriched.ffTotal = item.total;
                 }
               }
             }
-            if (projectDir) saveBuildRecord(projectDir, enriched).catch(() => {});
-          });
-        } else {
-          // Save failed build record immediately
-          if (projectDir) saveBuildRecord(projectDir, record).catch(() => {});
-        }
+          }
+          if (projectDir) saveBuildRecord(projectDir, enriched).catch(() => {});
+        }).catch(() => { if (projectDir) saveBuildRecord(projectDir, record).catch(() => {}); });
         // Refresh git status (build may have created new files)
         if (projectDir) {
           getGitStatus(projectDir)
@@ -1256,7 +1281,14 @@ export default function App() {
       return s;
     });
     setViewingFile(null);
-  }, []);
+    // Auto-load reports from disk when navigating to Reports tab
+    if (s === "reports" && isTauri && projectDir) {
+      // Use auto-detection — works regardless of backend ID
+      if (!realTimingReport || !realUtilReport || !realPowerReport || !realDrcReport) {
+        loadReportsFromDisk(projectDir, B.name);
+      }
+    }
+  }, [projectDir, B.name, realTimingReport, realUtilReport, realPowerReport, realDrcReport, loadReportsFromDisk]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1454,10 +1486,20 @@ export default function App() {
       <GitStatusBar
         git={gitState}
         projectName={project?.name}
+        projectDir={projectDir}
         gitExpanded={gitExpanded}
         setGitExpanded={setGitExpanded}
         onRefresh={refreshAll}
         onCommit={handleGitCommit}
+        onInit={projectDir ? async () => {
+          try {
+            const { gitInit } = await import("./hooks/useTauri");
+            await gitInit(projectDir);
+            refreshAll();
+          } catch (err) {
+            console.error("Git init failed:", err);
+          }
+        } : undefined}
       />
 
       {/* Command Palette */}
@@ -1568,8 +1610,8 @@ export default function App() {
           </div>
           <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minHeight: 0 }}>
             <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
-            <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
             <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
+            <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
             <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
             <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
             <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
@@ -1823,6 +1865,7 @@ export default function App() {
                   backend={B}
                   building={building}
                   buildStep={bStep}
+                  buildFailed={buildFailed}
                   logs={logs}
                   activeStage={activeStage}
                   onStageClick={setActiveStage}
@@ -1833,6 +1876,16 @@ export default function App() {
                   saveStatus={buildSaveStatus}
                   changedFromCommit={changedFromCommit}
                   deviceString={project?.device ?? ""}
+                  projectDir={projectDir}
+                  topModule={project?.topModule}
+                  onMakefileImport={(result) => {
+                    if (project) {
+                      const updated = { ...project };
+                      if (result.device) updated.device = result.device;
+                      if (result.topModule) updated.topModule = result.topModule;
+                      setProject(updated);
+                    }
+                  }}
                 />
                 {buildDone && realFiles && (
                   <BuildArtifacts

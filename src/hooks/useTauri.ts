@@ -732,6 +732,77 @@ export function mapIoReport(r: RustIoReport): { title: string; generated: string
   };
 }
 
+// ── Auto-detect report loading ──
+
+interface RustAutoReports {
+  timing: RustTimingReport | null;
+  utilization: RustResourceReport | null;
+  power: RustPowerReport | null;
+  drc: RustDrcReport | null;
+}
+
+export interface MappedAutoReports {
+  timing: TimingReportData | null;
+  utilization: UtilizationReportData | null;
+  power: PowerReportData | null;
+  drc: DrcReportData | null;
+}
+
+export async function autoLoadReports(projectDir: string, backendName: string): Promise<MappedAutoReports> {
+  if (!isTauri) {
+    return { timing: null, utilization: null, power: null, drc: null };
+  }
+  const raw = await invoke<RustAutoReports>("auto_load_reports", { projectDir });
+  return {
+    timing: raw.timing ? mapTimingReport(raw.timing, backendName) : null,
+    utilization: raw.utilization ? mapUtilizationReport(raw.utilization) : null,
+    power: raw.power ? mapPowerReport(raw.power) : null,
+    drc: raw.drc ? mapDrcReport(raw.drc) : null,
+  };
+}
+
+// ── Makefile Import/Export ──
+
+export interface MakefileImportResult {
+  device: string;
+  topModule: string;
+  sourcePatterns: string[];
+  constraintFiles: string[];
+  buildDir: string;
+  buildOptions: Record<string, string>;
+  warnings: string[];
+  summary: string[];
+}
+
+export async function importMakefile(path: string): Promise<MakefileImportResult> {
+  if (!isTauri) {
+    return {
+      device: "LFE5U-85F-6BG381C", topModule: "blinky",
+      sourcePatterns: ["src/*.v"], constraintFiles: ["constraints/pins.lpf"],
+      buildDir: "build", buildOptions: {}, warnings: [], summary: ["Mock import"],
+    };
+  }
+  return invoke<MakefileImportResult>("import_makefile", { path });
+}
+
+export async function exportMakefile(
+  projectDir: string, device: string, topModule: string,
+  sources: string[], constraints: string[], buildDir: string,
+  buildOptions: Record<string, string>,
+): Promise<string> {
+  if (!isTauri) return "# Mock Makefile";
+  return invoke<string>("export_makefile", {
+    projectDir, device, topModule, sources, constraints, buildDir, buildOptions,
+  });
+}
+
+// ── Git Init ──
+
+export async function gitInit(projectDir: string): Promise<string> {
+  if (!isTauri) return "mock123";
+  return invoke<string>("git_init", { projectDir });
+}
+
 // ── Programmer commands ──
 
 export interface ProgrammerCable {

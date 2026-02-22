@@ -3,6 +3,7 @@ pub mod commands;
 pub mod config;
 pub mod files;
 pub mod git;
+pub mod makefile;
 pub mod parser;
 pub mod process;
 pub mod programmer;
@@ -38,6 +39,7 @@ pub fn run() {
             commands::get_power_report,
             commands::get_drc_report,
             commands::get_io_report,
+            commands::auto_load_reports,
             commands::switch_backend,
             commands::get_available_backends,
             commands::get_backend_info,
@@ -67,6 +69,9 @@ pub fn run() {
             commands::detect_programmer_cables,
             commands::find_bitstreams,
             commands::program_device,
+            commands::import_makefile,
+            commands::export_makefile,
+            commands::git_init,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -187,6 +187,83 @@ pub fn parse_nextpnr_timing(content: &str) -> BackendResult<TimingReport> {
     })
 }
 
+/// Parse timing data from nextpnr log output (fallback when report.json is missing).
+///
+/// nextpnr prints lines like:
+///   Info: Max frequency for clock 'clk': 148.30 MHz (PASS at 12.00 MHz)
+///   Info: Max frequency for clock 'sys_clk': 45.22 MHz (FAIL at 50.00 MHz)
+pub fn parse_nextpnr_log_timing(content: &str) -> BackendResult<TimingReport> {
+    let fmax_re = Regex::new(
+        r"Max frequency for clock '([^']+)':\s*([\d.]+)\s*MHz\s*\((?:PASS|FAIL) at ([\d.]+)\s*MHz\)"
+    ).unwrap();
+
+    let mut best_fmax = 0.0_f64;
+    let mut best_constraint = 0.0_f64;
+    let mut worst_wns = f64::MAX;
+    let mut total_tns = 0.0_f64;
+    let mut failing_count = 0_u32;
+    let mut clock_domains = vec![];
+
+    for cap in fmax_re.captures_iter(content) {
+        let name = cap[1].to_string();
+        let achieved: f64 = cap[2].parse().unwrap_or(0.0);
+        let constraint: f64 = cap[3].parse().unwrap_or(0.0);
+
+        let wns = if constraint > 0.0 && achieved > 0.0 {
+            (1000.0 / constraint) - (1000.0 / achieved)
+        } else {
+            0.0
+        };
+
+        if wns < worst_wns {
+            worst_wns = wns;
+        }
+        if wns < 0.0 {
+            total_tns += wns;
+            failing_count += 1;
+        }
+        if achieved > best_fmax {
+            best_fmax = achieved;
+            best_constraint = constraint;
+        }
+
+        let period = if constraint > 0.0 { 1000.0 / constraint } else { 0.0 };
+
+        clock_domains.push(ClockDomain {
+            name,
+            period_ns: period,
+            frequency_mhz: achieved,
+            source: String::new(),
+            clock_type: "primary".into(),
+            wns_ns: wns,
+            path_count: 0,
+        });
+    }
+
+    if worst_wns == f64::MAX {
+        worst_wns = 0.0;
+    }
+
+    if clock_domains.is_empty() && best_fmax == 0.0 {
+        return Err(BackendError::ReportNotFound(
+            "No timing data found in nextpnr log".into(),
+        ));
+    }
+
+    Ok(TimingReport {
+        fmax_mhz: best_fmax,
+        target_mhz: best_constraint,
+        wns_ns: worst_wns,
+        tns_ns: total_tns,
+        whs_ns: 0.0,
+        ths_ns: 0.0,
+        failing_paths: failing_count,
+        total_paths: clock_domains.len() as u32,
+        clock_domains,
+        critical_paths: vec![],
+    })
+}
+
 /// Parse Radiant .twr timing report
 ///
 /// Radiant timing reports have a different format from Diamond:
@@ -496,6 +573,49 @@ Target Period : 10.000
         assert_eq!(report.target_mhz, 0.0);
         assert!(report.clock_domains.is_empty());
         assert!(report.critical_paths.is_empty());
+    }
+
+    // ── nextpnr log timing fallback tests ──
+
+    #[test]
+    fn test_parse_nextpnr_log_timing_single_clock() {
+        let content = r#"
+Info: Program Arguments: nextpnr-ecp5 --json build/out.json
+Info: Max frequency for clock 'clk': 148.30 MHz (PASS at 12.00 MHz)
+Info: 2 warnings, 0 errors
+"#;
+        let report = parse_nextpnr_log_timing(content).unwrap();
+        assert!((report.fmax_mhz - 148.30).abs() < 0.01);
+        assert!((report.target_mhz - 12.0).abs() < 0.01);
+        assert_eq!(report.clock_domains.len(), 1);
+        assert_eq!(report.clock_domains[0].name, "clk");
+        assert_eq!(report.failing_paths, 0);
+    }
+
+    #[test]
+    fn test_parse_nextpnr_log_timing_failing_clock() {
+        let content = "Info: Max frequency for clock 'sys_clk': 45.22 MHz (FAIL at 50.00 MHz)\n";
+        let report = parse_nextpnr_log_timing(content).unwrap();
+        assert!((report.fmax_mhz - 45.22).abs() < 0.01);
+        assert_eq!(report.failing_paths, 1);
+        assert!(report.wns_ns < 0.0); // Negative slack = timing violation
+    }
+
+    #[test]
+    fn test_parse_nextpnr_log_timing_multiple_clocks() {
+        let content = r#"
+Info: Max frequency for clock 'fast_clk': 200.00 MHz (PASS at 100.00 MHz)
+Info: Max frequency for clock 'slow_clk': 50.00 MHz (PASS at 25.00 MHz)
+"#;
+        let report = parse_nextpnr_log_timing(content).unwrap();
+        assert_eq!(report.clock_domains.len(), 2);
+        assert!((report.fmax_mhz - 200.0).abs() < 0.01); // Best fmax
+    }
+
+    #[test]
+    fn test_parse_nextpnr_log_timing_no_data() {
+        let result = parse_nextpnr_log_timing("Info: Program finished normally.\n");
+        assert!(result.is_err());
     }
 
     #[test]

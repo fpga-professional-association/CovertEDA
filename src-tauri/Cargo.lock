@@ -431,6 +431,7 @@ dependencies = [
  "dirs 5.0.1",
  "env_logger",
  "git2",
+ "glob",
  "libc",
  "log",
  "notify",

@@ -304,6 +304,25 @@ pub fn start_build(
         .ok_or("No project is open")?;
     drop(current);
 
+    // Resolve constraint file from project config if not already in options
+    let mut options = options;
+    if !options.contains_key("constraint_file") && !config.constraint_files.is_empty() {
+        // Glob-expand constraint patterns to find actual files
+        for pattern in &config.constraint_files {
+            let full_pattern = project_path.join(pattern);
+            if let Ok(matches) = glob::glob(&full_pattern.to_string_lossy()) {
+                for entry in matches.flatten() {
+                    // Store path relative to project dir
+                    if let Ok(rel) = entry.strip_prefix(&project_path) {
+                        options.insert("constraint_file".into(), rel.to_string_lossy().into_owned());
+                        break;
+                    }
+                }
+            }
+            if options.contains_key("constraint_file") { break; }
+        }
+    }
+
     // Generate the build script via the backend
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     let backend = registry
@@ -397,10 +416,12 @@ pub fn start_build(
         }
         emit_info("────────────────────────");
         emit_info(&format!("Spawning: {} {}", &executable, &script_arg));
+        emit_info(&format!("Working dir: {}", project_path.display()));
         emit_info("");
 
         let mut cmd = Command::new(&executable);
         cmd.arg(&script_arg)
+            .current_dir(&project_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -1980,6 +2001,233 @@ pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String
     }
 
     Err(format!("No report file found for type '{}'", report_type))
+}
+
+// ── Auto-detect report loading (no backend ID needed) ──
+
+/// All reports bundled into a single response.
+#[derive(serde::Serialize)]
+pub struct AutoReports {
+    pub timing: Option<TimingReport>,
+    pub utilization: Option<ResourceReport>,
+    pub power: Option<PowerReport>,
+    pub drc: Option<DrcReport>,
+}
+
+/// Try to load all available reports by auto-detecting project type from files on disk.
+/// Falls back through multiple parsers so it works regardless of backend ID.
+#[tauri::command]
+pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
+    let dir = PathBuf::from(&project_dir);
+    let build_dir = dir.join("build");
+    let impl_dir = dir.join("impl1");
+
+    let mut timing: Option<TimingReport> = None;
+    let mut utilization: Option<ResourceReport> = None;
+    let mut power: Option<PowerReport> = None;
+    let drc: Option<DrcReport>;
+
+    // ── Try OSS / nextpnr report.json first ──
+    let report_json = build_dir.join("report.json");
+    if report_json.exists() {
+        if let Ok(content) = std::fs::read_to_string(&report_json) {
+            if timing.is_none() {
+                timing = crate::parser::timing::parse_nextpnr_timing(&content).ok();
+            }
+            if utilization.is_none() {
+                utilization = crate::parser::utilization::parse_nextpnr_utilization(&content, "auto").ok();
+            }
+            // Power estimate from utilization
+            if power.is_none() {
+                power = estimate_power_from_json(&content);
+            }
+        }
+    }
+
+    // ── Fallback: parse nextpnr pnr.log for timing ──
+    let pnr_log = build_dir.join("pnr.log");
+    if timing.is_none() && pnr_log.exists() {
+        if let Ok(content) = std::fs::read_to_string(&pnr_log) {
+            timing = crate::parser::timing::parse_nextpnr_log_timing(&content).ok();
+        }
+    }
+
+    // ── Fallback: parse Yosys synth.log for utilization ──
+    let synth_log = build_dir.join("synth.log");
+    if utilization.is_none() && synth_log.exists() {
+        if let Ok(content) = std::fs::read_to_string(&synth_log) {
+            if let Ok(synth) = crate::parser::synthesis::parse_yosys_synthesis(&content) {
+                let mut items = vec![];
+                if synth.lut_count > 0 {
+                    items.push(ResourceItem { resource: "LUTs".into(), used: synth.lut_count, total: 0, detail: Some("from synthesis (pre-PnR)".into()) });
+                }
+                if synth.reg_count > 0 {
+                    items.push(ResourceItem { resource: "Registers/FFs".into(), used: synth.reg_count, total: 0, detail: Some("from synthesis (pre-PnR)".into()) });
+                }
+                if synth.ram_count > 0 {
+                    items.push(ResourceItem { resource: "Block RAM".into(), used: synth.ram_count, total: 0, detail: Some("from synthesis (pre-PnR)".into()) });
+                }
+                if synth.dsp_count > 0 {
+                    items.push(ResourceItem { resource: "DSP Blocks".into(), used: synth.dsp_count, total: 0, detail: Some("from synthesis (pre-PnR)".into()) });
+                }
+                if !items.is_empty() {
+                    utilization = Some(ResourceReport {
+                        device: "auto".into(),
+                        categories: vec![ResourceCategory { name: "Logic (Synthesis Estimate)".into(), items }],
+                        by_module: vec![],
+                    });
+                }
+            }
+        }
+    }
+
+    // ── DRC: parse warnings/errors from all log files ──
+    {
+        let mut drc_items = Vec::new();
+        let mut errors = 0u32;
+        let mut warnings = 0u32;
+        let mut critical_warnings = 0u32;
+        let info_count = 0u32;
+        let bitstream_log = build_dir.join("bitstream.log");
+
+        for (log_path, source) in [
+            (&synth_log, "yosys"),
+            (&pnr_log, "nextpnr"),
+            (&bitstream_log, "packer"),
+        ] {
+            if let Ok(content) = std::fs::read_to_string(log_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("Warning:") || trimmed.contains("] Warning:") {
+                        let msg = trimmed.splitn(2, "Warning:").nth(1).unwrap_or(trimmed).trim().to_string();
+                        let lower = msg.to_lowercase();
+                        if source == "nextpnr" && (lower.contains("timing") || lower.contains("slack") || lower.contains("frequency")) {
+                            critical_warnings += 1;
+                            drc_items.push(DrcItem { severity: DrcSeverity::CriticalWarning, code: format!("{}-CW", source.to_uppercase()), message: msg, location: source.to_string(), action: "Review timing warning".into() });
+                        } else {
+                            warnings += 1;
+                            drc_items.push(DrcItem { severity: DrcSeverity::Warning, code: format!("{}-W", source.to_uppercase()), message: msg, location: source.to_string(), action: "Review warning".into() });
+                        }
+                    } else if trimmed.starts_with("ERROR:") || trimmed.starts_with("Error:") {
+                        errors += 1;
+                        let msg = trimmed.splitn(2, "rror:").nth(1).unwrap_or(trimmed).trim().to_string();
+                        drc_items.push(DrcItem { severity: DrcSeverity::Error, code: format!("{}-E", source.to_uppercase()), message: msg, location: source.to_string(), action: "Fix error".into() });
+                    }
+                }
+            }
+        }
+        drc = Some(DrcReport { errors, critical_warnings, warnings, info: info_count, waived: 0, items: drc_items });
+    }
+
+    // ── Try vendor reports from impl1/ as fallback ──
+    if timing.is_none() {
+        // Look for .twr files
+        if impl_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&impl_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.extension().map(|e| e == "twr").unwrap_or(false) {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            // Try Radiant format first, then Diamond
+                            timing = crate::parser::timing::parse_radiant_timing(&content).ok()
+                                .or_else(|| crate::parser::timing::parse_diamond_timing(&content).ok());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if utilization.is_none() {
+        // Look for .mrp files
+        if impl_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&impl_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.extension().map(|e| e == "mrp").unwrap_or(false) {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            utilization = crate::parser::utilization::parse_radiant_utilization(&content, "auto").ok();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(AutoReports { timing, utilization, power, drc })
+}
+
+/// Estimate power from nextpnr report.json utilization data
+fn estimate_power_from_json(json_str: &str) -> Option<PowerReport> {
+    let json: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    let util = json.get("utilisation").or_else(|| json.get("utilization"))?.as_object()?;
+    let mut lut_count = 0.0f64;
+    let mut ff_count = 0.0f64;
+    let mut bram_count = 0.0f64;
+    for (key, val) in util {
+        let lower = key.to_lowercase();
+        let used = val.as_object()?.get("used")?.as_f64().unwrap_or(0.0);
+        if lower.contains("lut") || lower.contains("slice") || lower.contains("lc") { lut_count += used; }
+        else if lower.contains("ff") || lower.contains("dff") || lower.contains("reg") { ff_count += used; }
+        else if lower.contains("bram") || lower.contains("ebr") || lower.contains("ram") { bram_count += used; }
+    }
+    if lut_count == 0.0 && ff_count == 0.0 && bram_count == 0.0 { return None; }
+    let static_mw = 50.0;
+    let lut_mw = lut_count * 0.01;
+    let ff_mw = ff_count * 0.005;
+    let bram_mw = bram_count * 5.0;
+    let total_mw = static_mw + lut_mw + ff_mw + bram_mw;
+    Some(PowerReport {
+        total_mw, junction_temp_c: 25.0, ambient_temp_c: 25.0, theta_ja: 0.0, confidence: "Estimate".into(),
+        breakdown: vec![
+            PowerBreakdown { category: "Static".into(), mw: static_mw, percentage: (static_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Logic (LUTs)".into(), mw: lut_mw, percentage: (lut_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Registers (FFs)".into(), mw: ff_mw, percentage: (ff_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Block RAM".into(), mw: bram_mw, percentage: (bram_mw / total_mw) * 100.0 },
+        ],
+        by_rail: vec![
+            PowerRail { rail: "VCCIO".into(), mw: total_mw * 0.3 },
+            PowerRail { rail: "VCCINT".into(), mw: total_mw * 0.7 },
+        ],
+    })
+}
+
+// ── Makefile Import/Export Commands ──
+
+#[tauri::command]
+pub fn import_makefile(path: String) -> Result<crate::makefile::MakefileImportResult, String> {
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read Makefile: {}", e))?;
+    let config = crate::makefile::parse_makefile(&content);
+    Ok(crate::makefile::makefile_config_to_import_result(&config))
+}
+
+#[tauri::command]
+pub fn export_makefile(
+    _project_dir: String,
+    device: String,
+    top_module: String,
+    sources: Vec<String>,
+    constraints: Vec<String>,
+    build_dir: String,
+    build_options: HashMap<String, String>,
+) -> Result<String, String> {
+    Ok(crate::makefile::generate_makefile(
+        &device,
+        &top_module,
+        &sources,
+        &constraints,
+        &build_dir,
+        &build_options,
+    ))
+}
+
+// ── Git Init Command ──
+
+#[tauri::command]
+pub fn git_init(project_dir: String) -> Result<String, String> {
+    crate::git::init_repo(&PathBuf::from(project_dir))
 }
 
 // ── App Config commands ──

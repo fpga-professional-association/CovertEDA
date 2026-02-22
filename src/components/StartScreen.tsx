@@ -271,21 +271,21 @@ export default function StartScreen({
                         opacity: isPlaceholder ? 0.6 : 1,
                       }}
                     >
-                      <span style={{ color: bm.color, fontSize: 12 }}>{bm.icon}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
+                      <span style={{ color: bm.color, fontSize: 13 }}>{bm.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
                         {t.name}
                       </span>
                       {t.available && (
-                        <span style={{ fontSize: 8, fontFamily: MONO, color: bm.color }}>{t.version}</span>
+                        <span style={{ fontSize: 9, fontFamily: MONO, color: bm.color }}>{t.version}</span>
                       )}
                       <div style={{ flex: 1 }} />
                       <span
                         style={{
-                          fontSize: 7,
+                          fontSize: 8,
                           fontFamily: MONO,
-                          fontWeight: 600,
-                          padding: "1px 5px",
-                          borderRadius: 2,
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          borderRadius: 3,
                           color: t.available ? C.ok : isPlaceholder ? C.warn : C.t3,
                           background: isPlaceholder ? `${C.warn}12` : "transparent",
                         }}

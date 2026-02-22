@@ -6,19 +6,23 @@ import { Branch, Git, Refresh } from "./Icons";
 interface GitStatusBarProps {
   git: GitState | null;
   projectName?: string;
+  projectDir?: string;
   gitExpanded: boolean;
   setGitExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   onRefresh?: () => void;
   onCommit?: () => void;
+  onInit?: () => void;
 }
 
 export default function GitStatusBar({
   git,
   projectName,
+  projectDir,
   gitExpanded,
   setGitExpanded,
   onRefresh,
   onCommit,
+  onInit,
 }: GitStatusBarProps) {
   const { C, MONO } = useTheme();
   // Minimal bar when no git data
@@ -59,6 +63,11 @@ export default function GitStatusBar({
         <span style={{ color: C.t3, opacity: 0.5 }}>
           No git repository detected
         </span>
+        {onInit && projectDir && (
+          <Btn small onClick={onInit} style={{ padding: "1px 6px", fontSize: 8 }}>
+            Init
+          </Btn>
+        )}
       </div>
     );
   }

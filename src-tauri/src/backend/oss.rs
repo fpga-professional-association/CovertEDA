@@ -466,6 +466,16 @@ impl OssBackend {
         }
     }
 
+    /// Public wrapper for parse_ecp5_device (used by makefile generation).
+    pub fn parse_ecp5_device_pub(device: &str) -> (String, String, String) {
+        Self::parse_ecp5_device(device)
+    }
+
+    /// Public wrapper for parse_ice40_device (used by makefile generation).
+    pub fn parse_ice40_device_pub(device: &str) -> (String, String) {
+        Self::parse_ice40_device(device)
+    }
+
     /// Generate the bitstream packing command line.
     fn gen_pack_command(arch: OssArch, packer: &str, options: &HashMap<String, String>) -> String {
         let opt = |key: &str| -> String {
@@ -684,16 +694,23 @@ impl FpgaBackend for OssBackend {
         pnr_flags.push(device_flags);
         pnr_flags.push("--json build/out.json".to_string());
 
-        // Constraint file flag varies by architecture
+        // Constraint file: use explicit path from options, or find via glob
         let constraint_ext = arch.constraint_ext();
-        let constraint_flag = match arch {
-            OssArch::Ecp5 | OssArch::MachXO2 => format!("--lpf constraints/pins{}", constraint_ext),
-            OssArch::Ice40 => format!("--pcf constraints/pins{}", constraint_ext),
-            OssArch::Gowin => format!("--cst constraints/pins{}", constraint_ext),
-            OssArch::Nexus => format!("--pdc constraints/pins{}", constraint_ext),
-            OssArch::GateMate => format!("--ccf constraints/pins{}", constraint_ext),
+        let constraint_cli_flag = match arch {
+            OssArch::Ecp5 | OssArch::MachXO2 => "--lpf",
+            OssArch::Ice40 => "--pcf",
+            OssArch::Gowin => "--cst",
+            OssArch::Nexus => "--pdc",
+            OssArch::GateMate => "--ccf",
         };
-        pnr_flags.push(constraint_flag);
+        // Check if user specified a constraint file explicitly via build options
+        let explicit_constraint = options.get("constraint_file").cloned().unwrap_or_default();
+        if !explicit_constraint.is_empty() {
+            pnr_flags.push(format!("{} {}", constraint_cli_flag, explicit_constraint));
+        } else {
+            // Use $CONSTRAINT_FILE which is resolved by bash glob in the script preamble
+            pnr_flags.push(format!("{} $CONSTRAINT_FILE", constraint_cli_flag));
+        }
 
         // Output flag varies by architecture
         let pnr_output_flag = match arch {
@@ -795,12 +812,35 @@ impl FpgaBackend for OssBackend {
         let pack_label = arch.packer_bin();
         let bitstream_ext = arch.bitstream_ext();
 
+        // Generate constraint-finding block (only when using $CONSTRAINT_FILE)
+        let constraint_find_block = if explicit_constraint.is_empty() {
+            format!(
+                r#"
+# Find constraint file (*{ext})
+CONSTRAINT_FILES=( constraints/*{ext} )
+if [ ${{#CONSTRAINT_FILES[@]}} -eq 0 ]; then
+    echo "ERROR: No constraint file (*{ext}) found in constraints/" >&2
+    echo "  Create a constraint file or specify one in Build Options" >&2
+    exit 1
+fi
+CONSTRAINT_FILE="${{CONSTRAINT_FILES[0]}}"
+if [ ${{#CONSTRAINT_FILES[@]}} -gt 1 ]; then
+    echo "Note: Multiple constraint files found, using $CONSTRAINT_FILE"
+fi
+echo "Using constraint file: $CONSTRAINT_FILE"
+"#,
+                ext = constraint_ext,
+            )
+        } else {
+            String::new()
+        };
+
         Ok(format!(
             r#"#!/bin/bash
 # CovertEDA — OSS CAD Build Script
 # Device: {device}  (arch: {synth_label})
 # Top: {top_module}
-set -e
+set -eo pipefail
 shopt -s nullglob
 
 {source_env}cd {project_dir}
@@ -813,7 +853,7 @@ if [ ${{#SRC_FILES[@]}} -eq 0 ]; then
 fi
 
 mkdir -p build
-
+{constraint_find_block}
 echo "=== Yosys Synthesis ({synth_label}) ==="
 {yosys}{yosys_extra} -p "{yosys_pre}{synth_label} {synth_cmd}" "${{SRC_FILES[@]}}" 2>&1 | tee build/synth.log
 
@@ -840,55 +880,205 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
         let report = impl_dir.join("build").join("report.json");
-        if !report.exists() {
-            return Err(BackendError::ReportNotFound(report.display().to_string()));
+        if report.exists() {
+            let content = std::fs::read_to_string(&report)?;
+            return crate::parser::timing::parse_nextpnr_timing(&content);
         }
-        let content = std::fs::read_to_string(&report)?;
-        crate::parser::timing::parse_nextpnr_timing(&content)
+
+        // Fallback: extract fmax from nextpnr log output
+        let pnr_log = impl_dir.join("build").join("pnr.log");
+        if pnr_log.exists() {
+            let content = std::fs::read_to_string(&pnr_log)?;
+            return crate::parser::timing::parse_nextpnr_log_timing(&content);
+        }
+
+        Err(BackendError::ReportNotFound(report.display().to_string()))
     }
 
     fn parse_utilization_report(&self, impl_dir: &Path) -> BackendResult<ResourceReport> {
         let report = impl_dir.join("build").join("report.json");
-        if !report.exists() {
-            return Err(BackendError::ReportNotFound(report.display().to_string()));
+        if report.exists() {
+            let content = std::fs::read_to_string(&report)?;
+            return crate::parser::utilization::parse_nextpnr_utilization(&content, self.default_device());
         }
-        let content = std::fs::read_to_string(&report)?;
-        crate::parser::utilization::parse_nextpnr_utilization(&content, self.default_device())
+
+        // Fallback: parse synth.log for Yosys resource counts
+        let synth_log = impl_dir.join("build").join("synth.log");
+        if synth_log.exists() {
+            let content = std::fs::read_to_string(&synth_log)?;
+            let synth = crate::parser::synthesis::parse_yosys_synthesis(&content)?;
+            let mut items = vec![];
+            if synth.lut_count > 0 {
+                items.push(ResourceItem {
+                    resource: "LUTs".into(),
+                    used: synth.lut_count,
+                    total: 0,
+                    detail: Some("from synthesis (pre-PnR)".into()),
+                });
+            }
+            if synth.reg_count > 0 {
+                items.push(ResourceItem {
+                    resource: "Registers/FFs".into(),
+                    used: synth.reg_count,
+                    total: 0,
+                    detail: Some("from synthesis (pre-PnR)".into()),
+                });
+            }
+            if synth.ram_count > 0 {
+                items.push(ResourceItem {
+                    resource: "Block RAM".into(),
+                    used: synth.ram_count,
+                    total: 0,
+                    detail: Some("from synthesis (pre-PnR)".into()),
+                });
+            }
+            if synth.dsp_count > 0 {
+                items.push(ResourceItem {
+                    resource: "DSP Blocks".into(),
+                    used: synth.dsp_count,
+                    total: 0,
+                    detail: Some("from synthesis (pre-PnR)".into()),
+                });
+            }
+            if !items.is_empty() {
+                return Ok(ResourceReport {
+                    device: self.default_device().to_string(),
+                    categories: vec![ResourceCategory {
+                        name: "Logic (Synthesis Estimate)".into(),
+                        items,
+                    }],
+                    by_module: vec![],
+                });
+            }
+        }
+
+        Err(BackendError::ReportNotFound(report.display().to_string()))
     }
 
-    fn parse_power_report(&self, _impl_dir: &Path) -> BackendResult<Option<PowerReport>> {
-        Ok(None)
+    fn parse_power_report(&self, impl_dir: &Path) -> BackendResult<Option<PowerReport>> {
+        // Provide a rough power estimate based on utilization data.
+        // OSS tools don't have real power analysis, so we estimate from resource counts.
+        let report_path = impl_dir.join("build").join("report.json");
+        if !report_path.exists() {
+            return Ok(None);
+        }
+        let content = std::fs::read_to_string(&report_path)?;
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| BackendError::ParseError(format!("JSON parse error: {}", e)))?;
+
+        // Extract utilization from report.json
+        let utilization = json.get("utilisation").or_else(|| json.get("utilization"));
+        let mut lut_count: f64 = 0.0;
+        let mut ff_count: f64 = 0.0;
+        let mut bram_count: f64 = 0.0;
+
+        if let Some(util) = utilization {
+            // nextpnr report.json has utilisation as object with resource types
+            if let Some(obj) = util.as_object() {
+                for (key, val) in obj {
+                    let lower = key.to_lowercase();
+                    if let Some(used_obj) = val.as_object() {
+                        let used = used_obj.get("used")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        if lower.contains("lut") || lower.contains("slice") || lower.contains("lc") {
+                            lut_count += used;
+                        } else if lower.contains("ff") || lower.contains("dff") || lower.contains("reg") {
+                            ff_count += used;
+                        } else if lower.contains("bram") || lower.contains("ebr") || lower.contains("ram") {
+                            bram_count += used;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no utilization found, return None
+        if lut_count == 0.0 && ff_count == 0.0 && bram_count == 0.0 {
+            return Ok(None);
+        }
+
+        // Simple heuristic power model (very rough estimates):
+        // - Static: ~50mW base
+        // - LUT dynamic: ~0.01 mW per LUT
+        // - FF dynamic: ~0.005 mW per FF
+        // - BRAM: ~5 mW per block
+        let static_mw = 50.0;
+        let lut_mw = lut_count * 0.01;
+        let ff_mw = ff_count * 0.005;
+        let bram_mw = bram_count * 5.0;
+        let total_mw = static_mw + lut_mw + ff_mw + bram_mw;
+
+        let breakdown = vec![
+            PowerBreakdown { category: "Static".into(), mw: static_mw, percentage: (static_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Logic (LUTs)".into(), mw: lut_mw, percentage: (lut_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Registers (FFs)".into(), mw: ff_mw, percentage: (ff_mw / total_mw) * 100.0 },
+            PowerBreakdown { category: "Block RAM".into(), mw: bram_mw, percentage: (bram_mw / total_mw) * 100.0 },
+        ];
+
+        Ok(Some(PowerReport {
+            total_mw,
+            junction_temp_c: 25.0,
+            ambient_temp_c: 25.0,
+            theta_ja: 0.0,
+            confidence: "Estimate".into(),
+            breakdown,
+            by_rail: vec![
+                PowerRail { rail: "VCCIO".into(), mw: total_mw * 0.3 },
+                PowerRail { rail: "VCCINT".into(), mw: total_mw * 0.7 },
+            ],
+        }))
     }
 
     fn parse_drc_report(&self, impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
-        // Parse warnings/errors from yosys synth.log and nextpnr pnr.log
+        // Parse warnings/errors from yosys synth.log, nextpnr pnr.log, and packer bitstream.log
         let synth_log = impl_dir.join("build").join("synth.log");
         let pnr_log = impl_dir.join("build").join("pnr.log");
+        let bitstream_log = impl_dir.join("build").join("bitstream.log");
 
         let mut items = Vec::new();
         let mut errors = 0u32;
         let mut warnings = 0u32;
+        let mut critical_warnings = 0u32;
         let mut info_count = 0u32;
 
-        for (log_path, source) in [(synth_log, "yosys"), (pnr_log, "nextpnr")] {
+        for (log_path, source) in [
+            (synth_log, "yosys"),
+            (pnr_log, "nextpnr"),
+            (bitstream_log, "packer"),
+        ] {
             if let Ok(content) = std::fs::read_to_string(&log_path) {
                 for line in content.lines() {
                     let trimmed = line.trim();
                     if trimmed.starts_with("Warning:") || trimmed.contains("] Warning:") {
-                        warnings += 1;
                         let msg = trimmed
                             .splitn(2, "Warning:")
                             .nth(1)
                             .unwrap_or(trimmed)
                             .trim()
                             .to_string();
-                        items.push(DrcItem {
-                            severity: DrcSeverity::Warning,
-                            code: format!("{}-W", source.to_uppercase()),
-                            message: msg,
-                            location: source.to_string(),
-                            action: "Review warning".to_string(),
-                        });
+
+                        // Promote timing-related warnings to critical warnings
+                        let lower = msg.to_lowercase();
+                        if source == "nextpnr" && (lower.contains("timing") || lower.contains("slack") || lower.contains("frequency")) {
+                            critical_warnings += 1;
+                            items.push(DrcItem {
+                                severity: DrcSeverity::CriticalWarning,
+                                code: format!("{}-CW", source.to_uppercase()),
+                                message: msg,
+                                location: source.to_string(),
+                                action: "Review timing warning".to_string(),
+                            });
+                        } else {
+                            warnings += 1;
+                            items.push(DrcItem {
+                                severity: DrcSeverity::Warning,
+                                code: format!("{}-W", source.to_uppercase()),
+                                message: msg,
+                                location: source.to_string(),
+                                action: "Review warning".to_string(),
+                            });
+                        }
                     } else if trimmed.starts_with("ERROR:")
                         || trimmed.starts_with("Error:")
                         || trimmed.contains("] ERROR:")
@@ -908,8 +1098,11 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
                             action: "Fix error".to_string(),
                         });
                     } else if trimmed.starts_with("Info:") || trimmed.contains("] Info:") {
-                        // Only capture notable info messages, skip routine ones
-                        if trimmed.contains("constraint") || trimmed.contains("unplaced") {
+                        // Capture notable info messages
+                        let lower = trimmed.to_lowercase();
+                        if lower.contains("constraint") || lower.contains("unplaced")
+                            || lower.contains("unrouted") || lower.contains("critical")
+                        {
                             info_count += 1;
                             let msg = trimmed
                                 .splitn(2, "Info:")
@@ -917,13 +1110,26 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
                                 .unwrap_or(trimmed)
                                 .trim()
                                 .to_string();
-                            items.push(DrcItem {
-                                severity: DrcSeverity::Info,
-                                code: format!("{}-I", source.to_uppercase()),
-                                message: msg,
-                                location: source.to_string(),
-                                action: "Review".to_string(),
-                            });
+
+                            // Unplaced cells are worth a critical warning
+                            if lower.contains("unplaced") {
+                                critical_warnings += 1;
+                                items.push(DrcItem {
+                                    severity: DrcSeverity::CriticalWarning,
+                                    code: format!("{}-CW", source.to_uppercase()),
+                                    message: msg,
+                                    location: source.to_string(),
+                                    action: "Check unplaced cells".to_string(),
+                                });
+                            } else {
+                                items.push(DrcItem {
+                                    severity: DrcSeverity::Info,
+                                    code: format!("{}-I", source.to_uppercase()),
+                                    message: msg,
+                                    location: source.to_string(),
+                                    action: "Review".to_string(),
+                                });
+                            }
                         }
                     }
                 }
@@ -931,7 +1137,6 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
         }
 
         if items.is_empty() && errors == 0 && warnings == 0 {
-            // No issues found — still return a clean report
             return Ok(Some(DrcReport {
                 errors: 0,
                 critical_warnings: 0,
@@ -944,7 +1149,7 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
 
         Ok(Some(DrcReport {
             errors,
-            critical_warnings: 0,
+            critical_warnings,
             warnings,
             info: info_count,
             waived: 0,
@@ -1066,7 +1271,8 @@ mod tests {
         assert!(script.contains("--up5k"));
         assert!(script.contains("--package sg48"));
         assert!(script.contains("icepack"));
-        assert!(script.contains("--pcf constraints/pins.pcf"));
+        assert!(script.contains("--pcf $CONSTRAINT_FILE"));
+        assert!(script.contains("*.pcf"));
     }
 
     #[test]
@@ -1083,7 +1289,8 @@ mod tests {
         assert!(script.contains("nextpnr-himbaechel"));
         assert!(script.contains("--uarch gowin"));
         assert!(script.contains("gowin_pack"));
-        assert!(script.contains("--cst constraints/pins.cst"));
+        assert!(script.contains("--cst $CONSTRAINT_FILE"));
+        assert!(script.contains("*.cst"));
     }
 
     #[test]
@@ -1099,7 +1306,8 @@ mod tests {
         assert!(script.contains("synth_nexus"));
         assert!(script.contains("nextpnr-nexus"));
         assert!(script.contains("prjoxide"));
-        assert!(script.contains("--pdc constraints/pins.pdc"));
+        assert!(script.contains("--pdc $CONSTRAINT_FILE"));
+        assert!(script.contains("*.pdc"));
     }
 
     #[test]

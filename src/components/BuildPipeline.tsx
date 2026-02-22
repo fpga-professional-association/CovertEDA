@@ -481,6 +481,7 @@ interface BuildPipelineProps {
   backend: RuntimeBackend;
   building: boolean;
   buildStep: number;
+  buildFailed?: boolean;
   logs: LogEntry[];
   activeStage: number | null;
   onStageClick: (idx: number) => void;
@@ -492,6 +493,12 @@ interface BuildPipelineProps {
   changedFromCommit?: string[];
   /** Current device string — used to select arch-specific options for OSS backend */
   deviceString?: string;
+  /** Project directory — used for Makefile import/export */
+  projectDir?: string;
+  /** Top module name — used for Makefile export */
+  topModule?: string;
+  /** Callback when Makefile is imported with device/topModule/source changes */
+  onMakefileImport?: (result: import("../hooks/useTauri").MakefileImportResult) => void;
 }
 
 function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; onChange: (v: string) => void }) {
@@ -568,6 +575,7 @@ function PStep({
   total,
   building,
   buildStep,
+  buildFailed,
   active,
   checked,
   expanded,
@@ -585,6 +593,7 @@ function PStep({
   total: number;
   building: boolean;
   buildStep: number;
+  buildFailed?: boolean;
   active: boolean;
   checked: boolean;
   expanded: boolean;
@@ -599,15 +608,19 @@ function PStep({
 }) {
   const { C, MONO } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
-  let st: "done" | "run" | "pending" = "pending";
+  let st: "done" | "run" | "pending" | "failed" = "pending";
   if (building) {
     if (i < buildStep) st = "done";
     else if (i === buildStep) st = "run";
+  } else if (buildFailed) {
+    // After failure: stages before buildStep are done, the stage at buildStep failed, rest are pending
+    if (i < buildStep) st = "done";
+    else if (i === buildStep) st = "failed";
   } else if (buildStep >= total && buildStep >= 0) {
     st = "done";
   }
 
-  const col = { done: C.ok, run: C.accent, pending: C.t3 }[st];
+  const col = { done: C.ok, run: C.accent, pending: C.t3, failed: C.err }[st];
 
   // For OSS backend, select architecture-specific options based on device string
   const ossArch = deviceString ? detectOssArch(deviceString) : "ecp5";
@@ -675,6 +688,7 @@ function PStep({
             }}
           >
             {st === "done" && <Check />}
+            {st === "failed" && <span style={{ fontSize: 10, fontWeight: 900, color: C.err, lineHeight: 1 }}>{"\u2717"}</span>}
             {st === "run" && (
               <div
                 style={{
@@ -705,7 +719,7 @@ function PStep({
                 fontSize: 10,
                 fontFamily: MONO,
                 fontWeight: 600,
-                color: st === "pending" ? C.t3 : C.t1,
+                color: st === "failed" ? C.err : st === "pending" ? C.t3 : C.t1,
                 flex: 1,
                 cursor: st !== "pending" ? "pointer" : "default",
               }}
@@ -814,6 +828,7 @@ export default memo(function BuildPipeline({
   backend,
   building,
   buildStep,
+  buildFailed,
   logs,
   activeStage,
   onStageClick,
@@ -824,10 +839,13 @@ export default memo(function BuildPipeline({
   saveStatus,
   changedFromCommit,
   deviceString,
+  projectDir,
+  topModule,
+  onMakefileImport,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
   const B = backend;
-  const allDone = !building && buildStep >= B.pipeline.length && buildStep >= 0;
+  const allDone = !building && !buildFailed && buildStep >= B.pipeline.length && buildStep >= 0;
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -895,6 +913,38 @@ export default memo(function BuildPipeline({
     onOptionsChange({ ...buildOptions, ...preset.options });
   }, [buildOptions, onOptionsChange]);
 
+  const isOss = B.id === "opensource" || B.id === "oss";
+
+  const handleImportMakefile = useCallback(async () => {
+    try {
+      const { pickFile, importMakefile } = await import("../hooks/useTauri");
+      const path = await pickFile([{ name: "Makefile", extensions: ["*"] }]);
+      if (!path) return;
+      const result = await importMakefile(path);
+      if (result.buildOptions && Object.keys(result.buildOptions).length > 0) {
+        onOptionsChange({ ...buildOptions, ...result.buildOptions });
+      }
+      onMakefileImport?.(result);
+    } catch (err) {
+      console.error("Makefile import failed:", err);
+    }
+  }, [buildOptions, onOptionsChange, onMakefileImport]);
+
+  const handleExportMakefile = useCallback(async () => {
+    try {
+      const { pickSaveFile, exportMakefile, writeTextFile } = await import("../hooks/useTauri");
+      const content = await exportMakefile(
+        projectDir ?? "", deviceString ?? B.defaultDev ?? "",
+        topModule ?? "top", [], [], "build", buildOptions,
+      );
+      const path = await pickSaveFile([{ name: "Makefile", extensions: ["*"] }]);
+      if (!path) return;
+      await writeTextFile(path, content);
+    } catch (err) {
+      console.error("Makefile export failed:", err);
+    }
+  }, [projectDir, deviceString, topModule, buildOptions, B.defaultDev]);
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
       {/* Left column: Build Pipeline */}
@@ -953,6 +1003,20 @@ export default memo(function BuildPipeline({
             ))}
           </div>
         )}
+        {/* Makefile Import/Export (OSS only) */}
+        {isOss && !building && (
+          <div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>
+              Makefile:
+            </span>
+            <Btn small onClick={handleImportMakefile} style={{ fontSize: 7 }}>
+              Import
+            </Btn>
+            <Btn small onClick={handleExportMakefile} style={{ fontSize: 7 }}>
+              Export
+            </Btn>
+          </div>
+        )}
         {/* Changed from last commit */}
         {changedFromCommit && changedFromCommit.length > 0 && (
           <div style={{
@@ -985,6 +1049,7 @@ export default memo(function BuildPipeline({
             total={B.pipeline.length}
             building={building}
             buildStep={buildStep}
+            buildFailed={buildFailed}
             active={activeStage === i}
             checked={isStageSelected(s.id)}
             expanded={expandedStage === s.id}
@@ -1014,6 +1079,26 @@ export default memo(function BuildPipeline({
             }}
           >
             <Check /> Build complete
+          </div>
+        )}
+        {!building && buildFailed && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              background: C.errDim,
+              borderRadius: 6,
+              border: `1px solid ${C.err}40`,
+              fontSize: 11,
+              fontFamily: MONO,
+              color: C.err,
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              fontWeight: 700,
+            }}
+          >
+            {"\u2717"} BUILD FAILED — check the output log for errors
           </div>
         )}
       </div>
