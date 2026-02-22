@@ -12,6 +12,87 @@ import { Badge, Btn } from "./shared";
 import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download } from "./Icons";
 import { getRawReport } from "../hooks/useTauri";
 
+// ── Inline SVG Visualizations (no external chart libs) ──
+
+/** Arc gauge showing Fmax as % of target — green ≥100%, amber 80-100%, red <80% */
+function FmaxGauge({ fmax, target, C }: { fmax: string; target: string; C: ReturnType<typeof useTheme>["C"] }) {
+  const fmaxVal = parseFloat(fmax) || 0;
+  const targetVal = parseFloat(target) || 1;
+  const pct = Math.min((fmaxVal / targetVal) * 100, 150);
+  const color = pct >= 100 ? C.ok : pct >= 80 ? C.warn : C.err;
+
+  // SVG arc: 180-degree semicircle
+  const r = 40, cx = 50, cy = 48, strokeW = 8;
+  const arcLen = Math.PI * r; // half circumference
+  const filled = (Math.min(pct, 100) / 100) * arcLen;
+
+  return (
+    <svg width="100" height="60" viewBox="0 0 100 60" style={{ display: "block", margin: "0 auto" }}>
+      {/* Background arc */}
+      <path
+        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke={C.b1} strokeWidth={strokeW} strokeLinecap="round"
+      />
+      {/* Filled arc */}
+      <path
+        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke={color} strokeWidth={strokeW} strokeLinecap="round"
+        strokeDasharray={`${filled} ${arcLen}`}
+      />
+      {/* Center value */}
+      <text x={cx} y={cy - 8} textAnchor="middle" fill={color}
+        style={{ fontSize: 14, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>
+        {Math.round(pct)}%
+      </text>
+      <text x={cx} y={cy + 4} textAnchor="middle" fill={C.t3}
+        style={{ fontSize: 7, fontFamily: "'IBM Plex Mono', monospace" }}>
+        of target
+      </text>
+    </svg>
+  );
+}
+
+/** Donut chart for power breakdown — inline SVG with segments */
+function PowerDonut({ breakdown, total, C }: {
+  breakdown: { cat: string; mw: number; pct: number; color: string }[];
+  total: string;
+  C: ReturnType<typeof useTheme>["C"];
+}) {
+  const r = 36, strokeW = 14, cx = 50, cy = 50;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+
+  return (
+    <svg width="100" height="100" viewBox="0 0 100 100" style={{ display: "block", margin: "0 auto" }}>
+      {/* Background ring */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.b1} strokeWidth={strokeW} />
+      {/* Segments */}
+      {breakdown.map((b, i) => {
+        const segLen = (b.pct / 100) * circumference;
+        const dashOffset = -offset;
+        offset += segLen;
+        return (
+          <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+            stroke={b.color} strokeWidth={strokeW}
+            strokeDasharray={`${segLen} ${circumference - segLen}`}
+            strokeDashoffset={dashOffset}
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        );
+      })}
+      {/* Center text */}
+      <text x={cx} y={cy - 2} textAnchor="middle" fill={C.t1}
+        style={{ fontSize: 12, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>
+        {total}
+      </text>
+      <text x={cx} y={cy + 10} textAnchor="middle" fill={C.t3}
+        style={{ fontSize: 7, fontFamily: "'IBM Plex Mono', monospace" }}>
+        total
+      </text>
+    </svg>
+  );
+}
+
 // ── Props ──
 interface ReportViewerProps {
   rptTab: ReportTab;
@@ -525,8 +606,11 @@ export default function ReportViewer({
                   </span>
                 </div>
 
-                {/* 4 metric cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                {/* Fmax gauge + 4 metric cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "110px repeat(4, 1fr)", gap: 10, alignItems: "center" }}>
+                  <div style={{ padding: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, textAlign: "center" }}>
+                    <FmaxGauge fmax={t.summary.fmax} target={t.summary.target} C={C} />
+                  </div>
                   {[
                     { l: "Fmax Achieved", v: t.summary.fmax, c: C.ok },
                     { l: "Target", v: t.summary.target, c: C.t2 },
@@ -723,21 +807,30 @@ export default function ReportViewer({
                     </div>
                   ))}
                 </div>
-                <div style={{ height: 24, borderRadius: 6, overflow: "hidden", display: "flex", marginBottom: 10 }}>
-                  {pw.breakdown.map((b, i) => (
-                    <div key={i} style={{ width: `${b.pct}%`, background: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontFamily: MONO, color: "#fff", fontWeight: 700 }}>
-                      {b.pct > 8 ? `${b.pct}%` : ""}
-                    </div>
-                  ))}
-                </div>
-                {pw.breakdown.map((b, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: b.color, flexShrink: 0 }} />
-                    <span style={{ color: C.t1, flex: 1 }}>{b.cat}</span>
-                    <span style={{ color: b.color, fontWeight: 700 }}>{b.mw} mW</span>
-                    <span style={{ color: C.t3, width: 35, textAlign: "right" }}>{b.pct}%</span>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  {/* Donut chart */}
+                  <div style={{ flexShrink: 0 }}>
+                    <PowerDonut breakdown={pw.breakdown} total={pw.total} C={C} />
                   </div>
-                ))}
+                  {/* Stacked bar + legend */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ height: 24, borderRadius: 6, overflow: "hidden", display: "flex", marginBottom: 10 }}>
+                      {pw.breakdown.map((b, i) => (
+                        <div key={i} style={{ width: `${b.pct}%`, background: b.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontFamily: MONO, color: "#fff", fontWeight: 700 }}>
+                          {b.pct > 8 ? `${b.pct}%` : ""}
+                        </div>
+                      ))}
+                    </div>
+                    {pw.breakdown.map((b, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: b.color, flexShrink: 0 }} />
+                        <span style={{ color: C.t1, flex: 1 }}>{b.cat}</span>
+                        <span style={{ color: b.color, fontWeight: 700 }}>{b.mw} mW</span>
+                        <span style={{ color: C.t3, width: 35, textAlign: "right" }}>{b.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               {/* Both panels side by side at bottom */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
