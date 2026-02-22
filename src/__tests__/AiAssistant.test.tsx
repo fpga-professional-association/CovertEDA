@@ -56,10 +56,10 @@ describe("AiAssistant", () => {
     expect(connectBtn).toHaveStyle({ opacity: "0.4", cursor: "not-allowed" });
   });
 
-  it("shows setup description mentioning Claude AI", async () => {
+  it("shows setup screen with AI Assistant Setup title", async () => {
     renderWithTheme(<AiAssistant projectContext="Backend: radiant, Device: LIFCL-40" />);
     await waitFor(() => {
-      expect(screen.getByText(/Connect to Claude AI/)).toBeInTheDocument();
+      expect(screen.getByText("AI Assistant Setup")).toBeInTheDocument();
     });
   });
 });

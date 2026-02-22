@@ -5,21 +5,23 @@ import Documentation from "../components/Documentation";
 describe("Documentation", () => {
   it("renders sidebar with all section titles", () => {
     renderWithTheme(<Documentation />);
-    expect(screen.getByText("Getting Started")).toBeInTheDocument();
-    expect(screen.getByText("Build Pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Reports")).toBeInTheDocument();
-    expect(screen.getByText("About")).toBeInTheDocument();
+    // Section titles appear in sidebar and possibly in content header, so use getAllByText
+    expect(screen.getAllByText("Getting Started").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Build Pipeline").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reports").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("About").length).toBeGreaterThan(0);
   });
 
   it("shows Getting Started content by default", () => {
     renderWithTheme(<Documentation />);
-    expect(screen.getByText(/Welcome to CovertEDA/i)).toBeInTheDocument();
+    // Getting Started section shows "Opening a Project" as first sub-heading
+    expect(screen.getByText("Opening a Project")).toBeInTheDocument();
   });
 
   it("switches content when clicking a sidebar section", () => {
     renderWithTheme(<Documentation />);
-    fireEvent.click(screen.getByText("About"));
-    expect(screen.getByText(/FPGA Professional Association/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText("About")[0]);
+    expect(screen.getAllByText(/FPGA Professional Association/i).length).toBeGreaterThan(0);
   });
 
   it("shows all 16 sidebar sections", () => {
@@ -32,7 +34,7 @@ describe("Documentation", () => {
       "Project Configuration", "About",
     ];
     for (const s of sections) {
-      expect(screen.getByText(s)).toBeInTheDocument();
+      expect(screen.getAllByText(s).length).toBeGreaterThan(0);
     }
   });
 });

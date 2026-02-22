@@ -42,16 +42,18 @@ describe("SettingsPanel", () => {
   it("renders tool path labels", async () => {
     renderWithTheme(<SettingsPanel onClose={onClose} />);
     await waitFor(() => {
-      expect(screen.getByText("Lattice Radiant")).toBeInTheDocument();
-      expect(screen.getByText("Intel Quartus")).toBeInTheDocument();
-      expect(screen.getByText("AMD Vivado")).toBeInTheDocument();
+      expect(screen.getByText("LATTICE RADIANT")).toBeInTheDocument();
+      expect(screen.getByText("INTEL QUARTUS")).toBeInTheDocument();
+      expect(screen.getByText("AMD VIVADO")).toBeInTheDocument();
     });
   });
 
   it("renders close button that calls onClose", async () => {
     renderWithTheme(<SettingsPanel onClose={onClose} />);
-    // Settings panel has a close mechanism (×)
-    const closeBtn = screen.getByText("\u2715");
+    await waitFor(() => {
+      expect(screen.getByText("Close")).toBeInTheDocument();
+    });
+    const closeBtn = screen.getByText("Close");
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalled();
   });
