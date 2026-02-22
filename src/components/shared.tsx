@@ -56,6 +56,7 @@ export function Btn({
   const [h, setH] = useState(false);
   return (
     <button
+      disabled={disabled}
       onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setH(true)}
       onMouseLeave={() => setH(false)}

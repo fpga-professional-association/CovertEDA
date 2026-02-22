@@ -6,7 +6,7 @@ import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn, ResourceBar, Select } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Gauge, Term, Key, Settings,
-  Play, Stop, Search, Clock,
+  Play, Stop, Search, Clock, Download,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
@@ -21,6 +21,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
 import AiAssistant from "./components/AiAssistant";
 import ConstraintEditor from "./components/ConstraintEditor";
+import Programmer from "./components/Programmer";
 import BuildHistory from "./components/BuildHistory";
 import type { BuildRecord } from "./components/BuildHistory";
 import Documentation from "./components/Documentation";
@@ -1575,6 +1576,7 @@ export default function App() {
             <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
             <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
             <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
+            <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
             <NavBtn icon={<Gauge />} label="Rsrc" active={sec === "resources"} onClick={() => navClick("resources")} tooltip="Resources — utilization overview with bar charts" />
             <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
           </div>
@@ -1926,6 +1928,14 @@ export default function App() {
                 backendId={bid}
                 device={project?.device ?? B.defaultDev}
                 constraintFile={constraintFilePath}
+              />
+            )}
+
+            {/* Device Programmer */}
+            {sec === "programmer" && !viewingFile && (
+              <Programmer
+                device={project?.device ?? B.defaultDev}
+                backendId={bid}
               />
             )}
 
