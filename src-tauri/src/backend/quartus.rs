@@ -374,8 +374,8 @@ foreach f [glob -nocomplain {project_path_tcl}/*.sdc] {{
 
         script.push('\n');
 
-        // Run requested stages — wrap each in catch so we get clear error
-        // reporting per stage instead of aborting the entire script
+        // Run requested stages. Use execute_module with error reporting that
+        // reads the actual report file for details on failure.
         let stage_tools: &[(&str, &str)] = &[
             ("synth", "syn"),
             ("fit", "fit"),
@@ -387,12 +387,18 @@ foreach f [glob -nocomplain {project_path_tcl}/*.sdc] {{
                 script.push_str(&format!(
                     concat!(
                         "if {{[catch {{execute_module -tool {tool}}} err]}} {{\n",
-                        "    puts \"ERROR: Stage '{tool}' failed: $err\"\n",
+                        "    puts \"ERROR: Stage '{stage}' failed: $err\"\n",
+                        "    # Print report file contents for diagnostics\n",
+                        "    foreach rpt [glob -nocomplain *.{tool}.rpt *_{tool}.rpt] {{\n",
+                        "        puts \"--- Report: $rpt ---\"\n",
+                        "        if {{[catch {{set f [open $rpt r]; puts [read $f]; close $f}}]}} {{}}\n",
+                        "    }}\n",
                         "    project_close\n",
                         "    exit 1\n",
                         "}}\n",
                     ),
                     tool = tool_name,
+                    stage = stage_id,
                 ));
             }
         }
