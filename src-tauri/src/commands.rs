@@ -375,12 +375,42 @@ pub fn start_build(
     // For WSL→Windows executables, convert the WSL path to a Windows path
     let script_arg = wsl_to_windows_path(&script_path);
 
-    // Determine license environment variables
+    // Determine environment variables for vendor tools
     let mut env_vars: HashMap<String, String> = HashMap::new();
     if backend_id == "radiant" {
         let radiant = crate::backend::radiant::RadiantBackend::new();
         if let Some(lic_path) = radiant.find_license() {
             // Convert WSL path to Windows path for the Windows-native radiantc.exe
+            env_vars.insert(
+                "LM_LICENSE_FILE".into(),
+                wsl_to_windows_path(&lic_path),
+            );
+        }
+    } else if backend_id == "quartus" {
+        let quartus = crate::backend::quartus::QuartusBackend::new();
+        // QUARTUS_ROOTDIR is critical — without it, the DDM (Device Data Manager)
+        // crashes on startup with "Cannot identify the client"
+        if let Some(install_dir) = quartus.install_dir() {
+            let quartus_root = install_dir.join("quartus");
+            env_vars.insert(
+                "QUARTUS_ROOTDIR".into(),
+                wsl_to_windows_path(&quartus_root),
+            );
+            // Ensure bin64 is on PATH for Windows DLL resolution
+            let bin64 = quartus_root.join("bin64");
+            let sopc_bin = install_dir.join("quartus").join("sopc_builder").join("bin");
+            let win_bin64 = wsl_to_windows_path(&bin64);
+            let win_sopc = wsl_to_windows_path(&sopc_bin);
+            // Prepend to existing PATH
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            env_vars.insert(
+                "PATH".into(),
+                format!("{};{};{}", win_bin64, win_sopc, existing_path),
+            );
+            env_vars.insert("QUARTUS_64BIT".into(), "1".into());
+        }
+        // Set license file for Quartus
+        if let Some(lic_path) = quartus.find_license() {
             env_vars.insert(
                 "LM_LICENSE_FILE".into(),
                 wsl_to_windows_path(&lic_path),
