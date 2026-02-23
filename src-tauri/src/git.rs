@@ -243,14 +243,32 @@ promote.xml
 promote.pfl
 .recovery
 
+# Quartus intermediate directories
+db/
+dni/
+qdb/
+incremental_db/
+greybox_tmp/
+simulation/
+
+# Vivado intermediate directories
+*.runs/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.srcs/
+
+# Lattice intermediate directories
+.recovery/
+synwork/
+synlog/
+
 # Intermediate / object files
 *.vo
 *.ngd
 *.ncd
 *.edi
 *.edif
-synwork/
-synlog/
 
 # OS artifacts
 .DS_Store
@@ -343,6 +361,14 @@ mod tests {
         assert!(gitignore.contains(".coverteda_build.tcl"));
         assert!(gitignore.contains("*.rdf"));
         assert!(gitignore.contains("*.acepro"));
+        // Quartus intermediate dirs
+        assert!(gitignore.contains("db/"));
+        assert!(gitignore.contains("dni/"));
+        assert!(gitignore.contains("qdb/"));
+        assert!(gitignore.contains("incremental_db/"));
+        // Vivado intermediate dirs
+        assert!(gitignore.contains("*.runs/"));
+        assert!(gitignore.contains("*.cache/"));
         // Log files should NOT be excluded
         assert!(!gitignore.contains("*.log"));
     }
