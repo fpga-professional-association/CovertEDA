@@ -869,10 +869,27 @@ pub async fn clean_build(project_dir: String) -> Result<u32, String> {
                     || name.ends_with(".summary") || name.ends_with(".smsg")
                     || name.ends_with(".jdi") || name.ends_with(".pin")
                     || name.ends_with(".sld") || name.ends_with(".dpf")
-                    || name.ends_with(".bak");
+                    || name.ends_with(".bak") || name.ends_with(".rpt");
                 if is_quartus && entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
                     if std::fs::remove_file(entry.path()).is_ok() {
                         removed += 1;
+                    }
+                }
+            }
+        }
+
+        // Remove .rpt files from Lattice impl dirs, Vivado runs, and other output dirs
+        for subdir in &["output", "output_files"] {
+            let dir = project_path.join(subdir);
+            if dir.exists() && dir.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    for entry in entries.filter_map(|e| e.ok()) {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.ends_with(".rpt") && entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                            if std::fs::remove_file(entry.path()).is_ok() {
+                                removed += 1;
+                            }
+                        }
                     }
                 }
             }
