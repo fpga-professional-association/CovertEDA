@@ -8,7 +8,6 @@ interface PerfStats {
   jsHeapLimitMB: number;
   jsHeapPct: number;
   domNodes: number;
-  renderCount: number;
   uptimeSec: number;
   startupMs: number | null;
   // System stats from Rust backend
@@ -24,7 +23,6 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
   const [stats, setStats] = useState<PerfStats | null>(null);
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
-  const renderCount = useRef(0);
   const appStart = useRef(performance.timeOrigin);
   const sysStats = useRef<SystemStats | null>(null);
 
@@ -57,7 +55,6 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       const fps = elapsed > 0 ? Math.round(frameCount.current / elapsed) : 0;
       frameCount.current = 0;
       lastTime.current = now;
-      renderCount.current++;
 
       // JS heap (Chrome/Edge only)
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
@@ -71,13 +68,13 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       // Uptime
       const uptimeSec = Math.round((Date.now() - appStart.current) / 1000);
 
-      // Startup time from perf marks
+      // Startup time: bundle_eval → backends_loaded (start screen ready)
       const marks = performance.getEntriesByType("mark").filter((m) => m.name.startsWith("app:"));
       let startupMs: number | null = null;
-      if (marks.length >= 2) {
-        const first = marks[0].startTime;
-        const last = marks[marks.length - 1].startTime;
-        startupMs = Math.round(last - first);
+      const bundleMark = marks.find((m) => m.name === "app:bundle_eval");
+      const readyMark = marks.find((m) => m.name === "app:backends_loaded") ?? marks.find((m) => m.name === "app:config_loaded");
+      if (bundleMark && readyMark) {
+        startupMs = Math.round(readyMark.startTime - bundleMark.startTime);
       }
 
       const sys = sysStats.current;
@@ -88,7 +85,6 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         jsHeapLimitMB,
         jsHeapPct,
         domNodes,
-        renderCount: renderCount.current,
         uptimeSec,
         startupMs,
         cpuPct: sys?.cpuPct ?? 0,
@@ -121,13 +117,12 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
     ["CPU", `${stats.cpuPct}%`, cpuColor],
     ["Memory", `${stats.memUsedMb} / ${stats.memTotalMb} MB (${stats.memPct}%)`, memColor],
     ["Disk I/O", `${stats.diskWritePct}%`, diskColor],
-    ["JS Heap", `${stats.jsHeapMB} / ${stats.jsHeapLimitMB} MB (${stats.jsHeapPct}%)`],
-    ["DOM Nodes", `${stats.domNodes}`],
+    ["App Memory", `${stats.jsHeapMB} / ${stats.jsHeapLimitMB} MB (${stats.jsHeapPct}%)`],
+    ["UI Elements", `${stats.domNodes}`],
     ["Uptime", `${upMin}m ${upSec}s`],
-    ["Samples", `${stats.renderCount}`],
   ];
   if (stats.startupMs !== null) {
-    rows.splice(1, 0, ["Startup", `${stats.startupMs}ms`]);
+    rows.splice(1, 0, ["Startup", `${(stats.startupMs / 1000).toFixed(3)} s`]);
   }
 
   // Mini bar helper for CPU / Memory / Disk
