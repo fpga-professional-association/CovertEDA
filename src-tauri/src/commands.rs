@@ -420,6 +420,13 @@ pub fn start_build(
         emit_info("");
 
         let mut cmd = Command::new(&executable);
+        // Backend-specific CLI flags before the script path
+        match backend_id.as_str() {
+            "quartus" => { cmd.arg("-t"); }
+            "vivado" => { cmd.args(["-mode", "batch", "-source"]); }
+            "ace" => { cmd.args(["-batch", "-script_file"]); }
+            _ => {} // radiant, diamond, oss: bare argument
+        }
         cmd.arg(&script_arg)
             .current_dir(&project_path)
             .stdout(Stdio::piped())

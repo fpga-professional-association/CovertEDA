@@ -46,6 +46,7 @@ export default function StartScreen({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDir, setWizardDir] = useState<string | undefined>();
   const [hover, setHover] = useState<string | null>(null);
+  const [noProjectMsg, setNoProjectMsg] = useState<string | null>(null);
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const dragging = useRef(false);
@@ -76,6 +77,7 @@ export default function StartScreen({
   }, []);
 
   const handleOpenDir = async () => {
+    setNoProjectMsg(null);
     const dir = await pickDirectory();
     if (!dir) return;
     const existing = await checkProjectDir(dir);
@@ -84,8 +86,9 @@ export default function StartScreen({
       const config = await openProject(dir);
       onOpenProject(dir, config);
     } else {
-      setWizardDir(dir);
-      setWizardOpen(true);
+      setNoProjectMsg(
+        `No .coverteda project file found in "${dir}". Use "Create New Project" to initialize this directory as a CovertEDA project.`
+      );
     }
   };
 
@@ -189,7 +192,7 @@ export default function StartScreen({
 
           {/* Create New Project */}
           <div
-            onClick={() => { setWizardDir(undefined); setWizardOpen(true); }}
+            onClick={() => { setNoProjectMsg(null); setWizardDir(undefined); setWizardOpen(true); }}
             onMouseEnter={() => setHover("create")}
             onMouseLeave={() => setHover(null)}
             style={{
@@ -223,9 +226,27 @@ export default function StartScreen({
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Open Existing Directory</span>
             </div>
             <div style={{ fontSize: 10, color: C.t3, lineHeight: 1.5 }}>
-              Open a folder with an existing <code style={{ color: C.t2 }}>.coverteda</code> project file, or initialize a new one.
+              Open a folder containing an existing <code style={{ color: C.t2 }}>.coverteda</code> project file.
             </div>
           </div>
+
+          {noProjectMsg && (
+            <div style={{
+              padding: "10px 12px",
+              background: `${C.warn}18`,
+              border: `1px solid ${C.warn}44`,
+              borderRadius: 6,
+              fontSize: 11,
+              color: C.warn,
+              lineHeight: 1.5,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>&#9888;</span>
+              <span>{noProjectMsg}</span>
+            </div>
+          )}
 
           {/* Detected Tools */}
           <div style={{ marginTop: 8 }}>

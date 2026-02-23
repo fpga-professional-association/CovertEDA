@@ -1017,6 +1017,42 @@ export default memo(function BuildPipeline({
             ))}
           </div>
         )}
+        {/* Build in progress banner */}
+        {building && (
+          <div
+            style={{
+              marginBottom: 8,
+              padding: "8px 10px",
+              background: `${C.accent}12`,
+              border: `1px solid ${C.accent}30`,
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: MONO,
+              color: C.accent,
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              fontWeight: 600,
+            }}
+          >
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                border: `2px solid ${C.accent}`,
+                borderTopColor: "transparent",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            BUILD IN PROGRESS — Stage {buildStep + 1} of {B.pipeline.length}
+            {buildStep >= 0 && buildStep < B.pipeline.length && (
+              <span style={{ fontWeight: 400, color: C.t2 }}>
+                ({B.pipeline[buildStep].label})
+              </span>
+            )}
+          </div>
+        )}
         {B.pipeline.map((s, i) => (
           <PStep
             key={s.id}

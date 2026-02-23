@@ -22,6 +22,7 @@ interface AnalyzedPath {
   routePct: number;
   rootCause: RootCause;
   suggestion: string;
+  isHold?: boolean;
 }
 
 function classifyPath(p: { from: string; to: string; delay: number; levels: number }): { rootCause: RootCause; logicDelay: number; routeDelay: number; routePct: number; suggestion: string } {
@@ -44,6 +45,11 @@ const ROOT_CAUSE_LABELS: Record<RootCause, { label: string; color: (C: ReturnTyp
   dsp_bram_path: { label: "DSP/BRAM", color: (C) => C.cyan },
   unknown: { label: "Review", color: (C) => C.t3 },
 };
+
+const ALL_ROOT_CAUSES: RootCause[] = ["logic_depth", "high_fanout", "routing_congestion", "dsp_bram_path", "unknown"];
+
+type SortKey = "slack" | "delay" | "levels" | "route_pct";
+type PathView = "setup" | "hold";
 
 // ── Inline SVG: Delay Bar ──
 
@@ -192,6 +198,119 @@ function PathCard({ path, C, MONO, onAskAi }: {
   );
 }
 
+// ── Root Cause Distribution ──
+
+function RootCauseDistribution({ paths, C, MONO }: {
+  paths: AnalyzedPath[];
+  C: ReturnType<typeof useTheme>["C"];
+  MONO: string;
+}) {
+  const counts = useMemo(() => {
+    const c: Record<RootCause, number> = { logic_depth: 0, high_fanout: 0, routing_congestion: 0, dsp_bram_path: 0, unknown: 0 };
+    for (const p of paths) c[p.rootCause]++;
+    return c;
+  }, [paths]);
+
+  const total = paths.length;
+  if (total === 0) return null;
+
+  return (
+    <div>
+      {/* Stacked bar */}
+      <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 8 }}>
+        {ALL_ROOT_CAUSES.map((rc) => {
+          const pct = (counts[rc] / total) * 100;
+          if (pct === 0) return null;
+          return (
+            <div key={rc} style={{
+              width: `${pct}%`, background: ROOT_CAUSE_LABELS[rc].color(C),
+              minWidth: pct > 0 ? 3 : 0,
+            }} title={`${ROOT_CAUSE_LABELS[rc].label}: ${counts[rc]} (${pct.toFixed(0)}%)`} />
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {ALL_ROOT_CAUSES.map((rc) => {
+          if (counts[rc] === 0) return null;
+          const color = ROOT_CAUSE_LABELS[rc].color(C);
+          return (
+            <div key={rc} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 8, fontFamily: MONO }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+              <span style={{ color: C.t2 }}>{ROOT_CAUSE_LABELS[rc].label}</span>
+              <span style={{ color, fontWeight: 700 }}>{counts[rc]}</span>
+              <span style={{ color: C.t3 }}>({((counts[rc] / total) * 100).toFixed(0)}%)</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Per-Clock Summary Cards ──
+
+function ClockSummaryCards({ timing, analyzedPaths, C, MONO }: {
+  timing: TimingReportData;
+  analyzedPaths: AnalyzedPath[];
+  C: ReturnType<typeof useTheme>["C"];
+  MONO: string;
+}) {
+  if (timing.clocks.length === 0) return null;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+      {timing.clocks.map((clk) => {
+        const clkPaths = analyzedPaths.filter((p) => p.clk === clk.name);
+        const failingCount = clkPaths.filter((p) => p.slack < 0).length;
+        const clkWns = parseFloat(clk.wns) || 0;
+        const freq = parseFloat(clk.freq) || 0;
+        const period = parseFloat(clk.period) || 0;
+        const statusColor = clkWns >= 0 ? C.ok : C.err;
+
+        return (
+          <div key={clk.name} style={{
+            padding: "8px 10px", borderRadius: 5,
+            background: `${statusColor}06`, border: `1px solid ${statusColor}20`,
+            borderLeft: `3px solid ${statusColor}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {clk.name}
+              </span>
+              <div style={{ flex: 1 }} />
+              <Badge color={statusColor}>{clkWns >= 0 ? "MET" : "FAIL"}</Badge>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 10px", fontSize: 8, fontFamily: MONO }}>
+              <span style={{ color: C.t3 }}>Freq</span>
+              <span style={{ color: C.t1, textAlign: "right" }}>{freq.toFixed(1)} MHz</span>
+              <span style={{ color: C.t3 }}>Period</span>
+              <span style={{ color: C.t1, textAlign: "right" }}>{period} ns</span>
+              <span style={{ color: C.t3 }}>WNS</span>
+              <span style={{ color: statusColor, textAlign: "right", fontWeight: 700 }}>
+                {clkWns >= 0 ? "+" : ""}{clkWns.toFixed(3)} ns
+              </span>
+              <span style={{ color: C.t3 }}>Paths</span>
+              <span style={{ color: C.t1, textAlign: "right" }}>{clk.paths}</span>
+              {failingCount > 0 && (
+                <>
+                  <span style={{ color: C.t3 }}>Failing</span>
+                  <span style={{ color: C.err, textAlign: "right", fontWeight: 700 }}>{failingCount}</span>
+                </>
+              )}
+            </div>
+            {clk.source && (
+              <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {clk.type}: {clk.source}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Clock Domain Matrix ──
 
 function ClockDomainMatrix({ clocks, criticalPaths, C, MONO }: {
@@ -255,6 +374,90 @@ function ClockDomainMatrix({ clocks, criticalPaths, C, MONO }: {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── Path Filter Toolbar ──
+
+function PathFilterToolbar({ C, MONO, pathView, setPathView, sortKey, setSortKey, clkFilter, setClkFilter,
+  rcFilter, setRcFilter, failingOnly, setFailingOnly, clockNames, holdCount }: {
+  C: ReturnType<typeof useTheme>["C"];
+  MONO: string;
+  pathView: PathView;
+  setPathView: (v: PathView) => void;
+  sortKey: SortKey;
+  setSortKey: (k: SortKey) => void;
+  clkFilter: string;
+  setClkFilter: (c: string) => void;
+  rcFilter: string;
+  setRcFilter: (r: string) => void;
+  failingOnly: boolean;
+  setFailingOnly: (f: boolean) => void;
+  clockNames: string[];
+  holdCount: number;
+}) {
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    padding: "2px 8px", borderRadius: 10, fontSize: 8, fontFamily: MONO,
+    cursor: "pointer", userSelect: "none", border: `1px solid ${active ? C.accent : C.b1}`,
+    background: active ? `${C.accent}15` : "transparent",
+    color: active ? C.accent : C.t3, fontWeight: active ? 600 : 400,
+    transition: "all .1s",
+  });
+
+  const selectStyle: React.CSSProperties = {
+    background: C.bg, border: `1px solid ${C.b1}`, borderRadius: 4,
+    padding: "2px 6px", fontSize: 8, fontFamily: MONO, color: C.t2,
+    outline: "none", cursor: "pointer",
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Setup / Hold toggle */}
+      <div style={{ display: "flex", gap: 2 }}>
+        <span style={chipStyle(pathView === "setup")} onClick={() => setPathView("setup")}>
+          Setup
+        </span>
+        <span style={chipStyle(pathView === "hold")} onClick={() => setPathView("hold")}>
+          Hold{holdCount > 0 && ` (${holdCount})`}
+        </span>
+      </div>
+
+      <div style={{ width: 1, height: 14, background: C.b1 }} />
+
+      {/* Sort */}
+      <span style={{ fontSize: 8, color: C.t3, fontFamily: MONO }}>Sort:</span>
+      <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} style={selectStyle}>
+        <option value="slack">Slack</option>
+        <option value="delay">Delay</option>
+        <option value="levels">Levels</option>
+        <option value="route_pct">Route %</option>
+      </select>
+
+      {/* Clock filter */}
+      {clockNames.length > 1 && (
+        <>
+          <span style={{ fontSize: 8, color: C.t3, fontFamily: MONO }}>Clock:</span>
+          <select value={clkFilter} onChange={(e) => setClkFilter(e.target.value)} style={selectStyle}>
+            <option value="">All</option>
+            {clockNames.map((n) => <option key={n} value={n}>{n.length > 20 ? n.slice(0, 20) + "..." : n}</option>)}
+          </select>
+        </>
+      )}
+
+      {/* Root cause filter */}
+      <span style={{ fontSize: 8, color: C.t3, fontFamily: MONO }}>Cause:</span>
+      <select value={rcFilter} onChange={(e) => setRcFilter(e.target.value)} style={selectStyle}>
+        <option value="">All</option>
+        {ALL_ROOT_CAUSES.map((rc) => <option key={rc} value={rc}>{ROOT_CAUSE_LABELS[rc].label}</option>)}
+      </select>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Failing only toggle */}
+      <span style={chipStyle(failingOnly)} onClick={() => setFailingOnly(!failingOnly)}>
+        Failing Only
+      </span>
     </div>
   );
 }
@@ -369,6 +572,14 @@ interface TimingAnalyzerProps {
 export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
   const { C, MONO } = useTheme();
 
+  // Filter & sort state
+  const [pathView, setPathView] = useState<PathView>("setup");
+  const [sortKey, setSortKey] = useState<SortKey>("slack");
+  const [clkFilter, setClkFilter] = useState("");
+  const [rcFilter, setRcFilter] = useState("");
+  const [failingOnly, setFailingOnly] = useState(false);
+
+  // Analyze setup paths
   const analyzedPaths = useMemo(() => {
     if (!timing) return [];
     return timing.criticalPaths.map((p) => {
@@ -377,18 +588,51 @@ export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
       const required = parseFloat(p.req) || 0;
       const analysis = classifyPath({ from: p.from, to: p.to, delay, levels: p.levels });
       return {
-        rank: p.rank,
-        from: p.from,
-        to: p.to,
-        slack,
-        required,
-        delay,
-        levels: p.levels,
-        clk: p.clk,
-        type: p.type,
-        ...analysis,
+        rank: p.rank, from: p.from, to: p.to, slack, required, delay,
+        levels: p.levels, clk: p.clk, type: p.type, isHold: false, ...analysis,
       } as AnalyzedPath;
     });
+  }, [timing]);
+
+  // Analyze hold paths
+  const analyzedHoldPaths = useMemo(() => {
+    if (!timing) return [];
+    return timing.holdPaths.map((p) => {
+      const slack = parseFloat(p.slack) || 0;
+      const delay = 0; // hold paths don't have explicit delay in our data
+      const analysis = classifyPath({ from: p.from, to: p.to, delay, levels: p.levels });
+      return {
+        rank: p.rank, from: p.from, to: p.to, slack, required: 0, delay,
+        levels: p.levels, clk: "", type: p.type, isHold: true, ...analysis,
+      } as AnalyzedPath;
+    });
+  }, [timing]);
+
+  // Current paths based on view
+  const currentPaths = pathView === "setup" ? analyzedPaths : analyzedHoldPaths;
+
+  // Filtered and sorted paths
+  const filteredPaths = useMemo(() => {
+    let paths = [...currentPaths];
+    if (clkFilter) paths = paths.filter((p) => p.clk === clkFilter);
+    if (rcFilter) paths = paths.filter((p) => p.rootCause === rcFilter);
+    if (failingOnly) paths = paths.filter((p) => p.slack < 0);
+
+    paths.sort((a, b) => {
+      switch (sortKey) {
+        case "slack": return a.slack - b.slack;
+        case "delay": return b.delay - a.delay;
+        case "levels": return b.levels - a.levels;
+        case "route_pct": return b.routePct - a.routePct;
+        default: return 0;
+      }
+    });
+    return paths;
+  }, [currentPaths, clkFilter, rcFilter, failingOnly, sortKey]);
+
+  const clockNames = useMemo(() => {
+    if (!timing) return [];
+    return timing.clocks.map((c) => c.name);
   }, [timing]);
 
   const nearViolationCount = useMemo(() => {
@@ -396,7 +640,8 @@ export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
   }, [analyzedPaths]);
 
   const handleAskAi = useCallback((path: AnalyzedPath) => {
-    const prompt = `Analyze this FPGA timing path and suggest fixes:\n\nPath #${path.rank}: ${path.from} -> ${path.to}\nSlack: ${path.slack.toFixed(3)} ns\nDelay: ${path.delay.toFixed(3)} ns (Logic: ${path.logicDelay.toFixed(2)} ns, Route: ${path.routeDelay.toFixed(2)} ns)\nLogic Levels: ${path.levels}\nRoute %: ${path.routePct.toFixed(0)}%\nRoot Cause: ${path.rootCause}\nClock: ${path.clk}\n\nWhat RTL changes, constraint changes, or tool settings would improve this path?`;
+    const kind = path.isHold ? "hold" : "setup";
+    const prompt = `Analyze this FPGA ${kind} timing path and suggest fixes:\n\nPath #${path.rank}: ${path.from} -> ${path.to}\nSlack: ${path.slack.toFixed(3)} ns\nDelay: ${path.delay.toFixed(3)} ns (Logic: ${path.logicDelay.toFixed(2)} ns, Route: ${path.routeDelay.toFixed(2)} ns)\nLogic Levels: ${path.levels}\nRoute %: ${path.routePct.toFixed(0)}%\nRoot Cause: ${path.rootCause}\nClock: ${path.clk}\n\nWhat RTL changes, constraint changes, or tool settings would improve this path?`;
     navigator.clipboard.writeText(prompt);
   }, []);
 
@@ -413,10 +658,15 @@ export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
 
   const t = timing;
   const wns = parseFloat(t.summary.wns) || 0;
+  const whs = parseFloat(t.summary.whs) || 0;
   const fmax = parseFloat(t.summary.fmax) || 0;
   const target = parseFloat(t.summary.target) || 0;
   const met = t.summary.status === "MET";
   const worstPath = analyzedPaths[0];
+
+  // Detect if design was likely optimized away by synthesis
+  const isOptimizedAway = t.summary.totalPaths === 0 && t.criticalPaths.length === 0 && t.clocks.length > 0;
+  const isPartiallyOptimized = !isOptimizedAway && t.summary.totalPaths > 0 && t.summary.totalPaths < 5 && t.clocks.length > 0;
 
   // Fmax gauge arc
   const pct = target > 0 ? Math.min((fmax / target) * 100, 150) : 100;
@@ -510,7 +760,7 @@ export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
           {metricCard("WNS", t.summary.wns, wns >= 0 ? C.ok : C.err)}
           {metricCard("TNS", t.summary.tns, parseFloat(t.summary.tns) === 0 ? C.ok : C.err)}
-          {metricCard("WHS", t.summary.whs, parseFloat(t.summary.whs) >= 0 ? C.ok : C.err)}
+          {metricCard("WHS", t.summary.whs, whs >= 0 ? C.ok : C.err)}
           {metricCard("THS", t.summary.ths, parseFloat(t.summary.ths) === 0 ? C.ok : C.err)}
           {metricCard("Failing", String(t.summary.failingPaths), t.summary.failingPaths === 0 ? C.ok : C.err, `of ${t.summary.totalPaths}`)}
         </div>
@@ -522,35 +772,144 @@ export default function TimingAnalyzer({ timing }: TimingAnalyzerProps) {
             borderRadius: 4, background: C.bg, fontSize: 8, fontFamily: MONO, color: C.t3,
             flexWrap: "wrap",
           }}>
-            <span>Worst path: <span style={{ color: C.t1 }}>{worstPath.from.slice(-30)}</span> → <span style={{ color: C.t1 }}>{worstPath.to.slice(-30)}</span></span>
+            <span>Worst path: <span style={{ color: C.t1 }}>{worstPath.from.slice(-30)}</span> {"\u2192"} <span style={{ color: C.t1 }}>{worstPath.to.slice(-30)}</span></span>
             <span>Route: <span style={{ color: worstPath.routePct > 70 ? C.warn : C.t2 }}>{worstPath.routePct.toFixed(0)}%</span></span>
             <span>Levels: <span style={{ color: C.t2 }}>{worstPath.levels}</span></span>
           </div>
         )}
       </div>
 
-      {/* ════════════════ CRITICAL PATH CARDS ════════════════ */}
-      {analyzedPaths.length > 0 && (
+      {/* ════════════════ OPTIMIZATION WARNING ════════════════ */}
+      {isOptimizedAway && (
+        <div style={{
+          ...panel,
+          background: `linear-gradient(135deg, ${C.s1}, ${C.warn}12)`,
+          border: `2px solid ${C.warn}60`,
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <span style={{ fontSize: 28, lineHeight: 1 }}>{"\u26A0"}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.warn, marginBottom: 6 }}>
+                DESIGN OPTIMIZED AWAY
+              </div>
+              <div style={{ fontSize: 10, color: C.t1, lineHeight: 1.7, marginBottom: 8 }}>
+                The synthesis tool found <strong style={{ color: C.warn }}>no register-to-register timing paths</strong> to
+                analyze. This usually means the design logic was optimized away during synthesis because
+                the outputs are constant, equivalent, or disconnected from any clock.
+              </div>
+              <div style={{ fontSize: 10, color: C.t2, lineHeight: 1.7, marginBottom: 8 }}>
+                The timing report shows "MET" but this is <strong style={{ color: C.warn }}>misleading</strong> {"\u2014"} there is
+                nothing left to fail. Your actual design is not being implemented.
+              </div>
+              <div style={{
+                padding: "8px 12px", borderRadius: 5,
+                background: `${C.accent}08`, border: `1px solid ${C.accent}20`,
+                fontSize: 9, color: C.t2, lineHeight: 1.8,
+              }}>
+                <div style={{ fontWeight: 700, color: C.accent, fontSize: 8, marginBottom: 4 }}>HOW TO FIX:</div>
+                <div>1. Add <code style={{ background: C.bg, padding: "1px 4px", borderRadius: 2, fontFamily: MONO }}>
+                  {"(* syn_keep=1 *)"}</code> or <code style={{ background: C.bg, padding: "1px 4px", borderRadius: 2, fontFamily: MONO }}>
+                  {"(* dont_touch=\"true\" *)"}</code> attributes to key signals/registers</div>
+                <div>2. Verify all module outputs are connected and used</div>
+                <div>3. Check that input ports drive meaningful logic, not just pass-through</div>
+                <div>4. Inspect the synthesis log for "trimming" or "removing" warnings</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════ PARTIAL OPTIMIZATION WARNING ════════════════ */}
+      {isPartiallyOptimized && (
+        <div style={{
+          ...panel,
+          background: `${C.warn}08`, border: `1px solid ${C.warn}30`,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>{"\u26A0"}</span>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.warn, marginBottom: 2 }}>
+              Very few timing paths detected ({t.summary.totalPaths})
+            </div>
+            <div style={{ fontSize: 9, color: C.t2, lineHeight: 1.5 }}>
+              This design may have been partially optimized away during synthesis.
+              Check the synthesis log for trimming warnings and consider adding keep attributes to critical signals.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════ PER-CLOCK SUMMARIES ════════════════ */}
+      {t.clocks.length > 0 && (
         <div style={panel}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
-            Critical Paths
-            <Badge color={C.accent}>{analyzedPaths.length}</Badge>
+            Clock Domains
+            <Badge color={C.accent}>{t.clocks.length}</Badge>
+          </div>
+          <ClockSummaryCards timing={t} analyzedPaths={analyzedPaths} C={C} MONO={MONO} />
+        </div>
+      )}
+
+      {/* ════════════════ ROOT CAUSE DISTRIBUTION ════════════════ */}
+      {analyzedPaths.length > 0 && (
+        <div style={panel}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
+            Root Cause Distribution
+          </div>
+          <RootCauseDistribution paths={analyzedPaths} C={C} MONO={MONO} />
+        </div>
+      )}
+
+      {/* ════════════════ PATH FILTER + CARDS ════════════════ */}
+      {(analyzedPaths.length > 0 || analyzedHoldPaths.length > 0) && (
+        <div style={panel}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+            {pathView === "setup" ? "Setup" : "Hold"} Paths
+            <Badge color={C.accent}>{filteredPaths.length}</Badge>
+            {filteredPaths.length !== currentPaths.length && (
+              <span style={{ fontSize: 8, color: C.t3, fontFamily: MONO }}>
+                (of {currentPaths.length})
+              </span>
+            )}
             <div style={{ flex: 1 }} />
             <div style={{ display: "flex", gap: 6, fontSize: 7, fontFamily: MONO }}>
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#6366f1", verticalAlign: "middle" }} /> Logic</span>
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#f59e0b", verticalAlign: "middle" }} /> Route</span>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {analyzedPaths.map((p) => (
-              <PathCard key={p.rank} path={p} C={C} MONO={MONO} onAskAi={handleAskAi} />
-            ))}
+
+          {/* Filter toolbar */}
+          <div style={{ marginBottom: 8 }}>
+            <PathFilterToolbar
+              C={C} MONO={MONO}
+              pathView={pathView} setPathView={setPathView}
+              sortKey={sortKey} setSortKey={setSortKey}
+              clkFilter={clkFilter} setClkFilter={setClkFilter}
+              rcFilter={rcFilter} setRcFilter={setRcFilter}
+              failingOnly={failingOnly} setFailingOnly={setFailingOnly}
+              clockNames={clockNames}
+              holdCount={analyzedHoldPaths.length}
+            />
           </div>
+
+          {filteredPaths.length === 0 ? (
+            <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, padding: "12px 0", textAlign: "center" }}>
+              {currentPaths.length === 0
+                ? `No ${pathView} paths reported.`
+                : "No paths match the current filters."}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {filteredPaths.map((p) => (
+                <PathCard key={`${pathView}-${p.rank}`} path={p} C={C} MONO={MONO} onAskAi={handleAskAi} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ════════════════ CLOCK DOMAIN MATRIX ════════════════ */}
-      {t.clocks.length > 0 && (
+      {t.clocks.length > 1 && (
         <div style={panel}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
             Clock Domain Interactions

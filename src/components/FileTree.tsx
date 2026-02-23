@@ -4,6 +4,25 @@ import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 import { Refresh } from "./Icons";
 
+/** Truncate a path to show the right side with ... at the front */
+function truncatePath(path: string, maxChars: number = 40): string {
+  if (path.length <= maxChars) return path;
+  return "..." + path.slice(-(maxChars - 3));
+}
+
+/** Open a directory in the system file manager */
+async function openInExplorer(dir: string) {
+  try {
+    const isTauri = "__TAURI_INTERNALS__" in window;
+    if (isTauri) {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(dir);
+    }
+  } catch {
+    // Silently fail in browser mode
+  }
+}
+
 // Git status tooltip text
 function gitTooltip(git?: string): string {
   switch (git) {
@@ -303,7 +322,7 @@ const FileTreeRow = memo(function FileTreeRow({
         )}
         {/* File name */}
         <span
-          title={fileTypeTooltip(f.n, f.ty)}
+          title={f.path ? `${f.path}\n${fileTypeTooltip(f.n, f.ty)}` : fileTypeTooltip(f.n, f.ty)}
           style={{
             color: active ? C.t1 : C.t2,
             overflow: "hidden",
@@ -574,20 +593,48 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
       {/* Project directory path */}
       {projectDir && (
         <div
-          title={projectDir}
           style={{
             padding: "3px 10px",
             borderBottom: `1px solid ${C.b1}`,
-            fontSize: 8,
-            fontFamily: MONO,
-            color: C.t3,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            cursor: "default",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
           }}
         >
-          {projectDir}
+          <div
+            title={projectDir}
+            style={{
+              flex: 1,
+              fontSize: 8,
+              fontFamily: MONO,
+              color: C.t3,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              cursor: "default",
+              direction: "rtl",
+              textAlign: "left",
+              unicodeBidi: "plaintext",
+            }}
+          >
+            {truncatePath(projectDir, 50)}
+          </div>
+          <span
+            title="Open project location"
+            onClick={() => openInExplorer(projectDir)}
+            style={{
+              fontSize: 10,
+              cursor: "pointer",
+              color: C.t3,
+              flexShrink: 0,
+              padding: 2,
+              borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.accent; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+          >
+            {"\uD83D\uDCC2"}
+          </span>
         </div>
       )}
 

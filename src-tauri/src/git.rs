@@ -203,13 +203,23 @@ pub fn init_repo(project_dir: &Path) -> Result<String, String> {
 }
 
 /// Generate a .gitignore file for FPGA projects.
+/// Excludes build-generated files but keeps log files for debugging.
 fn generate_fpga_gitignore() -> String {
-    r#"# CovertEDA build artifacts
+    r#"# CovertEDA build scripts (generated, cleaned after build)
+.coverteda_build.tcl
+.coverteda_build.sh
+.coverteda_ipgen.tcl
+.coverteda_history.json
+
+# Build output directories
 build/
 impl1/
+impl_1/
 impl2/
 impl3/
 output_files/
+output/
+runs/
 
 # Bitstreams
 *.bit
@@ -219,26 +229,35 @@ output_files/
 *.svf
 *.fs
 *.cfg.bit
+*.acxbit
 
-# Vendor project files
+# Vendor project files (auto-created by CovertEDA at build time)
 *.ldf
+*.rdf
+*.sty
 *.qpf
 *.qsf
 *.xpr
+*.acepro
+promote.xml
+promote.pfl
+.recovery
 
-# Logs
-*.log
-.coverteda_build.log
-.coverteda_build.tcl
-.coverteda_build.sh
-.coverteda_ipgen.tcl
-.coverteda_history.json
+# Intermediate / object files
+*.vo
+*.ngd
+*.ncd
+*.edi
+*.edif
+synwork/
+synlog/
 
 # OS artifacts
 .DS_Store
 Thumbs.db
 *~
 *.swp
+*:Zone.Identifier
 "#
     .to_string()
 }
@@ -321,7 +340,11 @@ mod tests {
         assert!(gitignore.contains("*.bin"));
         assert!(gitignore.contains("*.jed"));
         assert!(gitignore.contains("*.sof"));
-        assert!(gitignore.contains(".coverteda_build.log"));
+        assert!(gitignore.contains(".coverteda_build.tcl"));
+        assert!(gitignore.contains("*.rdf"));
+        assert!(gitignore.contains("*.acepro"));
+        // Log files should NOT be excluded
+        assert!(!gitignore.contains("*.log"));
     }
 
     #[test]
