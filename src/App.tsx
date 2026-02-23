@@ -47,7 +47,6 @@ import {
   cleanBuild,
   checkSourcesStale,
   saveProject,
-  gitIsDirty,
   gitCommit,
   getGitStatus,
   saveBuildRecord,
@@ -834,25 +833,14 @@ export default function App() {
     doRunBuild();
   }, [doRunBuild]);
 
-  const runBuild = useCallback(async () => {
-    if (!projectDir) {
+  const runBuild = useCallback(() => {
+    // Use cached gitState.dirty instead of IPC round-trip for instant response
+    if (gitState?.dirty) {
+      setCommitModal("prompt");
+    } else {
       doRunBuild();
-      return;
     }
-    // Non-blocking git dirty check — don't block build start on slow IPC
-    gitIsDirty(projectDir).then((dirty) => {
-      if (dirty) {
-        setCommitModal("prompt");
-      } else {
-        setCommitModal(null);
-        doRunBuild();
-      }
-    }).catch(() => {
-      // Not a git repo or error — just proceed
-      setCommitModal(null);
-      doRunBuild();
-    });
-  }, [projectDir, doRunBuild]);
+  }, [gitState, doRunBuild]);
 
   const runClean = useCallback(async () => {
     if (!isTauri || !projectDir) return;
