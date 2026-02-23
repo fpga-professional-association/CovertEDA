@@ -351,6 +351,17 @@ pub fn start_build(
     let cli_tool = backend.cli_tool().to_string();
     drop(registry);
 
+    // Pre-build cleanup: remove corrupted intermediate databases that can
+    // cause vendor tools (especially Quartus) to crash on startup
+    if backend_id == "quartus" {
+        for dir_name in &["dni", "db", "qdb", "incremental_db"] {
+            let dir = project_path.join(dir_name);
+            if dir.exists() {
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+        }
+    }
+
     // Write the build script to a temp file in the project directory
     let script_ext = if backend_id == "opensource" { ".sh" } else { ".tcl" };
     let script_path = project_path.join(format!(".coverteda_build{}", script_ext));

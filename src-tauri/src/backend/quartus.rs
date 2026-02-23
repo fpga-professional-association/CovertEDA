@@ -328,8 +328,10 @@ impl FpgaBackend for QuartusBackend {
 # Device: {device}
 # Top: {top_module}
 
-# Check if project exists, if not create it
-if {{[catch {{project_open {project_path_tcl}/{top_module}}}]}} {{
+# Open existing project or create new
+if {{[file exists {project_path_tcl}/{top_module}.qpf]}} {{
+    project_open {project_path_tcl}/{top_module}
+}} else {{
     project_new {project_path_tcl}/{top_module}
 }}
 
