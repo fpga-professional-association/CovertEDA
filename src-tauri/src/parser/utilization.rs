@@ -134,12 +134,131 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
 }
 
 /// Parse Quartus .fit.rpt utilization report
+///
+/// Quartus fitter reports contain a Resource Usage Summary table:
+///   ; Resource                                  ; Used   ; Total  ; % Used   ;
+///   ; Logic utilization (ALMs needed / total)   ; 45     ; 32070  ; < 1 %    ;
+///   ; Total I/O Pins                            ; 18     ; 480    ; 4 %      ;
+///
+/// And a per-entity hierarchy table:
+///   ; |top                      ; 45   ; 80   ; 18   ; 2    ; 0            ;
+///   ;    |counter               ; 12   ; 16   ; 0    ; 0    ; 0            ;
 pub fn parse_quartus_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
-    let _ = content;
+    // Parse the Resource Usage Summary table
+    // Format: ; <resource name> ; <used> ; <total> ; <% used> ;
+    let row_re = Regex::new(
+        r"(?m);\s*([\w\s/()\-]+?)\s*;\s*(\d+)\s*;\s*(\d+)\s*;\s*"
+    ).unwrap();
+
+    let mut logic_items = vec![];
+    let mut io_items = vec![];
+    let mut memory_items = vec![];
+    let mut dsp_items = vec![];
+    let mut clock_items = vec![];
+    let mut other_items = vec![];
+
+    for cap in row_re.captures_iter(content) {
+        let name = cap[1].trim().to_string();
+        let used: u64 = cap[2].parse().unwrap_or(0);
+        let total: u64 = cap[3].parse().unwrap_or(0);
+
+        if total == 0 {
+            continue;
+        }
+
+        // Skip summary/header rows
+        if name == "Resource" || name.contains("Compilation Hierarchy") || name.contains("Node") {
+            continue;
+        }
+
+        let item = ResourceItem {
+            resource: name.clone(),
+            used,
+            total,
+            detail: None,
+        };
+
+        let n = name.to_lowercase();
+        if n.contains("alm") || n.contains("alut") || n.contains("register")
+            || n.contains("lab") || n.contains("logic") || n.contains("lut")
+            || n.contains("le ")
+        {
+            logic_items.push(item);
+        } else if n.contains("i/o") || n.contains("pin") || n.contains("gpio") {
+            io_items.push(item);
+        } else if n.contains("m10k") || n.contains("m20k") || n.contains("m9k")
+            || n.contains("mlab") || n.contains("memory") || n.contains("ram")
+            || n.contains("block mem")
+        {
+            memory_items.push(item);
+        } else if n.contains("dsp") || n.contains("mult") {
+            dsp_items.push(item);
+        } else if n.contains("pll") || n.contains("dll") || n.contains("clk")
+            || n.contains("clock")
+        {
+            clock_items.push(item);
+        } else {
+            other_items.push(item);
+        }
+    }
+
+    let mut categories = vec![];
+    if !logic_items.is_empty() {
+        categories.push(ResourceCategory { name: "Logic".into(), items: logic_items });
+    }
+    if !io_items.is_empty() {
+        categories.push(ResourceCategory { name: "I/O".into(), items: io_items });
+    }
+    if !memory_items.is_empty() {
+        categories.push(ResourceCategory { name: "Memory".into(), items: memory_items });
+    }
+    if !dsp_items.is_empty() {
+        categories.push(ResourceCategory { name: "DSP".into(), items: dsp_items });
+    }
+    if !clock_items.is_empty() {
+        categories.push(ResourceCategory { name: "Clocking".into(), items: clock_items });
+    }
+    if !other_items.is_empty() {
+        categories.push(ResourceCategory { name: "Other".into(), items: other_items });
+    }
+
+    // Parse per-entity hierarchy table
+    // Format: ; |top  ; 45 ; 80 ; 18 ; 2 ; 0 ;
+    //         ;    |counter ; 12 ; 16 ; 0 ; 0 ; 0 ;
+    let entity_re = Regex::new(
+        r"(?m);\s*\|(\w+)\s*;\s*(\d+)\s*;\s*(\d+)\s*;\s*(\d+)\s*;\s*(\d+)\s*;\s*(\d+)\s*;"
+    ).unwrap();
+
+    let mut by_module = vec![];
+    for cap in entity_re.captures_iter(content) {
+        let module = cap[1].to_string();
+        let alms: u64 = cap[2].parse().unwrap_or(0);
+        let regs: u64 = cap[3].parse().unwrap_or(0);
+        let _pins: u64 = cap[4].parse().unwrap_or(0);
+        let m10k: u64 = cap[5].parse().unwrap_or(0);
+        let _dsp: u64 = cap[6].parse().unwrap_or(0);
+
+        // Calculate percentage based on top-level ALMs
+        let top_alms = categories.iter()
+            .find(|c| c.name == "Logic")
+            .and_then(|c| c.items.first())
+            .map(|i| i.total)
+            .unwrap_or(1);
+        let pct = if top_alms > 0 { (alms as f64 / top_alms as f64) * 100.0 } else { 0.0 };
+
+        by_module.push(ModuleUtilization {
+            module,
+            lut: alms,
+            ff: regs,
+            ebr: m10k,
+            percentage: pct,
+        });
+    }
+
     Ok(ResourceReport {
         device: device.to_string(),
-        categories: vec![],
-        by_module: vec![],
+        categories,
+        by_module,
     })
 }
 
@@ -426,6 +545,78 @@ mod tests {
     fn test_parse_ace_utilization_empty_input() {
         let report = parse_ace_utilization("", "test").unwrap();
         assert!(report.categories.is_empty());
+    }
+
+    // ── Quartus utilization tests ──
+
+    #[test]
+    fn test_parse_quartus_utilization_with_fixture() {
+        let content = include_str!("../../tests/fixtures/quartus/utilization.fit.rpt");
+        let report = parse_quartus_utilization(content, "5CSEBA6U23I7").unwrap();
+        assert_eq!(report.device, "5CSEBA6U23I7");
+        assert!(!report.categories.is_empty(), "should have categories");
+
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some(), "should have Logic category");
+        let logic_items = &logic.unwrap().items;
+        assert!(logic_items.iter().any(|i| i.resource.contains("ALM")), "should have ALMs");
+
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "should have I/O category");
+        let io_item = io.unwrap().items.iter().find(|i| i.resource.contains("I/O Pin")).unwrap();
+        assert_eq!(io_item.used, 18);
+        assert_eq!(io_item.total, 480);
+
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "should have Memory category");
+
+        let clk = report.categories.iter().find(|c| c.name == "Clocking");
+        assert!(clk.is_some(), "should have Clocking category");
+
+        // Per-module hierarchy
+        assert!(!report.by_module.is_empty(), "should have module breakdown");
+        assert_eq!(report.by_module[0].module, "top");
+        assert_eq!(report.by_module[0].ff, 80);
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_categorizes_alms() {
+        let content = "; Total ALMs                                ; 45     ; 32070  ; < 1 %    ;\n";
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some(), "ALMs should be Logic");
+        assert_eq!(logic.unwrap().items[0].used, 45);
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_categorizes_io() {
+        let content = "; Total I/O Pins                            ; 18     ; 480    ; 4 %      ;\n";
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "I/O Pins should be I/O");
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_categorizes_memory() {
+        let content = "; Total M10K Memory Blocks                  ; 2      ; 397    ; < 1 %    ;\n";
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "M10K should be Memory");
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_categorizes_dsp() {
+        let content = "; Total DSP Blocks                          ; 4      ; 87     ; 5 %      ;\n";
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some(), "DSP Blocks should be DSP");
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_empty() {
+        let report = parse_quartus_utilization("", "test").unwrap();
+        assert!(report.categories.is_empty());
+        assert!(report.by_module.is_empty());
     }
 
     // ── nextpnr (OSS) utilization tests ──

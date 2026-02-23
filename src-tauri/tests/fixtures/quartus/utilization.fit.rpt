@@ -1,0 +1,36 @@
+Quartus Prime Fitter Resource Usage Summary
+--------------------------------------------
+
++-------------------------------------------------------------------------+
+; Fitter Resource Usage Summary                                           ;
++-------------------------------------------+--------+--------+----------+
+; Resource                                  ; Used   ; Total  ; % Used   ;
++-------------------------------------------+--------+--------+----------+
+; Logic utilization (ALMs needed / total)   ; 45     ; 32070  ; < 1 %    ;
+; Total ALMs                                ; 45     ; 32070  ; < 1 %    ;
+; Total Combinational ALUTs                 ; 62     ; 64140  ; < 1 %    ;
+; Dedicated Logic Registers                 ; 80     ; 64140  ; < 1 %    ;
+; Total Registers                           ; 80     ; 64140  ; < 1 %    ;
+; Total LABs                                ; 8      ; 3207   ; < 1 %    ;
+; Total I/O Pins                            ; 18     ; 480    ; 4 %      ;
+; Total M10K Memory Blocks                  ; 2      ; 397    ; < 1 %    ;
+; Total M10K Memory Bits                    ; 16384  ; 4065280; < 1 %    ;
+; Total MLAB Memory Blocks                  ; 0      ; 1607   ; 0 %      ;
+; Total Block Memory Bits                   ; 16384  ; 4065280; < 1 %    ;
+; Total DSP Blocks                          ; 0      ; 87     ; 0 %      ;
+; Total PLLs                                ; 1      ; 6      ; 17 %     ;
+; Total DLLs                                ; 0      ; 4      ; 0 %      ;
++-------------------------------------------+--------+--------+----------+
+
++----------------------------------------------------------------------+
+; Fitter Resource Utilization by Entity                                ;
++---------------------------+------+------+------+------+--------------+
+; Compilation Hierarchy     ; ALMs ; Regs ; Pins ; M10K ; DSP          ;
+;   Node                    ;      ;      ;      ;      ; Blocks       ;
++---------------------------+------+------+------+------+--------------+
+; |top                      ; 45   ; 80   ; 18   ; 2    ; 0            ;
+;    |counter               ; 12   ; 16   ; 0    ; 0    ; 0            ;
+;    |uart_tx               ; 18   ; 32   ; 0    ; 1    ; 0            ;
+;    |led_ctrl              ; 8    ; 16   ; 0    ; 0    ; 0            ;
+;    |pll_inst              ; 7    ; 16   ; 0    ; 1    ; 0            ;
++---------------------------+------+------+------+------+--------------+

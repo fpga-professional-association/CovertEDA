@@ -1,11 +1,78 @@
 Quartus Prime Timing Analyzer Summary
 --------------------------------------
 
-Fmax Summary:
-  Fmax: 200.50 MHz (clk)
-  Restricted Fmax: 200.50 MHz
+Type  : Slow 900mV 100C Model Setup Summary
+Slack : 1.205
+TNS   : 0.000
 
-Setup Summary:
-  Setup Slack: 1.200 ns
-  Total Negative Slack: 0.000 ns
-  Number of Failing Paths: 0
+Type  : Slow 900mV 100C Model Hold Summary
+Slack : 0.186
+TNS   : 0.000
+
+Type  : Slow 900mV 100C Model Minimum Pulse Width Summary
+Slack : 4.500
+TNS   : 0.000
+
+Type  : Fast 900mV 0C Model Setup Summary
+Slack : 3.456
+TNS   : 0.000
+
+Type  : Fast 900mV 0C Model Hold Summary
+Slack : 0.098
+TNS   : 0.000
+
+------------------------------------------------------------
+; Clocks                                                   ;
+------------------------------------------------------------
+;         ;           ; Fmax      ; Restricted ; Slack      ;
+; Clock   ; Frequency ; (MHz)     ; Fmax (MHz) ; (ns)       ;
+;---------+-----------+-----------+------------+------------;
+; clk     ; 200.50 MHz; 200.50    ; 200.50     ; 1.205      ;
+; pll_clk ; 150.33 MHz; 150.33    ; 150.33     ; 2.876      ;
+------------------------------------------------------------
+
+; Fmax Summary
+; Fmax Restricted to 200.50 MHz
+
+------------------------------------------------------------
+; Slow 900mV 100C Model Setup: 'clk'                      ;
+------------------------------------------------------------
+; Slack ; From               ; To                 ; Data   ;
+;       ;                    ;                    ; Delay  ;
+;-------+--------------------+--------------------+--------;
+; 1.205 ; counter_reg[0]     ; counter_reg[7]     ; 3.795  ;
+; 1.350 ; counter_reg[1]     ; counter_reg[7]     ; 3.650  ;
+; 1.498 ; counter_reg[2]     ; counter_reg[6]     ; 3.502  ;
+; 1.612 ; counter_reg[3]     ; counter_reg[5]     ; 3.388  ;
+; 1.789 ; counter_reg[4]     ; counter_reg[7]     ; 3.211  ;
+------------------------------------------------------------
+
+------------------------------------------------------------
+; Slow 900mV 100C Model Setup: 'pll_clk'                  ;
+------------------------------------------------------------
+; Slack ; From               ; To                 ; Data   ;
+;       ;                    ;                    ; Delay  ;
+;-------+--------------------+--------------------+--------;
+; 2.876 ; data_reg[0]        ; data_reg[15]       ; 3.779  ;
+; 3.001 ; data_reg[1]        ; data_reg[14]       ; 3.654  ;
+------------------------------------------------------------
+
+------------------------------------------------------------
+; Slow 900mV 100C Model Hold: 'clk'                       ;
+------------------------------------------------------------
+; Slack ; From               ; To                 ; Data   ;
+;       ;                    ;                    ; Delay  ;
+;-------+--------------------+--------------------+--------;
+; 0.186 ; counter_reg[7]     ; led_out[7]         ; 0.314  ;
+------------------------------------------------------------
+
++----------------------------------------------+
+; Timing Analyzer Summary                      ;
++----------------------------------------------+
+; Setup  Slack       ; 1.205 ns                ;
+; Hold   Slack       ; 0.186 ns                ;
+; Total Negative Slack (Setup)  ; 0.000 ns     ;
+; Total Negative Slack (Hold)   ; 0.000 ns     ;
+; Number of Failing Paths       ; 0            ;
+; Total Number of Paths         ; 142          ;
++----------------------------------------------+

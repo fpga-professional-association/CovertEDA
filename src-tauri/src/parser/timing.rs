@@ -26,21 +26,145 @@ pub fn parse_diamond_timing(content: &str) -> BackendResult<TimingReport> {
 }
 
 /// Parse Quartus .sta.rpt timing report
+///
+/// Quartus STA reports contain:
+/// - Timing Analyzer Summary table with Setup Slack, Hold Slack, TNS, failing paths
+/// - Clocks table with per-clock Fmax and slack
+/// - Per-clock setup path tables with from/to/slack/delay
 pub fn parse_quartus_timing(content: &str) -> BackendResult<TimingReport> {
-    let fmax = extract_float(content, r"Fmax[^:]*:\s*([\d.]+)\s*MHz").unwrap_or(0.0);
-    let wns = extract_float(content, r"Setup[^:]*:\s*([+-]?[\d.]+)\s*ns").unwrap_or(0.0);
+    // ── Summary table fields ──
+    let wns = extract_float(content, r"(?i)Setup\s+Slack\s*[;:]?\s*([+-]?[\d.]+)\s*ns")
+        .unwrap_or(0.0);
+    let whs = extract_float(content, r"(?i)Hold\s+Slack\s*[;:]?\s*([+-]?[\d.]+)\s*ns")
+        .unwrap_or(0.0);
+    let tns_setup = extract_float(
+        content,
+        r"(?i)Total Negative Slack \(Setup\)\s*[;:]?\s*([+-]?[\d.]+)\s*ns",
+    )
+    .or_else(|| extract_float(content, r"(?i)Total Negative Slack\s*[;:]?\s*([+-]?[\d.]+)\s*ns"))
+    .unwrap_or(0.0);
+    let tns_hold = extract_float(
+        content,
+        r"(?i)Total Negative Slack \(Hold\)\s*[;:]?\s*([+-]?[\d.]+)\s*ns",
+    )
+    .unwrap_or(0.0);
+    let failing_paths = extract_float(content, r"(?i)Number of Failing Paths\s*[;:]?\s*(\d+)")
+        .map(|v| v as u32)
+        .unwrap_or(if wns < 0.0 { 1 } else { 0 });
+    let total_paths = extract_float(content, r"(?i)Total Number of Paths\s*[;:]?\s*(\d+)")
+        .map(|v| v as u32)
+        .unwrap_or(0);
+
+    // ── Clock domains from Clocks table ──
+    // Format: ; clk     ; 200.50 MHz; 200.50    ; 200.50     ; 1.205      ;
+    let clock_re = Regex::new(
+        r"(?m);\s*(\w[\w./]*)\s*;\s*([\d.]+)\s*MHz\s*;\s*([\d.]+)\s*;\s*([\d.]+)\s*;\s*([+-]?[\d.]+)\s*;"
+    ).unwrap();
+
+    let mut clock_domains = vec![];
+    let mut best_fmax = 0.0_f64;
+
+    for cap in clock_re.captures_iter(content) {
+        let name = cap[1].to_string();
+        let freq: f64 = cap[2].parse().unwrap_or(0.0);
+        let fmax_val: f64 = cap[3].parse().unwrap_or(0.0);
+        let slack: f64 = cap[5].parse().unwrap_or(0.0);
+        let period = if freq > 0.0 { 1000.0 / freq } else { 0.0 };
+
+        if fmax_val > best_fmax {
+            best_fmax = fmax_val;
+        }
+
+        clock_domains.push(ClockDomain {
+            name,
+            period_ns: period,
+            frequency_mhz: fmax_val,
+            source: String::new(),
+            clock_type: "primary".into(),
+            wns_ns: slack,
+            path_count: 0,
+        });
+    }
+
+    // Fallback Fmax from "Fmax" line if clocks table not found
+    if best_fmax == 0.0 {
+        best_fmax = extract_float(content, r"Fmax[^:]*:\s*([\d.]+)\s*MHz").unwrap_or(0.0);
+    }
+
+    // ── Critical paths from setup tables ──
+    // Format: ; 1.205 ; counter_reg[0]     ; counter_reg[7]     ; 3.795  ;
+    let path_re = Regex::new(
+        r"(?m);\s*([+-]?[\d.]+)\s*;\s*(\S+)\s*;\s*(\S+)\s*;\s*([\d.]+)\s*;"
+    ).unwrap();
+
+    // Find per-clock setup sections to associate paths with clocks
+    let section_re = Regex::new(
+        r"(?i)Setup:\s*'(\w[\w./]*)'"
+    ).unwrap();
+
+    let mut critical_paths = vec![];
+    let mut rank = 0_u32;
+
+    // Parse setup sections with their clock names
+    for section_cap in section_re.captures_iter(content) {
+        let clock_name = section_cap[1].to_string();
+        let section_start = section_cap.get(0).unwrap().start();
+
+        // Find the next section or end
+        let rest = &content[section_start..];
+        // Look for the table delimiter ending (next section header or end)
+        let section_end = rest[1..]
+            .find("----\n\n")
+            .map(|i| section_start + 1 + i)
+            .unwrap_or(content.len());
+
+        let section_text = &content[section_start..section_end];
+
+        for path_cap in path_re.captures_iter(section_text) {
+            let slack: f64 = path_cap[1].parse().unwrap_or(0.0);
+            let from = path_cap[2].to_string();
+            let to = path_cap[3].to_string();
+            let delay: f64 = path_cap[4].parse().unwrap_or(0.0);
+
+            // Skip header rows
+            if from == "From" || from == ";" {
+                continue;
+            }
+
+            rank += 1;
+            critical_paths.push(CriticalPath {
+                rank,
+                from,
+                to,
+                slack_ns: slack,
+                required_ns: slack + delay,
+                delay_ns: delay,
+                logic_levels: 0,
+                clock: clock_name.clone(),
+                path_type: "setup".into(),
+            });
+        }
+    }
+
+    // Derive target_mhz from best_fmax and WNS
+    let target_mhz = if best_fmax > 0.0 && wns != 0.0 {
+        let period = 1000.0 / best_fmax;
+        1000.0 / (period + wns)
+    } else {
+        best_fmax
+    };
 
     Ok(TimingReport {
-        fmax_mhz: fmax,
-        target_mhz: 100.0,
+        fmax_mhz: best_fmax,
+        target_mhz,
         wns_ns: wns,
-        tns_ns: 0.0,
-        whs_ns: 0.0,
-        ths_ns: 0.0,
-        failing_paths: if wns < 0.0 { 1 } else { 0 },
-        total_paths: 0,
-        clock_domains: vec![],
-        critical_paths: vec![],
+        tns_ns: tns_setup,
+        whs_ns: whs,
+        ths_ns: tns_hold,
+        failing_paths,
+        total_paths,
+        clock_domains,
+        critical_paths,
     })
 }
 
@@ -480,16 +604,34 @@ Worst hold slack: 0.150 ns
 
     #[test]
     fn test_parse_quartus_timing_with_data() {
-        let content = "Fmax Summary: 200.50 MHz\nSetup Slack: 1.200 ns";
+        let content = r#"
+; Setup  Slack       ; 1.205 ns                ;
+; Hold   Slack       ; 0.186 ns                ;
+; Total Negative Slack (Setup)  ; 0.000 ns     ;
+; Total Negative Slack (Hold)   ; 0.000 ns     ;
+; Number of Failing Paths       ; 0            ;
+; Total Number of Paths         ; 142          ;
+
+; clk     ; 200.50 MHz; 200.50    ; 200.50     ; 1.205      ;
+"#;
         let report = parse_quartus_timing(content).unwrap();
         assert!((report.fmax_mhz - 200.50).abs() < 0.01);
+        assert!((report.wns_ns - 1.205).abs() < 0.01);
+        assert!((report.whs_ns - 0.186).abs() < 0.01);
+        assert!((report.tns_ns - 0.0).abs() < 0.01);
         assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.total_paths, 142);
+        assert_eq!(report.clock_domains.len(), 1);
+        assert_eq!(report.clock_domains[0].name, "clk");
     }
 
     #[test]
     fn test_parse_quartus_timing_empty() {
         let report = parse_quartus_timing("").unwrap();
         assert_eq!(report.fmax_mhz, 0.0);
+        assert_eq!(report.failing_paths, 0);
+        assert!(report.clock_domains.is_empty());
+        assert!(report.critical_paths.is_empty());
     }
 
     #[test]
@@ -649,7 +791,18 @@ Info: Max frequency for clock 'slow_clk': 50.00 MHz (PASS at 25.00 MHz)
     fn test_parse_quartus_timing_with_fixture() {
         let content = include_str!("../../tests/fixtures/quartus/timing.sta.rpt");
         let report = parse_quartus_timing(content).unwrap();
-        assert!(report.fmax_mhz > 199.0, "fmax={}", report.fmax_mhz);
+        assert!((report.fmax_mhz - 200.50).abs() < 0.1, "fmax={}", report.fmax_mhz);
+        assert!((report.wns_ns - 1.205).abs() < 0.01, "wns={}", report.wns_ns);
+        assert!((report.whs_ns - 0.186).abs() < 0.01, "whs={}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.total_paths, 142);
+        assert_eq!(report.clock_domains.len(), 2, "should have 2 clock domains");
+        assert_eq!(report.clock_domains[0].name, "clk");
+        assert_eq!(report.clock_domains[1].name, "pll_clk");
+        assert!(!report.critical_paths.is_empty(), "should have critical paths");
+        // First critical path should be the tightest (1.205 ns slack)
+        assert!((report.critical_paths[0].slack_ns - 1.205).abs() < 0.01);
+        assert_eq!(report.critical_paths[0].clock, "clk");
     }
 
     #[test]
