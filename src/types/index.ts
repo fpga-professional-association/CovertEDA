@@ -276,7 +276,15 @@ export type Section =
   | "programmer"
   | "docs";
 
-export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "timing-analysis" | "synth" | "map" | "par" | "bitstream";
+export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "timing-analysis" | "synth" | "map" | "par" | "bitstream" | "files";
+
+export interface ReportFileEntry {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  modifiedEpochMs: number;
+  extension: string;
+}
 
 // ── Project Config (.coverteda) ──
 export interface ProjectConfig {

@@ -2582,3 +2582,83 @@ fn read_diskstats_snapshot() -> Option<(u64, u64, u64)> {
     }
     Some((total_reads, total_writes, total_io_time))
 }
+
+// ── Report file discovery ──
+
+const REPORT_EXTENSIONS: &[&str] = &[
+    "rpt", "twr", "mrp", "par", "srp", "bgn", "log", "drc",
+    "pad", "arearep", "srr", "htm", "html",
+];
+
+const REPORT_SUFFIXES: &[&str] = &[
+    ".sta.rpt", ".fit.rpt", ".map.rpt", ".asm.rpt", ".syn.rpt", ".flow.rpt",
+    ".drc.rpt",
+];
+
+#[tauri::command]
+pub async fn list_report_files(project_dir: String) -> Result<Vec<ReportFileEntry>, String> {
+    tokio::task::spawn_blocking(move || {
+        let project_path = PathBuf::from(&project_dir);
+        let search_dirs = vec![
+            project_path.join("impl1"),
+            project_path.join("output_files"),
+            project_path.join("build"),
+            project_path.join("output"),
+        ];
+
+        let mut files = Vec::new();
+
+        for dir in &search_dirs {
+            if !dir.exists() {
+                continue;
+            }
+            let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let name = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let name_lower = name.to_lowercase();
+
+                let is_report = REPORT_SUFFIXES.iter().any(|s| name_lower.ends_with(s))
+                    || path.extension()
+                        .and_then(|e| e.to_str())
+                        .map(|ext| REPORT_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+                        .unwrap_or(false);
+
+                if !is_report {
+                    continue;
+                }
+
+                let metadata = entry.metadata().map_err(|e| e.to_string())?;
+                let modified_epoch_ms = metadata.modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+
+                let extension = path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                files.push(ReportFileEntry {
+                    name,
+                    path: path.to_string_lossy().to_string(),
+                    size_bytes: metadata.len(),
+                    modified_epoch_ms,
+                    extension,
+                });
+            }
+        }
+
+        files.sort_by(|a, b| b.modified_epoch_ms.cmp(&a.modified_epoch_ms));
+        Ok(files)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

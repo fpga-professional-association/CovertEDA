@@ -224,6 +224,18 @@ pub struct IoBankPin {
     pub direction: String,
 }
 
+// ── Report File Discovery ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportFileEntry {
+    pub name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub modified_epoch_ms: u64,
+    pub extension: String,
+}
+
 // ── File Content (read-only viewer) ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

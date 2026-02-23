@@ -19,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .manage(commands::AppState::default())
         .setup(|app| {
             let _window = app.get_webview_window("main").unwrap();
@@ -74,6 +75,7 @@ pub fn run() {
             commands::git_init,
             commands::open_in_file_manager,
             commands::get_system_stats,
+            commands::list_report_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

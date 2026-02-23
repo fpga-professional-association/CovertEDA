@@ -13,6 +13,7 @@ import {
   detectTools,
   refreshTools,
   checkLicenses,
+  exitApp,
 } from "../hooks/useTauri";
 import NewProjectWizard from "./NewProjectWizard";
 
@@ -247,6 +248,31 @@ export default function StartScreen({
               <span>{noProjectMsg}</span>
             </div>
           )}
+
+          {/* Exit */}
+          <div
+            onClick={() => exitApp()}
+            onMouseEnter={() => setHover("exit")}
+            onMouseLeave={() => setHover(null)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "8px 16px",
+              borderRadius: 6,
+              border: `1px solid ${hover === "exit" ? C.err : C.b1}`,
+              background: hover === "exit" ? `${C.err}12` : "transparent",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: MONO,
+              color: hover === "exit" ? C.err : C.t3,
+              transition: "all .15s",
+            }}
+          >
+            Exit
+          </div>
 
           {/* Detected Tools */}
           <div style={{ marginTop: 8 }}>

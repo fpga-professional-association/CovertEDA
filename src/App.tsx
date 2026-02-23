@@ -1110,6 +1110,7 @@ export default function App() {
     { label: "Synthesis Log", category: "View", desc: "Raw synthesis report", action: () => { navClick("reports"); setRptTab("synth"); } },
     { label: "Map Report", category: "View", desc: "Technology mapping log", action: () => { navClick("reports"); setRptTab("map"); } },
     { label: "PAR Report", category: "View", desc: "Place & Route log", action: () => { navClick("reports"); setRptTab("par"); } },
+    { label: "Report Files", category: "View", desc: "Browse generated report files", action: () => { navClick("reports"); setRptTab("files"); } },
     { label: "IP Catalog", category: "View", desc: "Browse and configure IP cores", action: () => navClick("ip") },
     { label: "Console", category: "View", desc: "Build output log", action: () => navClick("console") },
     { label: "Constraints", category: "View", desc: "Pin assignments", action: () => navClick("constraints") },
@@ -1550,6 +1551,7 @@ export default function App() {
                 }}
                 device={project?.device ?? B.defaultDev}
                 projectDir={projectDir}
+                building={building}
               />
             )}
 

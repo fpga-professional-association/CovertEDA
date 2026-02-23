@@ -852,6 +852,23 @@ export interface SystemStats {
   diskWritePct: number;
 }
 
+// ── Report file discovery ──
+
+import type { ReportFileEntry } from "../types";
+
+export async function listReportFiles(projectDir: string): Promise<ReportFileEntry[]> {
+  if (!isTauri) return [];
+  return invoke<ReportFileEntry[]>("list_report_files", { projectDir });
+}
+
+// ── Exit app ──
+
+export async function exitApp(): Promise<void> {
+  if (!isTauri) return;
+  const { exit } = await import("@tauri-apps/plugin-process");
+  exit(0);
+}
+
 export async function getSystemStats(): Promise<SystemStats | null> {
   if (!isTauri) return null;
   const r = await invoke<{

@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useMemo, ReactNode } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from "react";
 import {
   ReportTab,
+  ReportFileEntry,
   TimingReportData,
   UtilizationReportData,
   PowerReportData,
@@ -9,8 +10,8 @@ import {
 } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn } from "./shared";
-import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download } from "./Icons";
-import { getRawReport, writeTextFile } from "../hooks/useTauri";
+import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download, Doc } from "./Icons";
+import { getRawReport, writeTextFile, listReportFiles, readFile } from "../hooks/useTauri";
 import TimingAnalyzer from "./TimingAnalyzer";
 
 // ── Inline SVG Visualizations (no external chart libs) ──
@@ -107,6 +108,7 @@ interface ReportViewerProps {
   };
   device: string;
   projectDir: string;
+  building?: boolean;
 }
 
 function NoData({ label }: { label: string }) {
@@ -407,11 +409,321 @@ function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportT
   );
 }
 
+/** Content viewer for a single report file with error/warning/info filtering */
+function ReportFileContentViewer({ filePath }: { filePath: string }) {
+  const { C, MONO } = useTheme();
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "error" | "warning" | "info">("all");
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setContent(null);
+    setFilter("all");
+    readFile(filePath)
+      .then((fc) => setContent(fc.content))
+      .catch((e) => setContent(`Error loading file: ${e}`))
+      .finally(() => setLoading(false));
+  }, [filePath]);
+
+  const filteredLines = useMemo(() => {
+    if (!content || filter === "all") return content;
+    return content.split("\n").filter((line) => {
+      const lower = line.toLowerCase();
+      if (filter === "error") return lower.includes("error") || lower.includes("fatal") || lower.includes("fail");
+      if (filter === "warning") return lower.includes("warning") || lower.includes("warn");
+      if (filter === "info") return lower.includes("info") || lower.includes("note");
+      return true;
+    }).join("\n");
+  }, [content, filter]);
+
+  const counts = useMemo(() => {
+    if (!content) return { errors: 0, warnings: 0, info: 0 };
+    const lines = content.split("\n");
+    return {
+      errors: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("error") || ll.includes("fatal") || ll.includes("fail"); }).length,
+      warnings: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("warning") || ll.includes("warn"); }).length,
+      info: lines.filter((l) => { const ll = l.toLowerCase(); return ll.includes("info") || ll.includes("note"); }).length,
+    };
+  }, [content]);
+
+  const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
+
+  return (
+    <div style={{
+      background: C.s1, borderRadius: "0 0 7px 7px", border: `1px solid ${C.b1}`,
+      flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
+    }}>
+      {fullscreen && content && (
+        <FullscreenLogOverlay content={filteredLines ?? content} onClose={() => setFullscreen(false)} title={fileName} />
+      )}
+      {/* Filter toolbar */}
+      <div style={{
+        padding: "8px 14px", borderBottom: `1px solid ${C.b1}`,
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap",
+      }}>
+        <span style={{ fontSize: 9, fontFamily: MONO, color: C.t3 }}>
+          {content ? `${content.split("\n").length} lines` : ""}
+        </span>
+        <div style={{ flex: 1 }} />
+        {content && (
+          <button
+            onClick={() => setFullscreen(true)}
+            style={{
+              padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+              border: `1px solid ${C.b1}`, background: "transparent", color: C.t3, cursor: "pointer",
+            }}
+          >
+            Fullscreen
+          </button>
+        )}
+        {content && (
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {([
+              { id: "all", label: "All", color: C.t2, count: null },
+              { id: "error", label: "Errors", color: C.err, count: counts.errors },
+              { id: "warning", label: "Warnings", color: C.warn, count: counts.warnings },
+              { id: "info", label: "Info", color: C.accent, count: counts.info },
+            ] as const).map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
+                  padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                  border: filter === f.id ? `1px solid ${f.color}` : `1px solid ${C.b1}`,
+                  background: filter === f.id ? `${f.color}18` : "transparent",
+                  color: filter === f.id ? f.color : C.t3,
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 3,
+                }}
+              >
+                {f.label}
+                {f.count !== null && f.count > 0 && (
+                  <span style={{
+                    fontSize: 7, padding: "0 3px", borderRadius: 2,
+                    background: `${f.color}25`, color: f.color,
+                  }}>
+                    {f.count}
+                  </span>
+                )}
+              </button>
+            ))}
+            <button
+              onClick={() => {
+                if (content) navigator.clipboard.writeText(`Analyze this FPGA report (${fileName}):\n\n${content}`);
+              }}
+              title="Copy report to clipboard for AI analysis"
+              style={{
+                padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                border: `1px solid ${C.b1}`, background: "transparent", color: C.t3,
+                cursor: "pointer", marginLeft: 4,
+              }}
+            >
+              Send to AI
+            </button>
+          </div>
+        )}
+      </div>
+      {/* Content */}
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        scrollbarWidth: "thin", scrollbarColor: `${C.b2} ${C.bg}`,
+      }}>
+        {loading ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>Loading report...</div>
+        ) : !content || content.startsWith("Error") ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>{content || "No content."}</div>
+        ) : (
+          <pre style={{
+            fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.6,
+            margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", padding: "12px 14px",
+          }}>
+            {filteredLines}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Report files browser — discovers vendor report files with metadata and filtering */
+function ReportFilesPanel({ projectDir, building }: { projectDir: string; building?: boolean }) {
+  const { C, MONO } = useTheme();
+  const [files, setFiles] = useState<ReportFileEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  const loadFiles = useCallback(() => {
+    if (!projectDir) return;
+    listReportFiles(projectDir)
+      .then((f) => { setFiles(f); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [projectDir]);
+
+  // Initial load
+  useEffect(() => { setLoading(true); loadFiles(); }, [loadFiles]);
+
+  // Poll during builds every 5s
+  useEffect(() => {
+    if (!building) return;
+    const interval = setInterval(loadFiles, 5000);
+    return () => clearInterval(interval);
+  }, [building, loadFiles]);
+
+  // Reload when build finishes
+  const prevBuilding = useRef(building);
+  useEffect(() => {
+    if (prevBuilding.current && !building) {
+      const timeout = setTimeout(loadFiles, 1000);
+      return () => clearTimeout(timeout);
+    }
+    prevBuilding.current = building;
+  }, [building, loadFiles]);
+
+  const fmtSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+  };
+
+  const fmtTime = (ms: number) => {
+    if (ms === 0) return "\u2014";
+    const d = new Date(ms);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) +
+      " " + d.toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  const extColor = (ext: string) => {
+    if (["twr", "mrp", "par", "drc"].includes(ext)) return C.cyan;
+    if (["srp", "bgn", "log", "srr"].includes(ext)) return C.orange;
+    if (ext === "rpt") return C.accent;
+    return C.t3;
+  };
+
+  if (selectedFile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
+          background: C.s1, borderRadius: "7px 7px 0 0", border: `1px solid ${C.b1}`,
+          borderBottom: "none", flexShrink: 0,
+        }}>
+          <button
+            onClick={() => setSelectedFile(null)}
+            style={{
+              padding: "2px 8px", borderRadius: 3, fontSize: 9, fontFamily: MONO,
+              fontWeight: 600, border: `1px solid ${C.b1}`, background: "transparent",
+              color: C.t3, cursor: "pointer",
+            }}
+          >
+            {"\u2190"} Back
+          </button>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: MONO }}>
+            {files.find((f) => f.path === selectedFile)?.name ?? "Report"}
+          </span>
+        </div>
+        <ReportFileContentViewer filePath={selectedFile} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`,
+      flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: "10px 14px", borderBottom: `1px solid ${C.b1}`,
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+      }}>
+        <Doc />
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Report Files</span>
+        <Badge color={C.t3}>{files.length} file(s)</Badge>
+        {building && <Badge color={C.warn}>Building...</Badge>}
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={loadFiles}
+          style={{
+            padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO,
+            fontWeight: 600, border: `1px solid ${C.b1}`, background: "transparent",
+            color: C.t3, cursor: "pointer",
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+      {/* File list */}
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        scrollbarWidth: "thin", scrollbarColor: `${C.b2} ${C.bg}`,
+      }}>
+        {loading ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>
+            Scanning for report files...
+          </div>
+        ) : files.length === 0 ? (
+          <div style={{ color: C.t3, fontSize: 9, fontFamily: MONO, padding: 20, textAlign: "center" }}>
+            No report files found. Run a build to generate reports.
+          </div>
+        ) : (
+          <>
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 70px 120px",
+              gap: 8, padding: "6px 14px", fontSize: 8, fontFamily: MONO,
+              fontWeight: 700, color: C.t3, letterSpacing: 0.8,
+              borderBottom: `1px solid ${C.b1}`, position: "sticky", top: 0,
+              background: C.s1, zIndex: 1,
+            }}>
+              <span>FILE</span>
+              <span style={{ textAlign: "right" }}>SIZE</span>
+              <span style={{ textAlign: "right" }}>MODIFIED</span>
+            </div>
+            {files.map((f) => (
+              <div
+                key={f.path}
+                onClick={() => setSelectedFile(f.path)}
+                style={{
+                  display: "grid", gridTemplateColumns: "1fr 70px 120px",
+                  gap: 8, padding: "8px 14px", fontSize: 10, fontFamily: MONO,
+                  borderBottom: `1px solid ${C.b1}10`, cursor: "pointer",
+                  transition: "background .1s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.s2; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                  <span style={{
+                    fontSize: 7, padding: "1px 4px", borderRadius: 2,
+                    background: `${extColor(f.extension)}18`, color: extColor(f.extension),
+                    fontWeight: 700, flexShrink: 0,
+                  }}>
+                    .{f.extension}
+                  </span>
+                  <span style={{
+                    color: C.t1, fontWeight: 600, overflow: "hidden",
+                    textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {f.name}
+                  </span>
+                </span>
+                <span style={{ color: C.t3, textAlign: "right", fontSize: 9 }}>{fmtSize(f.sizeBytes)}</span>
+                <span style={{ color: C.t3, textAlign: "right", fontSize: 9 }}>{fmtTime(f.modifiedEpochMs)}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ReportViewer({
   rptTab,
   setRptTab,
   reports,
   projectDir,
+  building,
 }: ReportViewerProps) {
   const { C, MONO } = useTheme();
   const REPORTS = reports;
@@ -548,6 +860,7 @@ export default function ReportViewer({
     { id: "map", l: "Map" },
     { id: "par", l: "P&R" },
     { id: "bitstream", l: "Bitstream" },
+    { id: "files", l: "Files" },
   ];
 
   // Determine if export is available for current tab
@@ -1033,6 +1346,11 @@ export default function ReportViewer({
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
           <StageLogPanel projectDir={projectDir} reportType={rptTab} />
+        )}
+
+        {/* ════════════════ REPORT FILES ════════════════ */}
+        {rptTab === "files" && (
+          <ReportFilesPanel projectDir={projectDir} building={building} />
         )}
       </div>
     </div>
