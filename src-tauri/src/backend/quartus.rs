@@ -330,18 +330,27 @@ foreach f [glob -nocomplain {project_path_tcl}/*.sdc] {{
 
         script.push('\n');
 
-        // Run requested stages
-        if run_stage("synth") {
-            script.push_str("execute_module -tool syn\n");
-        }
-        if run_stage("fit") {
-            script.push_str("execute_module -tool fit\n");
-        }
-        if run_stage("sta") {
-            script.push_str("execute_module -tool sta\n");
-        }
-        if run_stage("asm") {
-            script.push_str("execute_module -tool asm\n");
+        // Run requested stages — wrap each in catch so we get clear error
+        // reporting per stage instead of aborting the entire script
+        let stage_tools: &[(&str, &str)] = &[
+            ("synth", "syn"),
+            ("fit", "fit"),
+            ("sta", "sta"),
+            ("asm", "asm"),
+        ];
+        for (stage_id, tool_name) in stage_tools {
+            if run_stage(stage_id) {
+                script.push_str(&format!(
+                    concat!(
+                        "if {{[catch {{execute_module -tool {tool}}} err]}} {{\n",
+                        "    puts \"ERROR: Stage '{tool}' failed: $err\"\n",
+                        "    project_close\n",
+                        "    exit 1\n",
+                        "}}\n",
+                    ),
+                    tool = tool_name,
+                ));
+            }
         }
 
         script.push_str("\nproject_close\n");

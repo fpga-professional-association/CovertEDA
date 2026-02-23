@@ -18,6 +18,19 @@ pub fn scan_directory(project_dir: &Path) -> Result<Vec<FileEntry>, std::io::Err
             name != "node_modules"
                 && name != "target"
                 && name != "__pycache__"
+                // Quartus build artifacts
+                && name != "db"
+                && name != "dni"
+                && name != "qdb"
+                && name != "incremental_db"
+                && name != "output_files"
+                && name != "greybox_tmp"
+                && name != "simulation"
+                // Vivado build artifacts
+                && !name.ends_with(".runs")
+                && !name.ends_with(".cache")
+                && !name.ends_with(".hw")
+                && !name.ends_with(".ip_user_files")
         })
     {
         let entry = entry.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;

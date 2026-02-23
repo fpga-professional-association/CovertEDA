@@ -139,7 +139,7 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         bottom: 8,
         right: 8,
         zIndex: 9999,
-        background: "rgba(0,0,0,0.75)",
+        background: "rgba(0,0,0,0.45)",
         borderRadius: 6,
         padding: "8px 12px",
         fontFamily: MONO,
