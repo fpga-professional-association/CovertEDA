@@ -2226,16 +2226,14 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
         drc = Some(DrcReport { errors, critical_warnings, warnings, info: info_count, waived: 0, items: drc_items });
     }
 
-    // ── Try vendor reports from impl1/ as fallback ──
+    // ── Try vendor reports from impl1/ (Lattice Diamond/Radiant) ──
     if timing.is_none() {
-        // Look for .twr files
         if impl_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&impl_dir) {
                 for entry in entries.flatten() {
                     let p = entry.path();
                     if p.extension().map(|e| e == "twr").unwrap_or(false) {
                         if let Ok(content) = std::fs::read_to_string(&p) {
-                            // Try Radiant format first, then Diamond
                             timing = crate::parser::timing::parse_radiant_timing(&content).ok()
                                 .or_else(|| crate::parser::timing::parse_diamond_timing(&content).ok());
                             break;
@@ -2246,7 +2244,6 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
         }
     }
     if utilization.is_none() {
-        // Look for .mrp files
         if impl_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&impl_dir) {
                 for entry in entries.flatten() {
@@ -2256,6 +2253,110 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
                             utilization = crate::parser::utilization::parse_radiant_utilization(&content, "auto").ok();
                             break;
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Try Quartus reports from output_files/ and project root ──
+    let output_files_dir = dir.join("output_files");
+    let quartus_search_dirs: [PathBuf; 2] = [output_files_dir.clone(), dir.clone()];
+
+    if timing.is_none() {
+        for search_dir in &quartus_search_dirs {
+            if !search_dir.exists() { continue; }
+            if let Ok(entries) = std::fs::read_dir(search_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.ends_with(".sta.rpt") {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            timing = crate::parser::timing::parse_quartus_timing(&content).ok();
+                            if timing.is_some() { break; }
+                        }
+                    }
+                }
+            }
+            if timing.is_some() { break; }
+        }
+    }
+
+    if utilization.is_none() {
+        for search_dir in &quartus_search_dirs {
+            if !search_dir.exists() { continue; }
+            if let Ok(entries) = std::fs::read_dir(search_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.ends_with(".fit.rpt") {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            utilization = crate::parser::utilization::parse_quartus_utilization(&content, "auto").ok();
+                            if utilization.is_some() { break; }
+                        }
+                    }
+                }
+            }
+            if utilization.is_some() { break; }
+        }
+    }
+
+    // ── Try Vivado reports from *.runs/ directories ──
+    if timing.is_none() || utilization.is_none() {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                if name.ends_with(".runs") && p.is_dir() {
+                    // Scan for timing/utilization reports inside run dirs
+                    if let Ok(run_entries) = std::fs::read_dir(&p) {
+                        for run_entry in run_entries.flatten() {
+                            let rp = run_entry.path();
+                            if rp.is_dir() {
+                                if let Ok(inner) = std::fs::read_dir(&rp) {
+                                    for file in inner.flatten() {
+                                        let fp = file.path();
+                                        let fname = fp.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                                        if timing.is_none() && fname.contains("timing_summary") && fname.ends_with(".rpt") {
+                                            if let Ok(content) = std::fs::read_to_string(&fp) {
+                                                timing = crate::parser::timing::parse_vivado_timing(&content).ok();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Try ACE reports from output/ ──
+    let ace_output_dir = dir.join("output");
+    if timing.is_none() && ace_output_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&ace_output_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.ends_with("_timing.rpt") {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        timing = crate::parser::timing::parse_ace_timing(&content).ok();
+                        if timing.is_some() { break; }
+                    }
+                }
+            }
+        }
+    }
+    if utilization.is_none() && ace_output_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&ace_output_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.ends_with("_utilization.rpt") {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        utilization = crate::parser::utilization::parse_ace_utilization(&content, "auto").ok();
+                        if utilization.is_some() { break; }
                     }
                 }
             }
