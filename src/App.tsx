@@ -16,7 +16,7 @@ import Console from "./components/Console";
 import CommandPalette from "./components/CommandPalette";
 import StartScreen from "./components/StartScreen";
 import FileViewer from "./components/FileViewer";
-import BuildArtifacts from "./components/BuildArtifacts";
+
 import SettingsPanel from "./components/SettingsPanel";
 import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
 import AiAssistant from "./components/AiAssistant";
@@ -633,7 +633,7 @@ export default function App() {
   const [realPowerReport, setRealPowerReport] = useState<PowerReportData | null>(null);
   const [realDrcReport, setRealDrcReport] = useState<DrcReportData | null>(null);
   const [realIoReport, setRealIoReport] = useState<{ title: string; generated: string; banks: IoBankData[] } | null>(null);
-  const [buildDone, setBuildDone] = useState(false);
+  const [_buildDone, setBuildDone] = useState(false);
   const [buildFailed, setBuildFailed] = useState(false);
   const [activeStage, setActiveStage] = useState<number | null>(null);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
@@ -1887,16 +1887,6 @@ export default function App() {
                     }
                   }}
                 />
-                {buildDone && realFiles && (
-                  <BuildArtifacts
-                    files={realFiles}
-                    implDir={project?.implDir ?? "impl1"}
-                    onOpenFile={(path) => {
-                      const name = path.split("/").pop() ?? path;
-                      handleFileClick(name, path);
-                    }}
-                  />
-                )}
               </>
             )}
 

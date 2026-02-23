@@ -37,12 +37,12 @@ describe("ReportViewer", () => {
     const props = makeProps();
     renderWithTheme(<ReportViewer {...props} />);
 
-    // Analysis tabs
-    expect(screen.getByText(/Timing/)).toBeInTheDocument();
-    expect(screen.getByText(/Utilization/)).toBeInTheDocument();
-    expect(screen.getByText(/Power/)).toBeInTheDocument();
-    expect(screen.getByText(/DRC/)).toBeInTheDocument();
-    expect(screen.getByText(/I\/O/)).toBeInTheDocument();
+    // Analysis tabs — some labels appear in multiple elements, use getAllByText
+    expect(screen.getAllByText(/Timing/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Utilization/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Power/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DRC/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/I\/O/).length).toBeGreaterThan(0);
     // Stage tabs
     expect(screen.getByText("Synth")).toBeInTheDocument();
     expect(screen.getByText("Map")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("ReportViewer", () => {
     });
     renderWithTheme(<ReportViewer {...props} />);
     expect(screen.getByText("LOGIC")).toBeInTheDocument();
-    expect(screen.getByText("I/O")).toBeInTheDocument();
+    expect(screen.getAllByText("I/O").length).toBeGreaterThan(0);
     expect(screen.getByText("LUT4")).toBeInTheDocument();
     expect(screen.getByText("Registers")).toBeInTheDocument();
     expect(screen.getByText("PIO")).toBeInTheDocument();

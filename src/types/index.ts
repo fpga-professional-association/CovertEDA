@@ -276,7 +276,7 @@ export type Section =
   | "programmer"
   | "docs";
 
-export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream";
+export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "timing-analysis" | "synth" | "map" | "par" | "bitstream";
 
 // ── Project Config (.coverteda) ──
 export interface ProjectConfig {

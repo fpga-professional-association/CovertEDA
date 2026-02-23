@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, memo } from "react";
+import { useState, useCallback, memo } from "react";
 import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, Select } from "./shared";
@@ -829,7 +829,7 @@ export default memo(function BuildPipeline({
   building,
   buildStep,
   buildFailed,
-  logs,
+  logs: _logs,
   activeStage,
   onStageClick,
   selectedStages,
@@ -847,20 +847,6 @@ export default memo(function BuildPipeline({
   const B = backend;
   const allDone = !building && !buildFailed && buildStep >= B.pipeline.length && buildStep >= 0;
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView?.({ block: "end" });
-  }, [logs.length]);
-
-  const handleCopy = useCallback(() => {
-    const text = logs.map((l) => l.m).join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [logs]);
 
   const panel: React.CSSProperties = {
     background: C.s1,
@@ -868,15 +854,6 @@ export default memo(function BuildPipeline({
     border: `1px solid ${C.b1}`,
     overflow: "hidden",
     padding: 14,
-  };
-
-  const lineColors: Record<string, string> = {
-    info: C.t3,
-    cmd: C.cyan,
-    ok: C.ok,
-    warn: C.warn,
-    err: C.err,
-    out: C.t2,
   };
 
   const isStageSelected = (id: string) =>
@@ -946,8 +923,7 @@ export default memo(function BuildPipeline({
   }, [projectDir, deviceString, topModule, buildOptions, B.defaultDev]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-      {/* Left column: Build Pipeline */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={panel}>
         <div
           style={{
@@ -1103,66 +1079,6 @@ export default memo(function BuildPipeline({
         )}
       </div>
 
-      {/* Right column: Live output */}
-      <div style={panel}>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: C.t1,
-            marginBottom: 10,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          {"\u25B6"} {activeStage !== null && B.pipeline[activeStage]
-            ? B.pipeline[activeStage].label
-            : "Build Output"}
-          <span style={{ flex: 1 }} />
-          {logs.length > 0 && (
-            <>
-              <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
-                {logs.length} lines
-              </span>
-              <Btn small onClick={handleCopy}>
-                {copied ? "Copied!" : "Copy"}
-              </Btn>
-            </>
-          )}
-        </div>
-        <div
-          style={{
-            background: C.bg,
-            borderRadius: 4,
-            padding: "6px 10px",
-            height: 280,
-            overflowY: "auto",
-            fontSize: 9,
-            fontFamily: MONO,
-            lineHeight: 1.6,
-          }}
-        >
-          {logs.length === 0 && !building ? (
-            <div style={{ color: C.t3, padding: 8, textAlign: "center" }}>
-              Click a stage to view its output, or hit Build to start.
-            </div>
-          ) : (
-            logs.slice(-500).map((l, i) => (
-              <div key={i} style={{ color: lineColors[l.t] || C.t2 }}>
-                {l.m}
-              </div>
-            ))
-          )}
-          {building && (
-            <div style={{ color: C.accent }}>
-              <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span>{" "}
-              Running...
-            </div>
-          )}
-          <div ref={logEndRef} />
-        </div>
-      </div>
     </div>
   );
 })

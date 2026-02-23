@@ -70,16 +70,9 @@ describe("BuildPipeline", () => {
     expect(screen.getByText("Advanced")).toBeInTheDocument();
   });
 
-  it("shows Build Output section header", () => {
+  it("shows Build Pipeline header", () => {
     renderPipeline();
-    // The header text is split across elements: "\u25B6" + " " + "Build Output"
-    // so we use a regex matcher on the container
-    expect(screen.getByText(/Build Output/)).toBeInTheDocument();
-  });
-
-  it("shows running indicator when building is true", () => {
-    renderPipeline({ building: true, buildStep: 1 });
-    expect(screen.getByText(/Running/)).toBeInTheDocument();
+    expect(screen.getByText(/Build Pipeline/)).toBeInTheDocument();
   });
 
   it("shows build complete message when all stages are done", () => {

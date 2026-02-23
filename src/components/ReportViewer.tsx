@@ -11,6 +11,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn } from "./shared";
 import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download } from "./Icons";
 import { getRawReport } from "../hooks/useTauri";
+import TimingAnalyzer from "./TimingAnalyzer";
 
 // ── Inline SVG Visualizations (no external chart libs) ──
 
@@ -143,12 +144,52 @@ function Collapsible({ title, icon, defaultOpen = false, children }: {
   );
 }
 
-/** Raw log drawer — collapsible, lazy-loads content on expand */
+/** Fullscreen overlay for raw log content */
+function FullscreenLogOverlay({ content, onClose, title }: { content: string; onClose: () => void; title: string }) {
+  const { C, MONO } = useTheme();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 2000,
+      background: C.bg, display: "flex", flexDirection: "column",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "10px 16px",
+        borderBottom: `1px solid ${C.b1}`, flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{title}</span>
+        <div style={{ flex: 1 }} />
+        <Btn small onClick={onClose}>Close</Btn>
+      </div>
+      <div style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        scrollbarWidth: "thin", scrollbarColor: `${C.b2} ${C.bg}`,
+      }}>
+        <pre style={{
+          fontSize: 10, fontFamily: MONO, color: C.t2, lineHeight: 1.7,
+          margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
+          padding: "16px 20px",
+        }}>
+          {content}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+/** Raw log drawer — collapsible, lazy-loads content on expand, with fullscreen toggle */
 function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportType: string }) {
   const { C, MONO } = useTheme();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const handleOpen = useCallback(() => {
     if (!open && content === null) {
@@ -165,6 +206,9 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
     <div style={{
       background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, overflow: "hidden",
     }}>
+      {fullscreen && content && (
+        <FullscreenLogOverlay content={content} onClose={() => setFullscreen(false)} title={`Raw Log — ${reportType}`} />
+      )}
       <div
         onClick={handleOpen}
         style={{
@@ -176,6 +220,18 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
         <span style={{ fontSize: 9, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
           Raw Log
         </span>
+        {open && content && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setFullscreen(true); }}
+            style={{
+              marginLeft: "auto", padding: "1px 6px", borderRadius: 3, fontSize: 8,
+              fontFamily: MONO, fontWeight: 600, border: `1px solid ${C.b1}`,
+              background: "transparent", color: C.t3, cursor: "pointer",
+            }}
+          >
+            Fullscreen
+          </button>
+        )}
       </div>
       {open && (
         <div style={{
@@ -201,12 +257,13 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
   );
 }
 
-/** Stage log panel with filter buttons, counts, and AI send */
+/** Stage log panel with filter buttons, counts, AI send, and fullscreen */
 function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportType: string }) {
   const { C, MONO } = useTheme();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "error" | "warning" | "info">("all");
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -249,6 +306,9 @@ function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportT
 
   return (
     <div style={{ ...panel, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {fullscreen && content && (
+        <FullscreenLogOverlay content={content} onClose={() => setFullscreen(false)} title={stageNames[reportType] ?? reportType} />
+      )}
       <div style={{
         padding: "10px 14px", borderBottom: `1px solid ${C.b1}`,
         display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap",
@@ -260,6 +320,17 @@ function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportT
           Raw vendor output from impl1/
         </span>
         <div style={{ flex: 1 }} />
+        {content && (
+          <button
+            onClick={() => setFullscreen(true)}
+            style={{
+              padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
+              border: `1px solid ${C.b1}`, background: "transparent", color: C.t3, cursor: "pointer",
+            }}
+          >
+            Fullscreen
+          </button>
+        )}
         {/* Filter buttons */}
         {content && (
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -454,22 +525,13 @@ export default function ReportViewer({
   const hasTimingFailures = REPORTS.timing && REPORTS.timing.summary.failingPaths > 0;
 
   // ── Tab definitions: analysis + stage logs ──
-  const analysisTabs: { id: ReportTab; l: string; c?: string }[] = [
-    {
-      id: "timing", l: "\u23F1 Timing",
-      c: REPORTS.timing
-        ? (REPORTS.timing.summary.failingPaths > 0 ? C.err : C.ok)
-        : undefined,
-    },
-    { id: "util", l: "\uD83D\uDCCA Utilization" },
-    { id: "power", l: "\u26A1 Power" },
-    {
-      id: "drc", l: "\u26A0 DRC",
-      c: REPORTS.drc
-        ? (REPORTS.drc.summary.critWarns > 0 ? C.warn : C.ok)
-        : undefined,
-    },
-    { id: "io", l: "\uD83D\uDCCC I/O" },
+  const analysisTabs: { id: ReportTab; l: string }[] = [
+    { id: "timing", l: "Timing" },
+    { id: "util", l: "Utilization" },
+    { id: "power", l: "Power" },
+    { id: "drc", l: "DRC" },
+    { id: "io", l: "I/O" },
+    { id: "timing-analysis", l: "Timing Analysis" },
   ];
 
   const stageTabs: { id: ReportTab; l: string }[] = [
@@ -514,7 +576,6 @@ export default function ReportViewer({
             }}
           >
             {t.l}
-            {t.c && <span style={{ width: 5, height: 5, borderRadius: 3, background: t.c }} />}
           </button>
         ))}
         <span style={{ width: 1, background: C.b1, margin: "4px 2px", flexShrink: 0 }} />
@@ -954,6 +1015,11 @@ export default function ReportViewer({
             </div>
           );
         })()}
+
+        {/* ════════════════ TIMING ANALYSIS ════════════════ */}
+        {rptTab === "timing-analysis" && (
+          <TimingAnalyzer timing={REPORTS.timing ?? null} />
+        )}
 
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
