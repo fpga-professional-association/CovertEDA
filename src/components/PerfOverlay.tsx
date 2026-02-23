@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
+import { getSystemStats, SystemStats } from "../hooks/useTauri";
 
 interface PerfStats {
   fps: number;
-  memUsedMB: number;
-  memTotalMB: number;
-  memPct: number;
   jsHeapMB: number;
   jsHeapLimitMB: number;
   jsHeapPct: number;
@@ -13,6 +11,12 @@ interface PerfStats {
   renderCount: number;
   uptimeSec: number;
   startupMs: number | null;
+  // System stats from Rust backend
+  cpuPct: number;
+  memUsedMb: number;
+  memTotalMb: number;
+  memPct: number;
+  diskWritePct: number;
 }
 
 export default function PerfOverlay({ visible }: { visible: boolean }) {
@@ -22,12 +26,14 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
   const lastTime = useRef(performance.now());
   const renderCount = useRef(0);
   const appStart = useRef(performance.timeOrigin);
+  const sysStats = useRef<SystemStats | null>(null);
 
   useEffect(() => {
     if (!visible) return;
 
     let rafId: number;
     let intervalId: ReturnType<typeof setInterval>;
+    let sysIntervalId: ReturnType<typeof setInterval>;
 
     // FPS counter via requestAnimationFrame
     const countFrame = () => {
@@ -35,6 +41,14 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       rafId = requestAnimationFrame(countFrame);
     };
     rafId = requestAnimationFrame(countFrame);
+
+    // Poll system stats from Rust backend every 1s
+    // (the Rust side sleeps ~200ms internally for CPU/disk sampling, so don't poll too fast)
+    const fetchSysStats = () => {
+      getSystemStats().then((s) => { if (s) sysStats.current = s; }).catch(() => {});
+    };
+    fetchSysStats();
+    sysIntervalId = setInterval(fetchSysStats, 1000);
 
     // Sample stats every 500ms
     intervalId = setInterval(() => {
@@ -54,12 +68,6 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       // DOM node count
       const domNodes = document.querySelectorAll("*").length;
 
-      // System memory via navigator (if available)
-      const devMem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
-      const memTotalMB = devMem ? Math.round(devMem * 1024) : 0;
-      const memUsedMB = jsHeapMB; // best approximation in browser
-      const memPct = memTotalMB > 0 ? Math.round((memUsedMB / memTotalMB) * 100) : 0;
-
       // Uptime
       const uptimeSec = Math.round((Date.now() - appStart.current) / 1000);
 
@@ -72,11 +80,10 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         startupMs = Math.round(last - first);
       }
 
+      const sys = sysStats.current;
+
       setStats({
         fps,
-        memUsedMB,
-        memTotalMB,
-        memPct,
         jsHeapMB,
         jsHeapLimitMB,
         jsHeapPct,
@@ -84,12 +91,18 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         renderCount: renderCount.current,
         uptimeSec,
         startupMs,
+        cpuPct: sys?.cpuPct ?? 0,
+        memUsedMb: sys?.memUsedMb ?? 0,
+        memTotalMb: sys?.memTotalMb ?? 0,
+        memPct: sys?.memPct ?? 0,
+        diskWritePct: sys?.diskWritePct ?? 0,
       });
     }, 500);
 
     return () => {
       cancelAnimationFrame(rafId);
       clearInterval(intervalId);
+      clearInterval(sysIntervalId);
     };
   }, [visible]);
 
@@ -99,20 +112,30 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
   const upSec = stats.uptimeSec % 60;
 
   const fpsColor = stats.fps >= 50 ? C.ok : stats.fps >= 30 ? C.warn : C.err;
+  const cpuColor = stats.cpuPct <= 50 ? C.ok : stats.cpuPct <= 80 ? C.warn : C.err;
+  const memColor = stats.memPct <= 60 ? C.ok : stats.memPct <= 85 ? C.warn : C.err;
+  const diskColor = stats.diskWritePct <= 50 ? C.ok : stats.diskWritePct <= 80 ? C.warn : C.err;
 
   const rows: [string, string, string?][] = [
     ["FPS", `${stats.fps}`, fpsColor],
-    ["DOM Nodes", `${stats.domNodes}`],
+    ["CPU", `${stats.cpuPct}%`, cpuColor],
+    ["Memory", `${stats.memUsedMb} / ${stats.memTotalMb} MB (${stats.memPct}%)`, memColor],
+    ["Disk I/O", `${stats.diskWritePct}%`, diskColor],
     ["JS Heap", `${stats.jsHeapMB} / ${stats.jsHeapLimitMB} MB (${stats.jsHeapPct}%)`],
+    ["DOM Nodes", `${stats.domNodes}`],
     ["Uptime", `${upMin}m ${upSec}s`],
     ["Samples", `${stats.renderCount}`],
   ];
   if (stats.startupMs !== null) {
     rows.splice(1, 0, ["Startup", `${stats.startupMs}ms`]);
   }
-  if (stats.memTotalMB > 0) {
-    rows.splice(3, 0, ["Device RAM", `~${stats.memTotalMB} MB`]);
-  }
+
+  // Mini bar helper for CPU / Memory / Disk
+  const miniBar = (pct: number, color: string) => (
+    <div style={{ width: "100%", height: 3, background: `${C.t3}30`, borderRadius: 2, marginTop: 1 }}>
+      <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.3s" }} />
+    </div>
+  );
 
   return (
     <div
@@ -131,18 +154,26 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         pointerEvents: "none",
         backdropFilter: "blur(4px)",
         border: `1px solid ${C.b1}`,
-        minWidth: 180,
+        minWidth: 200,
       }}
     >
       <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: 1, color: C.t3, marginBottom: 4 }}>
         STATS FOR NERDS
       </div>
-      {rows.map(([label, value, color]) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span style={{ color: C.t3 }}>{label}</span>
-          <span style={{ color: color ?? C.t1, fontWeight: 600 }}>{value}</span>
-        </div>
-      ))}
+      {rows.map(([label, value, color]) => {
+        const showBar = label === "CPU" || label === "Memory" || label === "Disk I/O";
+        const barPct = label === "CPU" ? stats.cpuPct : label === "Memory" ? stats.memPct : stats.diskWritePct;
+        const barColor = color ?? C.t1;
+        return (
+          <div key={label} style={{ marginBottom: showBar ? 3 : 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <span style={{ color: C.t3 }}>{label}</span>
+              <span style={{ color: color ?? C.t1, fontWeight: 600 }}>{value}</span>
+            </div>
+            {showBar && miniBar(barPct, barColor)}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -840,3 +840,34 @@ export async function openInFileManager(path: string): Promise<void> {
   }
   return invoke<void>("open_in_file_manager", { path });
 }
+
+// ── System stats (for Stats for Nerds) ──
+
+export interface SystemStats {
+  cpuPct: number;
+  memUsedMb: number;
+  memTotalMb: number;
+  memPct: number;
+  diskWriteBytes: number;
+  diskWritePct: number;
+}
+
+export async function getSystemStats(): Promise<SystemStats | null> {
+  if (!isTauri) return null;
+  const r = await invoke<{
+    cpu_pct: number;
+    mem_used_mb: number;
+    mem_total_mb: number;
+    mem_pct: number;
+    disk_write_bytes: number;
+    disk_write_pct: number;
+  }>("get_system_stats");
+  return {
+    cpuPct: r.cpu_pct,
+    memUsedMb: r.mem_used_mb,
+    memTotalMb: r.mem_total_mb,
+    memPct: r.mem_pct,
+    diskWriteBytes: r.disk_write_bytes,
+    diskWritePct: r.disk_write_pct,
+  };
+}

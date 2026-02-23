@@ -2438,3 +2438,147 @@ pub fn get_app_config() -> Result<crate::config::AppConfig, String> {
 pub fn save_app_config(config: crate::config::AppConfig) -> Result<(), String> {
     config.save().map_err(|e| e.to_string())
 }
+
+// ── System stats for "Stats for Nerds" overlay ──
+
+#[derive(serde::Serialize)]
+pub struct SystemStats {
+    pub cpu_pct: f64,
+    pub mem_used_mb: u64,
+    pub mem_total_mb: u64,
+    pub mem_pct: f64,
+    pub disk_write_bytes: u64,
+    pub disk_write_pct: f64,
+}
+
+#[tauri::command]
+pub async fn get_system_stats() -> Result<SystemStats, String> {
+    tokio::task::spawn_blocking(|| {
+        let cpu_pct = read_cpu_usage().unwrap_or(0.0);
+        let (mem_used_mb, mem_total_mb, mem_pct) = read_mem_usage().unwrap_or((0, 0, 0.0));
+        let (disk_write_bytes, disk_write_pct) = read_disk_write().unwrap_or((0, 0.0));
+        Ok(SystemStats {
+            cpu_pct,
+            mem_used_mb,
+            mem_total_mb,
+            mem_pct,
+            disk_write_bytes,
+            disk_write_pct,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Read CPU usage from /proc/stat (Linux) or approximate on other platforms.
+/// Uses a two-sample approach with a brief sleep to measure delta.
+fn read_cpu_usage() -> Option<f64> {
+    #[cfg(target_os = "linux")]
+    {
+        fn parse_cpu_line(line: &str) -> Option<(u64, u64)> {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 5 || parts[0] != "cpu" { return None; }
+            let vals: Vec<u64> = parts[1..].iter().filter_map(|s| s.parse().ok()).collect();
+            if vals.len() < 4 { return None; }
+            let idle = vals[3] + vals.get(4).copied().unwrap_or(0); // idle + iowait
+            let total: u64 = vals.iter().sum();
+            Some((idle, total))
+        }
+        let s1 = std::fs::read_to_string("/proc/stat").ok()?;
+        let line1 = s1.lines().next()?;
+        let (idle1, total1) = parse_cpu_line(line1)?;
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let s2 = std::fs::read_to_string("/proc/stat").ok()?;
+        let line2 = s2.lines().next()?;
+        let (idle2, total2) = parse_cpu_line(line2)?;
+        let d_total = total2.saturating_sub(total1) as f64;
+        let d_idle = idle2.saturating_sub(idle1) as f64;
+        if d_total <= 0.0 { return Some(0.0); }
+        Some(((d_total - d_idle) / d_total * 100.0 * 10.0).round() / 10.0)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Read memory usage from /proc/meminfo (Linux) or system APIs.
+fn read_mem_usage() -> Option<(u64, u64, f64)> {
+    #[cfg(target_os = "linux")]
+    {
+        let s = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let mut total_kb = 0u64;
+        let mut available_kb = 0u64;
+        for line in s.lines() {
+            if line.starts_with("MemTotal:") {
+                total_kb = line.split_whitespace().nth(1)?.parse().ok()?;
+            } else if line.starts_with("MemAvailable:") {
+                available_kb = line.split_whitespace().nth(1)?.parse().ok()?;
+            }
+        }
+        if total_kb == 0 { return None; }
+        let used_kb = total_kb.saturating_sub(available_kb);
+        let total_mb = total_kb / 1024;
+        let used_mb = used_kb / 1024;
+        let pct = (used_kb as f64 / total_kb as f64 * 1000.0).round() / 10.0;
+        Some((used_mb, total_mb, pct))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Read disk write stats from /proc/diskstats (Linux).
+/// Returns (bytes_written_since_boot, estimated_write_activity_pct).
+fn read_disk_write() -> Option<(u64, f64)> {
+    #[cfg(target_os = "linux")]
+    {
+        // First sample
+        let (_, write1, time1) = read_diskstats_snapshot()?;
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Second sample
+        let (_, write2, time2) = read_diskstats_snapshot()?;
+
+        let d_write = write2.saturating_sub(write1);
+        let d_time = time2.saturating_sub(time1);
+        // io_time is in ms; our sample is ~100ms
+        let write_pct = if d_time > 0 {
+            (d_time as f64 / 100.0 * 100.0 * 10.0).round() / 10.0
+        } else {
+            0.0
+        };
+        // Sectors are 512 bytes each
+        let write_bytes = d_write * 512;
+        Some((write_bytes, write_pct.min(100.0)))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_diskstats_snapshot() -> Option<(u64, u64, u64)> {
+    let s = std::fs::read_to_string("/proc/diskstats").ok()?;
+    let mut total_reads = 0u64;
+    let mut total_writes = 0u64;
+    let mut total_io_time = 0u64;
+    for line in s.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 14 { continue; }
+        let name = parts[2];
+        // Only count whole disks (sda, vda, nvme0n1) not partitions
+        let is_disk = (name.starts_with("sd") || name.starts_with("vd") || name.starts_with("hd"))
+            && name.len() == 3;
+        let is_nvme = name.starts_with("nvme") && name.contains("n") && !name.contains("p");
+        if !is_disk && !is_nvme { continue; }
+        let reads: u64 = parts[5].parse().unwrap_or(0);    // sectors read
+        let writes: u64 = parts[9].parse().unwrap_or(0);   // sectors written
+        let io_time: u64 = parts[12].parse().unwrap_or(0); // ms spent doing I/O
+        total_reads += reads;
+        total_writes += writes;
+        total_io_time += io_time;
+    }
+    Some((total_reads, total_writes, total_io_time))
+}
