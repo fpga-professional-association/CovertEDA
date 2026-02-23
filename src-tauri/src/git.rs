@@ -1,5 +1,5 @@
 use crate::types::GitStatus;
-use git2::Repository;
+use git2::{Repository, StatusOptions};
 use std::path::Path;
 
 /// Get git status for a project directory using libgit2 (no shell-out).
@@ -34,9 +34,13 @@ pub fn get_status(project_dir: &Path) -> Result<GitStatus, String> {
 
     let time_ago = format_time_ago(commit.time().seconds());
 
-    // Count file statuses
+    // Count file statuses — skip ignored files (db/, dni/, etc.) for speed
+    let mut opts = StatusOptions::new();
+    opts.include_ignored(false)
+        .include_untracked(true)
+        .recurse_untracked_dirs(false);
     let statuses = repo
-        .statuses(None)
+        .statuses(Some(&mut opts))
         .map_err(|e| format!("Status error: {}", e))?;
 
     let mut staged = 0u32;
@@ -87,8 +91,12 @@ pub fn is_dirty(project_dir: &Path) -> Result<bool, String> {
     let repo =
         Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
 
+    let mut opts = StatusOptions::new();
+    opts.include_ignored(false)
+        .include_untracked(true)
+        .recurse_untracked_dirs(false);
     let statuses = repo
-        .statuses(None)
+        .statuses(Some(&mut opts))
         .map_err(|e| format!("Status error: {}", e))?;
 
     for entry in statuses.iter() {
@@ -115,8 +123,16 @@ pub fn commit_all(project_dir: &Path, message: &str) -> Result<String, String> {
     let repo =
         Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
 
-    // Stage all files (git add -A equivalent)
+    // Ensure .gitignore has vendor build directories
+    ensure_gitignore_has_vendor_dirs(project_dir);
+
+    // Remove any previously-tracked vendor build dirs from the index
     let mut index = repo.index().map_err(|e| format!("Index error: {}", e))?;
+    for dir in VENDOR_BUILD_DIRS {
+        let _ = index.remove_all([format!("{}/*", dir)].iter(), None);
+    }
+
+    // Stage all files (git add -A equivalent) — respects .gitignore
     index
         .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
         .map_err(|e| format!("Stage error: {}", e))?;
@@ -278,6 +294,40 @@ Thumbs.db
 *:Zone.Identifier
 "#
     .to_string()
+}
+
+/// Vendor build directories that should never be tracked.
+const VENDOR_BUILD_DIRS: &[&str] = &[
+    "db", "dni", "qdb", "incremental_db", "greybox_tmp", "simulation",
+    "output_files", "synwork", "synlog",
+];
+
+/// Ensure the project's .gitignore contains critical vendor build directory entries.
+/// Appends missing entries without overwriting user content.
+fn ensure_gitignore_has_vendor_dirs(project_dir: &Path) {
+    let gitignore_path = project_dir.join(".gitignore");
+    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+
+    let mut missing = Vec::new();
+    for dir in VENDOR_BUILD_DIRS {
+        let pattern = format!("{}/", dir);
+        if !existing.contains(&pattern) {
+            missing.push(pattern);
+        }
+    }
+
+    if !missing.is_empty() {
+        let mut content = existing;
+        if !content.ends_with('\n') && !content.is_empty() {
+            content.push('\n');
+        }
+        content.push_str("\n# Vendor build directories (auto-added by CovertEDA)\n");
+        for m in missing {
+            content.push_str(&m);
+            content.push('\n');
+        }
+        let _ = std::fs::write(&gitignore_path, content);
+    }
 }
 
 fn format_time_ago(epoch_secs: i64) -> String {
