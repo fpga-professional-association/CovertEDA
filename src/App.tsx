@@ -1,31 +1,33 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, PowerReportData, DrcReportData, IoBankData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
-import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, IP_CATEGORIES, IpCore } from "./data/ipCatalog";
 import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
-import { Btn, NavBtn, Select } from "./components/shared";
+import { Btn, NavBtn } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Term, Key, Settings,
   Play, Stop, Search, Clock, Download,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
-import BuildPipeline from "./components/BuildPipeline";
-import ReportViewer from "./components/ReportViewer";
-import Console from "./components/Console";
-import CommandPalette from "./components/CommandPalette";
 import StartScreen from "./components/StartScreen";
-import FileViewer from "./components/FileViewer";
-
-import SettingsPanel from "./components/SettingsPanel";
+import PerfOverlay from "./components/PerfOverlay";
 import ContextMenu, { ContextMenuItem } from "./components/ContextMenu";
-import AiAssistant from "./components/AiAssistant";
-import ConstraintEditor from "./components/ConstraintEditor";
-import Programmer from "./components/Programmer";
-import BuildHistory from "./components/BuildHistory";
 import type { BuildRecord } from "./components/BuildHistory";
-import Documentation from "./components/Documentation";
-import KeyboardShortcuts from "./components/KeyboardShortcuts";
+
+// Lazy-loaded section components — only fetched when first rendered
+const BuildPipeline = lazy(() => import("./components/BuildPipeline"));
+const ReportViewer = lazy(() => import("./components/ReportViewer"));
+const Console = lazy(() => import("./components/Console"));
+const CommandPalette = lazy(() => import("./components/CommandPalette"));
+const FileViewer = lazy(() => import("./components/FileViewer"));
+const SettingsPanel = lazy(() => import("./components/SettingsPanel"));
+const AiAssistant = lazy(() => import("./components/AiAssistant"));
+const ConstraintEditor = lazy(() => import("./components/ConstraintEditor"));
+const Programmer = lazy(() => import("./components/Programmer"));
+const BuildHistory = lazy(() => import("./components/BuildHistory"));
+const Documentation = lazy(() => import("./components/Documentation"));
+const KeyboardShortcuts = lazy(() => import("./components/KeyboardShortcuts"));
+const IpCatalogSection = lazy(() => import("./components/IpCatalogSection"));
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -48,7 +50,6 @@ import {
   gitIsDirty,
   gitCommit,
   getGitStatus,
-  executeIpGenerate,
   saveBuildRecord,
   getProjectConfigAtHead,
 } from "./hooks/useTauri";
@@ -94,405 +95,6 @@ const FALLBACK_BACKEND: RuntimeBackend = {
   ],
   available: false,
 };
-
-function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAddToSynth }: { backendId: string; projectDir: string; device: string; onRefreshFiles?: () => void; onAddToSynth?: (instanceName: string) => void }) {
-  const { C, MONO } = useTheme();
-  const [ipSearch, setIpSearch] = useState("");
-  const [configuring, setConfiguring] = useState<IpCore | null>(null);
-  const [ipParams, setIpParams] = useState<Record<string, string>>({});
-  const [instanceName, setInstanceName] = useState("u_inst");
-  const [copiedTemplate, setCopiedTemplate] = useState(false);
-  const [tclVisible, setTclVisible] = useState(false);
-  const [genState, setGenState] = useState<"idle" | "preview" | "running" | "done" | "error">("idle");
-  const [genOutput, setGenOutput] = useState<string[]>([]);
-
-  const catalog = useMemo(() => {
-    if (backendId === "quartus") return QUARTUS_IP_CATALOG;
-    if (backendId === "opensource") {
-      const d = device.toUpperCase();
-      if (d.startsWith("ICE40")) return ICE40_IP_CATALOG;
-      if (d.startsWith("GW")) return GOWIN_IP_CATALOG;
-      return OSS_IP_CATALOG; // ECP5 default + Nexus/GateMate/MachXO2
-    }
-    return RADIANT_IP_CATALOG;
-  }, [backendId, device]);
-
-  const filtered = useMemo(() => {
-    if (!ipSearch) return catalog;
-    const q = ipSearch.toLowerCase();
-    return catalog.filter(
-      (ip) => ip.name.toLowerCase().includes(q) || ip.description.toLowerCase().includes(q) || ip.category.toLowerCase().includes(q)
-    );
-  }, [ipSearch, catalog]);
-
-  const grouped = useMemo(() => {
-    const map: Record<string, typeof filtered> = {};
-    for (const cat of IP_CATEGORIES) map[cat] = [];
-    for (const ip of filtered) (map[ip.category] ??= []).push(ip);
-    return Object.entries(map).filter(([, items]) => items.length > 0);
-  }, [filtered]);
-
-  const openConfigurator = useCallback((ip: IpCore) => {
-    setConfiguring(ip);
-    const defaults: Record<string, string> = {};
-    for (const p of ip.params ?? []) defaults[p.key] = p.default;
-    setIpParams(defaults);
-    setInstanceName(`u_${ip.name.toLowerCase().replace(/\s+/g, "_")}`);
-    setCopiedTemplate(false);
-    setTclVisible(false);
-    setGenState("idle");
-    setGenOutput([]);
-  }, []);
-
-  const generateTemplate = useMemo(() => {
-    if (!configuring?.template) return null;
-    let t = configuring.template;
-    for (const [key, val] of Object.entries(ipParams)) {
-      t = t.replace(new RegExp(`\\{${key}\\}`, "g"), val);
-    }
-    t = t.replace(/\{INSTANCE_NAME\}/g, instanceName);
-    return t;
-  }, [configuring, ipParams, instanceName]);
-
-  const copyTemplate = useCallback(() => {
-    if (generateTemplate) {
-      navigator.clipboard.writeText(generateTemplate);
-      setCopiedTemplate(true);
-      setTimeout(() => setCopiedTemplate(false), 2000);
-    }
-  }, [generateTemplate]);
-
-  // Deterministic TCL preview — computed synchronously, no async races
-  const genTcl = useMemo(() => {
-    if (!tclVisible || !configuring) return null;
-    const sortedParams = Object.entries(ipParams)
-      .filter(([, v]) => v)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    const isQuartus = backendId === "quartus";
-    const isVivado = backendId === "vivado";
-    if (isQuartus) {
-      const paramLines = sortedParams.map(([k, v]) => `set_parameter -name ${k} ${v}`).join("\n");
-      return `# IP generation TCL for ${configuring.name}\npackage require ::quartus::project\nset_global_assignment -name IP_COMPONENT "${configuring.name}"\nset_global_assignment -name IP_INSTANCE "${instanceName}"\n${paramLines}\ngenerate_ip "${instanceName}"`;
-    }
-    if (isVivado) {
-      const paramLines = sortedParams.map(([k, v]) => `CONFIG.${k} {${v}}`).join(" \\\n  ");
-      return `# IP generation TCL for ${configuring.name}\ncreate_ip -name ${configuring.name} -vendor xilinx.com -library ip -module_name ${instanceName}\nset_property -dict [list \\\n  ${paramLines} \\\n] [get_ips ${instanceName}]\ngenerate_target all [get_ips ${instanceName}]`;
-    }
-    // Lattice (Radiant/Diamond) and OSS
-    const paramLines = sortedParams
-      .map(([k, v]) => `  -param "${k}:${v}"`)
-      .join(" \\\n");
-    return `# IP generation TCL for ${configuring.name}\nsbp_design new -name "${instanceName}" -family "LIFCL" -device "${device}"\nsbp_configure -component "${configuring.name}" \\\n${paramLines}\nsbp_generate -lang "verilog"\nsbp_save\nsbp_close_design`;
-  }, [tclVisible, configuring, ipParams, instanceName, backendId, device]);
-
-  const handleRunGenerate = useCallback(async () => {
-    if (!genTcl) return;
-    setGenState("running");
-    setGenOutput([]);
-    try {
-      const unlistenStdout = await listen<{ genId: string; line: string }>(
-        "ip:stdout",
-        (data) => setGenOutput((p) => [...p, data.line]),
-      );
-      const unlistenFinished = await listen<{ genId: string; status: string; message: string }>(
-        "ip:finished",
-        (data) => {
-          setGenOutput((p) => [...p, data.message]);
-          setGenState(data.status === "success" ? "done" : "error");
-          unlistenStdout();
-          unlistenFinished();
-        },
-      );
-      await executeIpGenerate(backendId, projectDir, genTcl);
-    } catch (err) {
-      setGenState("error");
-      setGenOutput((p) => [...p, `Error: ${err}`]);
-    }
-  }, [genTcl, backendId, projectDir]);
-
-  const panelP: React.CSSProperties = {
-    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
-  };
-
-  // Full-screen configurator when an IP is selected
-  if (configuring) {
-    return (
-      <div style={{ ...panelP, display: "flex", flexDirection: "column", overflow: "auto" }}>
-        {/* Back button + header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Btn small onClick={() => { setConfiguring(null); setGenState("idle"); setTclVisible(false); setGenOutput([]); }}
-            icon={<span style={{ fontSize: 10 }}>{"\u2190"}</span>}>
-            IP Catalog
-          </Btn>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, flex: 1 }}>
-            {configuring.name}
-          </div>
-          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-            {configuring.category}
-          </span>
-        </div>
-
-        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 12, lineHeight: 1.5 }}>
-          {configuring.description}
-        </div>
-
-        {/* Two-column layout: params on left, template + generation on right */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, flex: 1 }}>
-          {/* Left: Instance Name + Parameters */}
-          <div>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
-                INSTANCE NAME
-              </div>
-              <input
-                value={instanceName}
-                onChange={(e) => setInstanceName(e.target.value)}
-                style={{
-                  width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
-                  background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
-                  outline: "none", boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            {configuring.params?.map((p) => (
-              <div key={p.key} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 3 }}>
-                  {p.label} {p.unit && <span style={{ fontWeight: 400 }}>({p.unit})</span>}
-                </div>
-                {p.type === "select" ? (
-                  <Select
-                    value={ipParams[p.key] ?? p.default}
-                    onChange={(v) => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
-                    options={(p.choices ?? []).map((c) => ({ value: c, label: c }))}
-                    style={{ width: "100%" }}
-                  />
-                ) : p.type === "boolean" ? (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {["true", "false"].map((v) => (
-                      <span
-                        key={v}
-                        onClick={() => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
-                        style={{
-                          padding: "3px 8px", borderRadius: 3, cursor: "pointer",
-                          fontSize: 8, fontFamily: MONO, fontWeight: 600,
-                          border: `1px solid ${(ipParams[p.key] ?? p.default) === v ? C.accent : C.b1}`,
-                          color: (ipParams[p.key] ?? p.default) === v ? C.accent : C.t2,
-                          background: (ipParams[p.key] ?? p.default) === v ? `${C.accent}15` : C.bg,
-                        }}
-                      >
-                        {v === "true" ? "Yes" : "No"}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <input
-                    type={p.type === "number" ? "number" : "text"}
-                    value={ipParams[p.key] ?? p.default}
-                    onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                    min={p.min}
-                    max={p.max}
-                    style={{
-                      width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
-                      background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
-                      outline: "none", boxSizing: "border-box",
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Right: Template + Generation */}
-          <div>
-            {generateTemplate && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
-                    INSTANTIATION
-                  </div>
-                  <span
-                    onClick={copyTemplate}
-                    style={{
-                      fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
-                      background: copiedTemplate ? `${C.ok}15` : `${C.accent}15`,
-                      color: copiedTemplate ? C.ok : C.accent,
-                      fontWeight: 600, cursor: "pointer",
-                    }}
-                  >
-                    {copiedTemplate ? "Copied!" : "Copy"}
-                  </span>
-                </div>
-                <pre style={{
-                  fontSize: 8, fontFamily: MONO, color: C.t1, background: C.bg,
-                  border: `1px solid ${C.b1}`, borderRadius: 4, padding: "8px 10px",
-                  overflow: "auto", maxHeight: 200, lineHeight: 1.5, whiteSpace: "pre-wrap",
-                  margin: 0,
-                }}>
-                  {generateTemplate}
-                </pre>
-              </div>
-            )}
-
-            {configuring.params && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
-                    IP GENERATION
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                  <Btn small onClick={() => { setTclVisible((v) => !v); setGenState((p) => p === "done" ? "done" : tclVisible ? "idle" : "preview"); }} disabled={genState === "running"}>
-                    {tclVisible ? "Hide TCL" : "Preview TCL"}
-                  </Btn>
-                  {genTcl && genState !== "running" && (
-                    <Btn small primary onClick={handleRunGenerate}>
-                      {genState === "done" ? "Re-Generate" : "Generate IP"}
-                    </Btn>
-                  )}
-                  {genState === "done" && (
-                    <>
-                      <span style={{ fontSize: 8, fontFamily: MONO, color: C.ok, fontWeight: 600, alignSelf: "center" }}>
-                        {"\u2713"} Complete
-                      </span>
-                      <Btn small onClick={() => {
-                        onRefreshFiles?.();
-                        onAddToSynth?.(instanceName);
-                        setGenOutput([`IP "${instanceName}" added to project and synthesis flow.`]);
-                      }} style={{ color: C.ok, borderColor: `${C.ok}44` }}>
-                        Add to Synthesis
-                      </Btn>
-                      <Btn small onClick={() => {
-                        onRefreshFiles?.();
-                        setGenOutput([`IP files added to project (not in synthesis).`]);
-                      }}>
-                        Add to Project Only
-                      </Btn>
-                      <Btn small onClick={() => {
-                        setConfiguring(null);
-                        setGenState("idle");
-                        setTclVisible(false);
-                        setGenOutput([]);
-                      }} style={{ color: C.err, borderColor: `${C.err}44` }}>
-                        Discard
-                      </Btn>
-                    </>
-                  )}
-                </div>
-                {genTcl && (
-                  <pre style={{
-                    fontSize: 7, fontFamily: MONO, color: C.t2, background: C.bg,
-                    border: `1px solid ${C.b1}`, borderRadius: 4, padding: "6px 8px",
-                    overflow: "auto", maxHeight: 120, lineHeight: 1.4, whiteSpace: "pre-wrap",
-                    margin: "0 0 6px",
-                  }}>
-                    {genTcl}
-                  </pre>
-                )}
-                {genOutput.length > 0 && (
-                  <div style={{
-                    background: C.bg, borderRadius: 4, padding: "6px 8px",
-                    maxHeight: 120, overflowY: "auto", fontSize: 7, fontFamily: MONO, lineHeight: 1.5,
-                  }}>
-                    {genOutput.map((line, i) => (
-                      <div key={i} style={{ color: line.includes("error") || line.includes("Error") ? C.err : line.includes("complete") ? C.ok : C.t2 }}>
-                        {line}
-                      </div>
-                    ))}
-                    {genState === "running" && (
-                      <div style={{ color: C.accent }}>
-                        <span style={{ animation: "pulse 1s infinite" }}>{"\u25CF"}</span> Running...
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Catalog browsing view
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={panelP}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-          <Box />
-          IP Catalog
-          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
-            {filtered.length} cores
-          </span>
-        </div>
-        <input
-          type="text"
-          value={ipSearch}
-          onChange={(e) => setIpSearch(e.target.value)}
-          placeholder="Search IP cores..."
-          style={{
-            width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
-            background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
-            outline: "none", marginBottom: 10, boxSizing: "border-box",
-          }}
-        />
-        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
-          Click "Configure" on any IP to set parameters and generate instantiation code.
-        </div>
-      </div>
-      {grouped.map(([cat, items]) => (
-        <div key={cat} style={panelP}>
-          <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 8 }}>
-            {cat.toUpperCase()}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
-            {items.map((ip) => (
-              <div
-                key={ip.name}
-                style={{
-                  padding: "8px 10px", background: C.bg, borderRadius: 5,
-                  border: `1px solid ${C.b1}`,
-                  cursor: ip.params ? "pointer" : "default",
-                }}
-                onClick={() => { if (ip.params) openConfigurator(ip); }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1, flex: 1 }}>
-                    {ip.name}
-                  </div>
-                  {ip.params && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); openConfigurator(ip); }}
-                      style={{
-                        fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
-                        background: `${C.accent}15`, color: C.accent, fontWeight: 600, cursor: "pointer",
-                      }}
-                    >
-                      Configure
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
-                  {ip.description}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
-                  {ip.families.map((f) => (
-                    <span key={f} style={{
-                      fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
-                      background: `${C.accent}15`, color: C.accent, fontWeight: 600,
-                    }}>
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function DevicePicker({ backendId, value, onChange, onSelect, onCancel }: {
   backendId: string; value: string;
@@ -593,8 +195,37 @@ function DevicePicker({ backendId, value, onChange, onSelect, onCancel }: {
   );
 }
 
+// ── Startup performance helpers ──
+const perfOnce = new Set<string>();
+function perf(name: string) {
+  if (perfOnce.has(name)) return;
+  perfOnce.add(name);
+  performance.mark(`app:${name}`);
+}
+function perfSummary() {
+  const marks = performance.getEntriesByType("mark")
+    .filter((m) => m.name.startsWith("app:"))
+    .sort((a, b) => a.startTime - b.startTime);
+  if (marks.length === 0) return;
+  const first = marks[0].startTime;
+  const lines = marks.map((m) => {
+    const fromOrigin = Math.round(m.startTime);
+    const fromFirst = Math.round(m.startTime - first);
+    return `  ${m.name.replace("app:", "").padEnd(20)} ${String(fromOrigin).padStart(5)}ms (origin)  +${String(fromFirst).padStart(5)}ms`;
+  });
+  const total = Math.round(marks[marks.length - 1].startTime - first);
+  console.log(
+    `%c[CovertEDA Startup] ${total}ms total\n` +
+    `%c  ${"milestone".padEnd(20)} ${"abs".padStart(5)}          ${"delta".padStart(6)}\n` +
+    lines.join("\n"),
+    "color: #58a6ff; font-weight: bold",
+    "color: #8b949e",
+  );
+}
+
 export default function App() {
   const { C, MONO, SANS, setThemeId, scaleFactor, setScaleFactor } = useTheme();
+  perf("app_render");
 
   // ── View routing ──
   const [view, setView] = useState<AppView>("start");
@@ -643,7 +274,10 @@ export default function App() {
   const [sourcesStale, setSourcesStale] = useState(false);
   const [editingDevice, setEditingDevice] = useState(false);
   const [deviceDraft, setDeviceDraft] = useState("");
-  const [commitModal, setCommitModal] = useState<"checking" | "prompt" | null>(null);
+  const [commitModal, setCommitModal] = useState<"checking" | "prompt" | "committing" | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [perfOverlay, setPerfOverlay] = useState(false);
 
   // ── Build config auto-save state ──
   const [buildSaveStatus, setBuildSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
@@ -668,14 +302,16 @@ export default function App() {
 
   // Load backends and config on mount; restore project if page was reloaded
   useEffect(() => {
+    perf("mount_effect");
     getRuntimeBackends().then((be) => {
+      perf("backends_loaded");
       setBackends(be);
       // Restore project from sessionStorage on reload
       const savedDir = sessionStorage.getItem("coverteda_projectDir");
       if (savedDir && view === "start") {
         openProject(savedDir)
           .then((cfg) => {
-            handleOpenProject(savedDir, cfg);
+            handleOpenProject(savedDir, cfg, be);
           })
           .catch(() => {
             sessionStorage.removeItem("coverteda_projectDir");
@@ -683,6 +319,7 @@ export default function App() {
       }
     });
     getAppConfig().then((cfg) => {
+      perf("config_loaded");
       const tid = cfg.theme as "dark" | "light" | "colorblind";
       if (tid === "dark" || tid === "light" || tid === "colorblind") setThemeId(tid);
       if (cfg.scale_factor >= 0.5 && cfg.scale_factor <= 3.0) setScaleFactor(cfg.scale_factor);
@@ -713,12 +350,14 @@ export default function App() {
     }
   }, []);
 
-  const handleOpenProject = useCallback((dir: string, config: ProjectConfig) => {
+  const handleOpenProject = useCallback((dir: string, config: ProjectConfig, backendsOverride?: RuntimeBackend[]) => {
+    perf("project_open");
+    const resolvedBackends = backendsOverride ?? backends;
     sessionStorage.setItem("coverteda_projectDir", dir);
     setProjectDir(dir);
     setProject(config);
     const backendId = config.backendId;
-    const matchingBackend = backends.find((b) => b.id === backendId);
+    const matchingBackend = resolvedBackends.find((b) => b.id === backendId);
     if (matchingBackend) setBid(backendId);
     setBStep(-1);
     setLogs([]);
@@ -741,18 +380,14 @@ export default function App() {
     getProjectConfigAtHead(dir).then(setHeadConfig).catch(() => setHeadConfig(null));
 
     if (isTauri) {
-      // Ensure the Rust backend registers this as the active project
-      // (required for start_build to find the project config)
-      openProject(dir).catch(() => {});
-
       // Load git status
       getGitStatus(dir)
-        .then((r) => setGitState(mapGitStatus(r)))
+        .then((r) => { perf("git_status_loaded"); setGitState(mapGitStatus(r)); })
         .catch(() => setGitState(null));
 
       // Load real file tree
       getFileTreeMapped(dir).then((files) => {
-        console.log("File tree loaded:", files.length, "entries");
+        perf("file_tree_loaded");
         setRealFiles(files);
         // If report files exist, a previous build was done — load reports
         const implDir = config.implDir || "impl1";
@@ -774,16 +409,20 @@ export default function App() {
           console.log("[Reports] Loading existing reports for", backendId, dir);
           // Use auto-detection to bypass backend ID issues
           autoLoadReports(dir, bName).then((reports) => {
+            perf("reports_loaded");
             if (reports.timing) setRealTimingReport(reports.timing);
             if (reports.utilization) setRealUtilReport(reports.utilization);
             if (reports.power) setRealPowerReport(reports.power);
             if (reports.drc) setRealDrcReport(reports.drc);
+            perfSummary();
           }).catch((e) => console.warn("[Reports] auto-load failed:", e));
           getIoReport(backendId, dir)
             .then((r) => { if (r) setRealIoReport(mapIoReport(r)); })
             .catch((e) => console.warn("[Reports] io load:", e));
           // Check if sources are newer than build outputs
           checkSourcesStale(dir).then(setSourcesStale).catch(() => {});
+        } else {
+          perfSummary();
         }
       }).catch((err) => {
         console.error("File tree scan failed:", err);
@@ -801,6 +440,7 @@ export default function App() {
       }).catch(() => {});
     } else {
       // Browser dev mode: show mock file tree matching the test project
+      perf("file_tree_loaded");
       setRealFiles([
         { n: "source", d: 0, ty: "folder", open: true },
         { n: "count_attr.v", d: 1, ty: "rtl", saved: true, git: "clean", synth: true, lines: 42, lang: "Verilog" },
@@ -810,6 +450,7 @@ export default function App() {
         { n: "counter1.sty", d: 0, ty: "config", saved: true, git: "clean" },
         { n: "build.tcl", d: 0, ty: "config", saved: true, git: "clean" },
       ]);
+      perfSummary();
     }
   }, [backends]);
 
@@ -831,6 +472,7 @@ export default function App() {
   }, []);
 
   const buildCleanup = useRef<(() => void) | null>(null);
+  const commitCancelled = useRef(false);
 
   // Mock build simulation for browser dev mode
   const runMockBuild = useCallback((backend: RuntimeBackend) => {
@@ -1156,23 +798,36 @@ export default function App() {
   }, [B, bid, projectDir, buildStages, buildOptions, startLogFlush, stopLogFlush, runMockBuild]);
 
   const handleCommitAndBuild = useCallback(async () => {
-    setCommitModal(null);
-    if (projectDir && project) {
-      const msg = `Pre-build: ${project.name} ${new Date().toISOString().split("T")[0]}`;
-      try {
-        const hash = await gitCommit(projectDir, msg);
-        setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
-        // Refresh git status and HEAD config after commit
-        getGitStatus(projectDir)
-          .then((r) => setGitState(mapGitStatus(r)))
-          .catch(() => {});
-        getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {});
-      } catch (err) {
-        setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}` }]);
-      }
+    if (!projectDir || !project) { setCommitModal(null); doRunBuild(); return; }
+    commitCancelled.current = false;
+    setCommitModal("committing");
+    setCommitting(true);
+    const msg = `Pre-build: ${project.name} ${new Date().toISOString().split("T")[0]}`;
+    try {
+      const hash = await gitCommit(projectDir, msg);
+      if (commitCancelled.current) { setCommitting(false); return; }
+      setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
+      // Refresh git status and HEAD config in parallel (don't block build start)
+      Promise.all([
+        getGitStatus(projectDir).then((r) => setGitState(mapGitStatus(r))).catch(() => {}),
+        getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {}),
+      ]);
+    } catch (err) {
+      if (commitCancelled.current) { setCommitting(false); return; }
+      setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}` }]);
+    } finally {
+      setCommitting(false);
     }
+    if (commitCancelled.current) return;
+    setCommitModal(null);
     doRunBuild();
   }, [projectDir, project, doRunBuild]);
+
+  const handleCancelCommitAndBuild = useCallback(() => {
+    commitCancelled.current = true;
+    setCommitModal(null);
+    setCommitting(false);
+  }, []);
 
   const handleBuildWithoutCommit = useCallback(() => {
     setCommitModal(null);
@@ -1184,23 +839,24 @@ export default function App() {
       doRunBuild();
       return;
     }
-    // Check if working directory is dirty
-    setCommitModal("checking");
-    try {
-      const dirty = await gitIsDirty(projectDir);
+    // Non-blocking git dirty check — don't block build start on slow IPC
+    gitIsDirty(projectDir).then((dirty) => {
       if (dirty) {
         setCommitModal("prompt");
-        return;
+      } else {
+        setCommitModal(null);
+        doRunBuild();
       }
-    } catch {
+    }).catch(() => {
       // Not a git repo or error — just proceed
-    }
-    setCommitModal(null);
-    doRunBuild();
+      setCommitModal(null);
+      doRunBuild();
+    });
   }, [projectDir, doRunBuild]);
 
   const runClean = useCallback(async () => {
     if (!isTauri || !projectDir) return;
+    setCleaning(true);
     setLogs([{ t: "info", m: "Cleaning build artifacts..." }]);
     setSec("build");
     setBuildDone(false);
@@ -1217,6 +873,8 @@ export default function App() {
       getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
     } catch (err) {
       setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}` }]);
+    } finally {
+      setCleaning(false);
     }
   }, [projectDir]);
 
@@ -1242,16 +900,20 @@ export default function App() {
     if (!projectDir || !project) return;
     const msg = window.prompt("Commit message:", `${project.name}: ${new Date().toISOString().split("T")[0]}`);
     if (!msg) return;
+    setCommitting(true);
     try {
       const hash = await gitCommit(projectDir, msg);
       setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}` }]);
-      // Refresh git status and HEAD config
-      getGitStatus(projectDir)
-        .then((r) => setGitState(mapGitStatus(r)))
-        .catch(() => {});
-      getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {});
+      // Refresh git status, HEAD config, and file tree in parallel
+      Promise.all([
+        getGitStatus(projectDir).then((r) => setGitState(mapGitStatus(r))).catch(() => {}),
+        getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {}),
+        getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}),
+      ]);
     } catch (err) {
       setLogs((p) => [...p, { t: "err" as const, m: `Commit failed: ${err}` }]);
+    } finally {
+      setCommitting(false);
     }
   }, [projectDir, project]);
 
@@ -1316,6 +978,10 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && (e.key === "?" || (e.shiftKey && e.key === "/"))) {
         e.preventDefault();
         setShortcutsOpen((p) => !p);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "P") {
+        e.preventDefault();
+        setPerfOverlay((p) => !p);
       }
       if (e.key === "Escape") {
         setCmdOpen(false);
@@ -1414,7 +1080,10 @@ export default function App() {
     return (
       <>
         <StartScreen onOpenProject={handleOpenProject} onOpenSettings={() => setSettingsOpen(true)} />
-        {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+        <Suspense fallback={null}>
+          {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+        </Suspense>
+        <PerfOverlay visible={perfOverlay} />
       </>
     );
   }
@@ -1464,6 +1133,7 @@ export default function App() {
     { label: "Settings", category: "Project", desc: "Tool paths, theme, zoom", action: () => setSettingsOpen(true) },
     { label: "Toggle File Tree", category: "Project", desc: showFiles ? "Hide files" : "Show files", action: () => setShowFiles((p) => !p) },
     { label: "Keyboard Shortcuts", category: "Project", desc: "Show all shortcuts (Ctrl+?)", action: () => setShortcutsOpen(true) },
+    { label: "Stats for Nerds", category: "Project", desc: "FPS, memory, DOM nodes (Ctrl+Shift+P)", action: () => setPerfOverlay((p) => !p) },
     { label: "Close Project", category: "Project", desc: "Return to start screen", action: handleCloseProject },
   ];
 
@@ -1491,6 +1161,7 @@ export default function App() {
         setGitExpanded={setGitExpanded}
         onRefresh={refreshAll}
         onCommit={handleGitCommit}
+        committing={committing}
         onInit={projectDir ? async () => {
           try {
             const { gitInit } = await import("./hooks/useTauri");
@@ -1503,20 +1174,26 @@ export default function App() {
       />
 
       {/* Command Palette */}
-      <CommandPalette
-        open={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        commands={commands}
-      />
+      <Suspense fallback={null}>
+        <CommandPalette
+          open={cmdOpen}
+          onClose={() => setCmdOpen(false)}
+          commands={commands}
+        />
+      </Suspense>
 
       {/* Settings Panel */}
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      <Suspense fallback={null}>
+        {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      </Suspense>
 
       {/* Keyboard Shortcuts */}
-      {shortcutsOpen && <KeyboardShortcuts onClose={() => setShortcutsOpen(false)} />}
+      <Suspense fallback={null}>
+        {shortcutsOpen && <KeyboardShortcuts onClose={() => setShortcutsOpen(false)} />}
+      </Suspense>
 
       {/* Pre-Build Commit Modal */}
-      {commitModal === "prompt" && (
+      {(commitModal === "prompt" || commitModal === "committing") && (
         <div
           style={{
             position: "fixed",
@@ -1528,7 +1205,7 @@ export default function App() {
             zIndex: 1001,
             fontFamily: SANS,
           }}
-          onClick={() => setCommitModal(null)}
+          onClick={() => { if (commitModal === "prompt") setCommitModal(null); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -1541,16 +1218,34 @@ export default function App() {
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
-              Uncommitted Changes
+              {commitModal === "committing" ? "Committing\u2026" : "Uncommitted Changes"}
             </div>
             <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, marginBottom: 16, lineHeight: 1.5 }}>
-              You have uncommitted changes. Committing before building lets you link
-              each build to a specific source state and easily return to it later.
+              {commitModal === "committing"
+                ? "Staging files and creating commit. This may take a moment for large repositories."
+                : "You have uncommitted changes. Committing before building lets you link each build to a specific source state and easily return to it later."}
             </div>
+            {commitModal === "committing" && (
+              <div style={{
+                height: 3, borderRadius: 2, background: C.bg, marginBottom: 16, overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%", borderRadius: 2, background: C.accent,
+                  animation: "commitProgress 1.5s ease-in-out infinite",
+                }} />
+                <style>{`@keyframes commitProgress { 0% { width: 0%; margin-left: 0%; } 50% { width: 60%; margin-left: 20%; } 100% { width: 0%; margin-left: 100%; } }`}</style>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <Btn small onClick={() => setCommitModal(null)}>Cancel</Btn>
-              <Btn small onClick={handleBuildWithoutCommit}>Build Without Committing</Btn>
-              <Btn small primary onClick={handleCommitAndBuild}>Commit & Build</Btn>
+              {commitModal === "committing" ? (
+                <Btn small onClick={handleCancelCommitAndBuild}>Cancel</Btn>
+              ) : (
+                <>
+                  <Btn small onClick={() => setCommitModal(null)}>Cancel</Btn>
+                  <Btn small onClick={handleBuildWithoutCommit}>Build Without Committing</Btn>
+                  <Btn small primary onClick={handleCommitAndBuild}>Commit & Build</Btn>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1611,6 +1306,7 @@ export default function App() {
           <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minHeight: 0 }}>
             <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
             <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
+            <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
             <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
             <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
             <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
@@ -1618,7 +1314,6 @@ export default function App() {
             <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
             <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
-            <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
@@ -1660,6 +1355,8 @@ export default function App() {
             onRefresh={refreshAll}
             onToggleSynth={handleToggleSynth}
             projectDir={projectDir}
+            device={project?.device ?? B.defaultDev}
+            onDeviceClick={() => { if (project) { setDeviceDraft(project.device); setEditingDevice(true); } }}
             onFileContextMenu={(file, x, y) => {
               const isSynthable = file.ty === "rtl" || file.ty === "tb" || file.ty === "constr";
               const items: ContextMenuItem[] = file.ty === "folder"
@@ -1737,41 +1434,6 @@ export default function App() {
             <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 600, color: C.t1 }}>
               {project ? project.name : B.name}
             </span>
-            {editingDevice ? (
-              <DevicePicker
-                backendId={bid}
-                value={deviceDraft}
-                onChange={setDeviceDraft}
-                onSelect={(part) => {
-                  if (part && project && projectDir) {
-                    const updated = { ...project, device: part };
-                    setProject(updated);
-                    setEditingDevice(false);
-                    saveProject(projectDir, updated).catch(() => {});
-                  }
-                }}
-                onCancel={() => setEditingDevice(false)}
-              />
-            ) : (
-              <span
-                onClick={() => {
-                  if (project) {
-                    setDeviceDraft(project.device);
-                    setEditingDevice(true);
-                  }
-                }}
-                style={{
-                  color: C.t3,
-                  fontSize: 9,
-                  fontFamily: MONO,
-                  cursor: project ? "pointer" : "default",
-                  borderBottom: project ? `1px dashed ${C.t3}40` : "none",
-                }}
-                title={project ? "Click to change device/part" : undefined}
-              >
-                {"\u2192"} {project ? project.device : B.defaultDev}
-              </span>
-            )}
             {sourcesStale && (
               <span
                 style={{
@@ -1786,23 +1448,6 @@ export default function App() {
                 title="Source files changed since last build"
               >
                 STALE
-              </span>
-            )}
-            {projectDir && (
-              <span
-                style={{
-                  color: C.t3,
-                  fontSize: 8,
-                  fontFamily: MONO,
-                  opacity: 0.6,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  maxWidth: 200,
-                }}
-                title={projectDir}
-              >
-                {projectDir}
               </span>
             )}
             <div style={{ flex: 1 }} />
@@ -1835,20 +1480,21 @@ export default function App() {
                 {"\u2318K"}
               </span>
             </div>
-            <Btn small onClick={runClean} disabled={building}>
-              Clean
+            <Btn small onClick={runClean} disabled={building || cleaning}>
+              {cleaning ? "Cleaning\u2026" : "Clean"}
             </Btn>
             {building ? (
               <Btn small icon={<Stop />} onClick={runCancel} style={{ background: "#e5534b22", color: "#e5534b", border: "1px solid #e5534b44" }}>
                 Cancel
               </Btn>
             ) : (
-              <Btn primary small icon={<Play />} onClick={runBuild}>
+              <Btn primary small icon={<Play />} onClick={runBuild} disabled={cleaning}>
                 Build
               </Btn>
             )}
           </div>
 
+          <Suspense fallback={null}>
           <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
             {/* File Viewer (overrides section content) */}
             {viewingFile && (
@@ -2103,8 +1749,27 @@ export default function App() {
               </div>
             )}
           </div>
+          </Suspense>
         </div>
       </div>
+      {/* Device picker overlay */}
+      {editingDevice && project && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1500, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 120, background: "rgba(0,0,0,0.5)" }}>
+          <DevicePicker
+            backendId={bid}
+            value={deviceDraft}
+            onChange={setDeviceDraft}
+            onSelect={(part) => {
+              const updated = { ...project, device: part };
+              setProject(updated);
+              setEditingDevice(false);
+              if (projectDir) saveProject(projectDir, updated).catch(() => {});
+            }}
+            onCancel={() => setEditingDevice(false)}
+          />
+        </div>
+      )}
+      <PerfOverlay visible={perfOverlay} />
     </div>
   );
 }

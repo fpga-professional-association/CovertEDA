@@ -3,24 +3,12 @@ import { ProjectFile } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 import { Refresh } from "./Icons";
+import { openInFileManager } from "../hooks/useTauri";
 
 /** Truncate a path to show the right side with ... at the front */
 function truncatePath(path: string, maxChars: number = 40): string {
   if (path.length <= maxChars) return path;
   return "..." + path.slice(-(maxChars - 3));
-}
-
-/** Open a directory in the system file manager */
-async function openInExplorer(dir: string) {
-  try {
-    const isTauri = "__TAURI_INTERNALS__" in window;
-    if (isTauri) {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(dir);
-    }
-  } catch {
-    // Silently fail in browser mode
-  }
 }
 
 // Git status tooltip text
@@ -395,9 +383,11 @@ interface FileTreeProps {
   width: number;
   onWidthChange: (w: number) => void;
   projectDir?: string;
+  device?: string;
+  onDeviceClick?: () => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, onDeviceClick }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -621,7 +611,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
           </div>
           <span
             title="Open project location"
-            onClick={() => openInExplorer(projectDir)}
+            onClick={() => openInFileManager(projectDir)}
             style={{
               fontSize: 10,
               cursor: "pointer",
@@ -633,7 +623,43 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.accent; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
           >
-            {"\uD83D\uDCC2"}
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M2 3h4l1.5 1.5H12a1 1 0 011 1V11a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" />
+            </svg>
+          </span>
+        </div>
+      )}
+
+      {/* Device / Part */}
+      {device && (
+        <div
+          style={{
+            padding: "3px 10px",
+            borderBottom: `1px solid ${C.b1}`,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600, letterSpacing: 0.3 }}>
+            DEVICE
+          </span>
+          <span
+            onClick={onDeviceClick}
+            style={{
+              fontSize: 8,
+              fontFamily: MONO,
+              color: C.accent,
+              fontWeight: 600,
+              cursor: onDeviceClick ? "pointer" : "default",
+              borderBottom: onDeviceClick ? `1px dashed ${C.accent}40` : "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={onDeviceClick ? "Click to change device/part" : device}
+          >
+            {device}
           </span>
         </div>
       )}

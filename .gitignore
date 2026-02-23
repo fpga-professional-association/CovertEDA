@@ -30,9 +30,62 @@ Thumbs.db
 *.swo
 *~
 
-# Build artifacts
+# Build artifacts (all vendors)
 *.jed
 *.bit
 *.sof
 *.bin
 *.svf
+*.acxbit
+*.rbf
+*.pof
+
+# Quartus (Intel/Altera)
+db/
+dni/
+incremental_db/
+output_files/
+qdb/
+tmp/
+*.qws
+*.rpt
+*.done
+*.summary
+*.smsg
+*.jdi
+*.pin
+*.sld
+*.qpf
+*.qsf
+greybox_tmp/
+simulation/
+*.dpf
+*.bak
+
+# Radiant (Lattice)
+impl*/
+*.dir/
+*.log
+synlog.srp
+*.twr
+*.mrp
+*.par
+*.rdf
+*.sty
+
+# Vivado (AMD/Xilinx)
+*.runs/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.xpr
+*.xsa
+*.ltx
+*.dcp
+.Xil/
+
+# OSS CAD Suite
+build/
+
+# CovertEDA build temp
+.coverteda_build.tcl

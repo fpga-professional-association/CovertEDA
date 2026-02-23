@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, Select } from "./shared";
@@ -829,7 +829,7 @@ export default memo(function BuildPipeline({
   building,
   buildStep,
   buildFailed,
-  logs: _logs,
+  logs,
   activeStage,
   onStageClick,
   selectedStages,
@@ -847,6 +847,29 @@ export default memo(function BuildPipeline({
   const B = backend;
   const allDone = !building && !buildFailed && buildStep >= B.pipeline.length && buildStep >= 0;
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
+
+  // Extract key error messages from build log for the failure banner
+  const buildErrors = useMemo(() => {
+    if (!buildFailed || !logs.length) return [];
+    const errors: string[] = [];
+    for (let i = logs.length - 1; i >= 0 && errors.length < 5; i--) {
+      const l = logs[i];
+      if (l.t !== "err" && l.t !== "out") continue;
+      const m = l.m.trim();
+      // Skip generic/noise lines
+      if (!m || m.startsWith("Info:") || m.startsWith("Info ")) continue;
+      if (/^(while executing|Error:|Error \()/.test(m) || /^\(file /.test(m)) {
+        // Only keep substantive error lines (with error codes or meaningful text)
+        if (/Error \(\d+\)/.test(m)) {
+          errors.push(m);
+        } else if (/^Error:.*unsuccessful/i.test(m) || /^Error:.*failed/i.test(m)) {
+          errors.push(m);
+        }
+      }
+    }
+    // Deduplicate
+    return [...new Set(errors)].slice(0, 3);
+  }, [buildFailed, logs]);
 
   const panel: React.CSSProperties = {
     background: C.s1,
@@ -1101,16 +1124,30 @@ export default memo(function BuildPipeline({
               background: C.errDim,
               borderRadius: 6,
               border: `1px solid ${C.err}40`,
-              fontSize: 11,
               fontFamily: MONO,
-              color: C.err,
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              fontWeight: 700,
             }}
           >
-            {"\u2717"} BUILD FAILED — check the output log for errors
+            <div style={{ fontSize: 11, color: C.err, fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
+              {"\u2717"} BUILD FAILED
+            </div>
+            {buildErrors.length > 0 ? (
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                {buildErrors.map((e, i) => (
+                  <div key={i} style={{
+                    fontSize: 9, color: C.t1, lineHeight: 1.5,
+                    padding: "3px 8px", borderRadius: 3,
+                    background: `${C.err}10`, borderLeft: `2px solid ${C.err}`,
+                    wordBreak: "break-word",
+                  }}>
+                    {e}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 9, color: C.t2, marginTop: 4 }}>
+                Check the output log for error details.
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@ interface GitStatusBarProps {
   onRefresh?: () => void;
   onCommit?: () => void;
   onInit?: () => void;
+  committing?: boolean;
 }
 
 export default function GitStatusBar({
@@ -23,6 +24,7 @@ export default function GitStatusBar({
   onRefresh,
   onCommit,
   onInit,
+  committing,
 }: GitStatusBarProps) {
   const { C, MONO } = useTheme();
   // Minimal bar when no git data
@@ -162,8 +164,8 @@ export default function GitStatusBar({
           </span>
         )}
         {onCommit && git.dirty && (
-          <Btn small onClick={onCommit} style={{ padding: "1px 6px", fontSize: 8, color: C.ok, borderColor: `${C.ok}44` }}>
-            Commit
+          <Btn small onClick={onCommit} disabled={committing} style={{ padding: "1px 6px", fontSize: 8, color: C.ok, borderColor: `${C.ok}44` }}>
+            {committing ? "Committing\u2026" : "Commit"}
           </Btn>
         )}
         <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>

@@ -31,8 +31,12 @@ impl Default for AppState {
 }
 
 #[tauri::command]
-pub fn get_file_tree(project_dir: String) -> Result<Vec<FileEntry>, String> {
-    crate::files::scan_directory(&PathBuf::from(project_dir)).map_err(|e| e.to_string())
+pub async fn get_file_tree(project_dir: String) -> Result<Vec<FileEntry>, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::files::scan_directory(&PathBuf::from(project_dir)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -98,18 +102,30 @@ pub fn read_build_log(project_dir: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn get_git_status(project_dir: String) -> Result<GitStatus, String> {
-    crate::git::get_status(&PathBuf::from(project_dir)).map_err(|e| e.to_string())
+pub async fn get_git_status(project_dir: String) -> Result<GitStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::get_status(&PathBuf::from(project_dir)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn git_is_dirty(project_dir: String) -> Result<bool, String> {
-    crate::git::is_dirty(&PathBuf::from(project_dir))
+pub async fn git_is_dirty(project_dir: String) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::is_dirty(&PathBuf::from(project_dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn git_commit(project_dir: String, message: String) -> Result<String, String> {
-    crate::git::commit_all(&PathBuf::from(project_dir), &message)
+pub async fn git_commit(project_dir: String, message: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::commit_all(&PathBuf::from(project_dir), &message)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -798,45 +814,97 @@ pub fn start_build(
 }
 
 #[tauri::command]
-pub fn clean_build(project_dir: String) -> Result<u32, String> {
-    let project_path = PathBuf::from(&project_dir);
-    let mut removed = 0u32;
+pub async fn clean_build(project_dir: String) -> Result<u32, String> {
+    tokio::task::spawn_blocking(move || {
+        let project_path = PathBuf::from(&project_dir);
+        let mut removed = 0u32;
 
-    // Remove impl directories (impl1/, impl2/, etc.)
-    if let Ok(entries) = std::fs::read_dir(&project_path) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("impl") && entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                if let Ok(_) = std::fs::remove_dir_all(entry.path()) {
+        // Remove impl directories (impl1/, impl2/, etc.) — Lattice Diamond/Radiant
+        if let Ok(entries) = std::fs::read_dir(&project_path) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("impl") && entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    if std::fs::remove_dir_all(entry.path()).is_ok() {
+                        removed += 1;
+                    }
+                }
+            }
+        }
+
+        // Remove OSS build/ directory
+        let oss_build = project_path.join("build");
+        if oss_build.exists() && oss_build.is_dir() {
+            if std::fs::remove_dir_all(&oss_build).is_ok() {
+                removed += 1;
+            }
+        }
+
+        // Remove Quartus build directories
+        for dir_name in &["db", "dni", "incremental_db", "output_files", "qdb", "tmp", "greybox_tmp", "simulation"] {
+            let p = project_path.join(dir_name);
+            if p.exists() && p.is_dir() {
+                if std::fs::remove_dir_all(&p).is_ok() {
                     removed += 1;
                 }
             }
         }
-    }
 
-    // Remove OSS build/ directory
-    let oss_build = project_path.join("build");
-    if oss_build.exists() && oss_build.is_dir() {
-        if std::fs::remove_dir_all(&oss_build).is_ok() {
-            removed += 1;
+        // Remove Quartus generated files
+        if let Ok(entries) = std::fs::read_dir(&project_path) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let is_quartus = name.ends_with(".qpf") || name.ends_with(".qsf")
+                    || name.ends_with(".qws") || name.ends_with(".done")
+                    || name.ends_with(".summary") || name.ends_with(".smsg")
+                    || name.ends_with(".jdi") || name.ends_with(".pin")
+                    || name.ends_with(".sld") || name.ends_with(".dpf")
+                    || name.ends_with(".bak");
+                if is_quartus && entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                    if std::fs::remove_file(entry.path()).is_ok() {
+                        removed += 1;
+                    }
+                }
+            }
         }
-    }
 
-    // Remove build artifacts in project root
-    let artifacts = [
-        ".coverteda_build.tcl",
-        ".coverteda_build.sh",
-        ".coverteda_build.log",
-    ];
-    for name in &artifacts {
-        let p = project_path.join(name);
-        if p.exists() {
-            let _ = std::fs::remove_file(&p);
-            removed += 1;
+        // Remove Vivado build directories
+        for suffix in &[".runs", ".cache", ".hw", ".ip_user_files"] {
+            if let Ok(entries) = std::fs::read_dir(&project_path) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.ends_with(suffix) && entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        if std::fs::remove_dir_all(entry.path()).is_ok() {
+                            removed += 1;
+                        }
+                    }
+                }
+            }
         }
-    }
+        let xil_dir = project_path.join(".Xil");
+        if xil_dir.exists() && xil_dir.is_dir() {
+            if std::fs::remove_dir_all(&xil_dir).is_ok() {
+                removed += 1;
+            }
+        }
 
-    Ok(removed)
+        // Remove build artifacts in project root
+        let artifacts = [
+            ".coverteda_build.tcl",
+            ".coverteda_build.sh",
+            ".coverteda_build.log",
+        ];
+        for name in &artifacts {
+            let p = project_path.join(name);
+            if p.exists() {
+                let _ = std::fs::remove_file(&p);
+                removed += 1;
+            }
+        }
+
+        Ok(removed)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1232,38 +1300,42 @@ pub fn save_project(
 }
 
 #[tauri::command]
-pub fn get_project_config_at_head(dir: String) -> Result<Option<ProjectConfig>, String> {
-    let project_dir = std::path::Path::new(&dir);
-    let repo = match git2::Repository::discover(project_dir) {
-        Ok(r) => r,
-        Err(_) => return Ok(None), // Not a git repo
-    };
-    let head = match repo.head() {
-        Ok(h) => h,
-        Err(_) => return Ok(None), // No commits yet
-    };
-    let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
-    let tree = commit.tree().map_err(|e| e.to_string())?;
+pub async fn get_project_config_at_head(dir: String) -> Result<Option<ProjectConfig>, String> {
+    tokio::task::spawn_blocking(move || {
+        let project_dir = std::path::Path::new(&dir);
+        let repo = match git2::Repository::discover(project_dir) {
+            Ok(r) => r,
+            Err(_) => return Ok(None), // Not a git repo
+        };
+        let head = match repo.head() {
+            Ok(h) => h,
+            Err(_) => return Ok(None), // No commits yet
+        };
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        let tree = commit.tree().map_err(|e| e.to_string())?;
 
-    // Find .coverteda relative to repo root
-    let repo_root = repo.workdir().ok_or("Bare repo")?;
-    let relative = project_dir
-        .strip_prefix(repo_root)
-        .unwrap_or(std::path::Path::new(""));
-    let config_path = relative.join(".coverteda");
+        // Find .coverteda relative to repo root
+        let repo_root = repo.workdir().ok_or("Bare repo".to_string())?;
+        let relative = project_dir
+            .strip_prefix(repo_root)
+            .unwrap_or(std::path::Path::new(""));
+        let config_path = relative.join(".coverteda");
 
-    let entry = match tree.get_path(&config_path) {
-        Ok(e) => e,
-        Err(_) => return Ok(None), // File not in HEAD
-    };
-    let blob = repo
-        .find_blob(entry.id())
-        .map_err(|e| e.to_string())?;
-    let content = std::str::from_utf8(blob.content())
-        .map_err(|e| e.to_string())?;
-    let config: ProjectConfig =
-        serde_json::from_str(content).map_err(|e| e.to_string())?;
-    Ok(Some(config))
+        let entry = match tree.get_path(&config_path) {
+            Ok(e) => e,
+            Err(_) => return Ok(None), // File not in HEAD
+        };
+        let blob = repo
+            .find_blob(entry.id())
+            .map_err(|e| e.to_string())?;
+        let content = std::str::from_utf8(blob.content())
+            .map_err(|e| e.to_string())?;
+        let config: ProjectConfig =
+            serde_json::from_str(content).map_err(|e| e.to_string())?;
+        Ok(Some(config))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2292,6 +2364,69 @@ pub fn delete_directory(path: String, state: State<'_, AppState>) -> Result<(), 
 #[tauri::command]
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn open_in_file_manager(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // On WSL, try explorer.exe first (opens Windows Explorer)
+        if std::fs::read_to_string("/proc/version")
+            .unwrap_or_default()
+            .contains("microsoft")
+        {
+            // Convert WSL path to Windows path for /mnt/c/... paths
+            let win_path = if path.starts_with("/mnt/") {
+                let trimmed = path.strip_prefix("/mnt/").unwrap();
+                let drive = &trimmed[..1];
+                let rest = &trimmed[1..];
+                format!("{}:{}", drive.to_uppercase(), rest.replace('/', "\\"))
+            } else {
+                // Use wslpath for non-/mnt/ paths
+                match std::process::Command::new("wslpath")
+                    .args(["-w", &path])
+                    .output()
+                {
+                    Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
+                    Err(_) => path.clone(),
+                }
+            };
+            return std::process::Command::new("explorer.exe")
+                .arg(&win_path)
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| format!("Failed to open explorer.exe: {}", e));
+        }
+        // Native Linux: use xdg-open
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
 }
 
 #[tauri::command]

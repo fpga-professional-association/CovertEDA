@@ -10,7 +10,7 @@ import {
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn } from "./shared";
 import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download } from "./Icons";
-import { getRawReport } from "../hooks/useTauri";
+import { getRawReport, writeTextFile } from "../hooks/useTauri";
 import TimingAnalyzer from "./TimingAnalyzer";
 
 // ── Inline SVG Visualizations (no external chart libs) ──
@@ -487,16 +487,25 @@ export default function ReportViewer({
       return;
     }
 
-    const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportMsg(`Exported ${filename}`);
-    setTimeout(() => setExportMsg(null), 2000);
-  }, [rptTab, REPORTS]);
+    const filePath = projectDir ? `${projectDir}/${filename}` : filename;
+    writeTextFile(filePath, content)
+      .then(() => {
+        setExportMsg(`Saved ${filename} to project`);
+        setTimeout(() => setExportMsg(null), 3000);
+      })
+      .catch(() => {
+        // Fallback to browser download if writeTextFile fails
+        const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        setExportMsg(`Downloaded ${filename}`);
+        setTimeout(() => setExportMsg(null), 3000);
+      });
+  }, [rptTab, REPORTS, projectDir]);
 
   const panel: React.CSSProperties = {
     background: C.s1,

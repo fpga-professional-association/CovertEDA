@@ -72,6 +72,7 @@ pub fn run() {
             commands::import_makefile,
             commands::export_makefile,
             commands::git_init,
+            commands::open_in_file_manager,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

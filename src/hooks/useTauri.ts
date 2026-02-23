@@ -829,3 +829,14 @@ export async function programDevice(
 ): Promise<string> {
   return invoke<string>("program_device", { bitstream, device, cablePort, operation });
 }
+
+// ── File manager ──
+
+export async function openInFileManager(path: string): Promise<void> {
+  if (!isTauri) {
+    // Browser fallback: copy path to clipboard
+    try { await navigator.clipboard.writeText(path); } catch { /* ignore */ }
+    return;
+  }
+  return invoke<void>("open_in_file_manager", { path });
+}
