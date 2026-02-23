@@ -2599,25 +2599,47 @@ const REPORT_SUFFIXES: &[&str] = &[
 pub async fn list_report_files(project_dir: String) -> Result<Vec<ReportFileEntry>, String> {
     tokio::task::spawn_blocking(move || {
         let project_path = PathBuf::from(&project_dir);
-        let search_dirs = vec![
-            project_path.join("impl1"),
-            project_path.join("output_files"),
-            project_path.join("build"),
-            project_path.join("output"),
-        ];
+        // Scan project root + common vendor output subdirectories
+        let mut search_dirs = vec![project_path.clone()];
+        for sub in &["impl1", "output_files", "build", "output"] {
+            search_dirs.push(project_path.join(sub));
+        }
+
+        let skip_dirs: std::collections::HashSet<&str> = [
+            "db", "dni", "qdb", "incremental_db", "greybox_tmp",
+            "simulation", ".git", "node_modules", "target", "source",
+        ].iter().copied().collect();
 
         let mut files = Vec::new();
+        let mut seen_paths = std::collections::HashSet::new();
 
         for dir in &search_dirs {
             if !dir.exists() {
                 continue;
             }
-            let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
-            for entry in entries.filter_map(|e| e.ok()) {
+            // Recurse up to depth 3 (covers e.g. output_files/timing/ or impl1/report/)
+            for entry in walkdir::WalkDir::new(dir)
+                .max_depth(3)
+                .into_iter()
+                .filter_entry(|e| {
+                    if e.file_type().is_dir() {
+                        let name = e.file_name().to_str().unwrap_or("");
+                        return !skip_dirs.contains(name);
+                    }
+                    true
+                })
+                .filter_map(|e| e.ok())
+            {
                 let path = entry.path();
                 if !path.is_file() {
                     continue;
                 }
+                // Deduplicate since project root overlaps with subdirs
+                let abs = path.to_path_buf();
+                if !seen_paths.insert(abs.clone()) {
+                    continue;
+                }
+
                 let name = path.file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
@@ -2634,7 +2656,10 @@ pub async fn list_report_files(project_dir: String) -> Result<Vec<ReportFileEntr
                     continue;
                 }
 
-                let metadata = entry.metadata().map_err(|e| e.to_string())?;
+                let metadata = match entry.metadata() {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
                 let modified_epoch_ms = metadata.modified()
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())

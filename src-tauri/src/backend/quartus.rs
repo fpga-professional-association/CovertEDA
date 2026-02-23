@@ -102,25 +102,34 @@ impl QuartusBackend {
 
     /// Search for a Quartus/Intel FlexLM license file.
     pub fn find_license(&self) -> Option<PathBuf> {
-        // 1. Check QUARTUS_LICENSE_FILE env var first (Intel-specific)
-        if let Ok(lic_path) = std::env::var("QUARTUS_LICENSE_FILE") {
-            let p = PathBuf::from(&lic_path);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-
-        // 2. Check LM_LICENSE_FILE env var
-        if let Ok(lic_path) = std::env::var("LM_LICENSE_FILE") {
-            let p = PathBuf::from(&lic_path);
-            if p.exists() {
-                if let Ok(content) = std::fs::read_to_string(&p) {
-                    if Self::looks_like_quartus_license(&content) {
-                        return Some(p);
+        // Helper: split FlexLM env var by path separator and check each entry
+        let check_env_paths = |var: &str| -> Option<PathBuf> {
+            if let Ok(val) = std::env::var(var) {
+                let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
+                for part in val.split(sep) {
+                    let part = part.trim();
+                    if part.is_empty() || part.contains('@') {
+                        continue; // skip port@host server specs
+                    }
+                    let p = PathBuf::from(part);
+                    if p.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            if Self::looks_like_quartus_license(&content) {
+                                return Some(p);
+                            }
+                        }
                     }
                 }
             }
-        }
+            None
+        };
+
+        // 1. Intel-specific env vars
+        if let Some(p) = check_env_paths("QUARTUS_LICENSE_FILE") { return Some(p); }
+        if let Some(p) = check_env_paths("ALTERAD_LICENSE_FILE") { return Some(p); }
+
+        // 2. Generic FlexLM env var (may contain multiple paths)
+        if let Some(p) = check_env_paths("LM_LICENSE_FILE") { return Some(p); }
 
         // 3. Check inside the Quartus installation directory
         if let Some(install) = &self.install_dir {
@@ -139,38 +148,71 @@ impl QuartusBackend {
                     }
                 }
             }
+            // Also check parent directory (e.g. /mnt/c/altera_pro/25.3/licenses/)
+            if let Some(parent) = install.parent() {
+                let parent_lic = parent.join("licenses");
+                if parent_lic.exists() {
+                    if let Ok(entries) = std::fs::read_dir(&parent_lic) {
+                        for entry in entries.filter_map(|e| e.ok()) {
+                            let path = entry.path();
+                            if path.extension().map(|e| e == "dat" || e == "lic").unwrap_or(false) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    if Self::looks_like_quartus_license(&content) {
+                                        return Some(path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // 4. Common license file locations
-        let candidates: Vec<Option<PathBuf>> = if cfg!(target_os = "windows") {
-            vec![
-                dirs::home_dir().map(|h| h.join("license.dat")),
-                Some(PathBuf::from(r"C:\license.dat")),
-                Some(PathBuf::from(r"C:\flexlm\license.dat")),
-            ]
-        } else {
-            vec![
-                // WSL: Windows user home
-                Some(PathBuf::from("/mnt/c/Users"))
-                    .and_then(|p| {
-                        std::fs::read_dir(&p)
-                            .ok()?
-                            .filter_map(|e| e.ok())
-                            .find(|e| {
-                                e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
-                                    && e.file_name() != "Public"
-                                    && e.file_name() != "Default"
-                                    && e.file_name() != "Default User"
-                                    && e.file_name() != "All Users"
-                            })
-                            .map(|e| e.path().join("license.dat"))
-                    }),
-                dirs::home_dir().map(|h| h.join("license.dat")),
-                Some(PathBuf::from("/opt/flexlm/license.dat")),
-            ]
-        };
+        let mut candidates: Vec<PathBuf> = vec![];
 
-        for candidate in candidates.into_iter().flatten() {
+        if cfg!(target_os = "windows") {
+            if let Some(h) = dirs::home_dir() { candidates.push(h.join("license.dat")); }
+            candidates.push(PathBuf::from(r"C:\license.dat"));
+            candidates.push(PathBuf::from(r"C:\flexlm\license.dat"));
+        } else {
+            // WSL: scan all Windows user homes for license files
+            if let Ok(entries) = std::fs::read_dir("/mnt/c/Users") {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let name = entry.file_name();
+                    let n = name.to_str().unwrap_or("");
+                    if n == "Public" || n == "Default" || n == "Default User" || n == "All Users" {
+                        continue;
+                    }
+                    if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        candidates.push(entry.path().join("license.dat"));
+                    }
+                }
+            }
+            // WSL: scan common Quartus install paths
+            for base in &["/mnt/c/intelFPGA_pro", "/mnt/c/intelFPGA", "/mnt/c/altera_pro", "/mnt/c/altera"] {
+                if let Ok(entries) = std::fs::read_dir(base) {
+                    for entry in entries.filter_map(|e| e.ok()) {
+                        let ver_dir = entry.path();
+                        let lic_dir = ver_dir.join("licenses");
+                        if lic_dir.exists() {
+                            if let Ok(lic_entries) = std::fs::read_dir(&lic_dir) {
+                                for le in lic_entries.filter_map(|e| e.ok()) {
+                                    let p = le.path();
+                                    if p.extension().map(|e| e == "dat" || e == "lic").unwrap_or(false) {
+                                        candidates.push(p);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(h) = dirs::home_dir() { candidates.push(h.join("license.dat")); }
+            candidates.push(PathBuf::from("/opt/flexlm/license.dat"));
+        }
+
+        for candidate in candidates {
             if candidate.exists() {
                 if let Ok(content) = std::fs::read_to_string(&candidate) {
                     if Self::looks_like_quartus_license(&content) {

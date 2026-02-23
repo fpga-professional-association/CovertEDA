@@ -431,6 +431,7 @@ export interface AppConfig {
   theme: string;
   scale_factor: number;
   license_file: string | null;
+  license_files: Record<string, string>;
   ai_api_key: string | null;
   ai_model: string | null;
   ai_provider: string | null;
@@ -446,6 +447,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       theme: "dark",
       scale_factor: 1.0,
       license_file: null,
+      license_files: {},
       ai_api_key: null,
       ai_model: null,
       ai_provider: null,

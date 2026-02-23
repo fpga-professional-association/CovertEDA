@@ -156,16 +156,34 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
     });
   }, [setScaleFactor, save]);
 
-  const handleLicenseFileBrowse = useCallback(async () => {
+  const handleLicenseFileBrowse = useCallback(async (vendor: string) => {
     const picked = await pickFile([{ name: "License", extensions: ["dat", "lic", "txt"] }]);
     if (picked) {
       setConfig((prev) => {
         if (!prev) return prev;
-        const updated = { ...prev, license_file: picked };
+        const updated = {
+          ...prev,
+          license_files: { ...(prev.license_files ?? {}), [vendor]: picked },
+        };
         save(updated);
         return updated;
       });
     }
+  }, [save]);
+
+  const updateLicenseFile = useCallback((vendor: string, value: string) => {
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const lf = { ...(prev.license_files ?? {}) };
+      if (value) {
+        lf[vendor] = value;
+      } else {
+        delete lf[vendor];
+      }
+      const updated = { ...prev, license_files: lf };
+      save(updated);
+      return updated;
+    });
   }, [save]);
 
   const label: React.CSSProperties = {
@@ -322,31 +340,31 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
 
-        {/* ── License ── */}
+        {/* ── License Files ── */}
         <div style={{ ...sectionTitle, marginTop: 8 }}>
           <span style={{ color: C.warn }}>{"\u25CF"}</span>
-          License
+          License Files
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <span style={label}>LICENSE FILE</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Input
-              value={config?.license_file ?? ""}
-              onChange={(v) => {
-                setConfig((prev) => {
-                  if (!prev) return prev;
-                  const updated = { ...prev, license_file: v || null };
-                  save(updated);
-                  return updated;
-                });
-              }}
-              placeholder="Auto-detect"
-              style={{ flex: 1 }}
-            />
-            <Btn small onClick={handleLicenseFileBrowse}>Browse</Btn>
+        {[
+          { vendor: "radiant", label: "Lattice Radiant" },
+          { vendor: "quartus", label: "Intel Quartus" },
+          { vendor: "vivado", label: "AMD Vivado" },
+          { vendor: "diamond", label: "Lattice Diamond" },
+        ].map((lf) => (
+          <div key={lf.vendor} style={{ marginBottom: 12 }}>
+            <span style={label}>{lf.label.toUpperCase()}</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Input
+                value={config?.license_files?.[lf.vendor] ?? ""}
+                onChange={(v) => updateLicenseFile(lf.vendor, v)}
+                placeholder="Auto-detect"
+                style={{ flex: 1 }}
+              />
+              <Btn small onClick={() => handleLicenseFileBrowse(lf.vendor)}>Browse</Btn>
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* ── AI Assistant ── */}
         <div style={{ ...sectionTitle, marginTop: 8 }}>

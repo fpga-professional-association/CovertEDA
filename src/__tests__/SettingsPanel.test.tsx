@@ -11,8 +11,11 @@ vi.mock("../hooks/useTauri", () => ({
     theme: "dark",
     scale_factor: 1.2,
     license_file: null,
+    license_files: {},
     ai_api_key: null,
     ai_model: null,
+    ai_provider: null,
+    ai_base_url: null,
   })),
   saveAppConfig: vi.fn(() => Promise.resolve()),
   pickDirectory: vi.fn(() => Promise.resolve(null)),
@@ -42,9 +45,10 @@ describe("SettingsPanel", () => {
   it("renders tool path labels", async () => {
     renderWithTheme(<SettingsPanel onClose={onClose} />);
     await waitFor(() => {
-      expect(screen.getByText("LATTICE RADIANT")).toBeInTheDocument();
-      expect(screen.getByText("INTEL QUARTUS")).toBeInTheDocument();
-      expect(screen.getByText("AMD VIVADO")).toBeInTheDocument();
+      // Labels appear in both Tool Paths and License Files sections
+      expect(screen.getAllByText("LATTICE RADIANT").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("INTEL QUARTUS").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("AMD VIVADO").length).toBeGreaterThanOrEqual(1);
     });
   });
 

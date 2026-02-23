@@ -125,44 +125,58 @@ impl RadiantBackend {
 
     /// Check if a license file is found and contains LSC_RADIANT feature.
     pub fn find_license(&self) -> Option<PathBuf> {
-        // Check LM_LICENSE_FILE env var first
-        if let Ok(lic_path) = std::env::var("LM_LICENSE_FILE") {
-            let p = PathBuf::from(&lic_path);
-            if p.exists() {
-                return Some(p);
+        // Check LM_LICENSE_FILE env var (may contain multiple paths separated by : or ;)
+        if let Ok(val) = std::env::var("LM_LICENSE_FILE") {
+            let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
+            for part in val.split(sep) {
+                let part = part.trim();
+                if part.is_empty() || part.contains('@') { continue; }
+                let p = PathBuf::from(part);
+                if p.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        if content.contains("LSC_RADIANT") || content.contains("lattice") {
+                            return Some(p);
+                        }
+                    }
+                }
             }
         }
 
         // Check common license file locations
-        let candidates = if cfg!(target_os = "windows") {
-            vec![
-                dirs::home_dir().map(|h| h.join("license.dat")),
-                Some(PathBuf::from(r"C:\license.dat")),
-            ]
-        } else {
-            vec![
-                // WSL: check Windows user home
-                Some(PathBuf::from("/mnt/c/Users"))
-                    .and_then(|p| {
-                        std::fs::read_dir(&p)
-                            .ok()?
-                            .filter_map(|e| e.ok())
-                            .find(|e| {
-                                e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
-                                    && e.file_name() != "Public"
-                                    && e.file_name() != "Default"
-                                    && e.file_name() != "Default User"
-                                    && e.file_name() != "All Users"
-                            })
-                            .map(|e| e.path().join("license.dat"))
-                    }),
-                dirs::home_dir().map(|h| h.join("license.dat")),
-            ]
-        };
+        let mut candidates: Vec<PathBuf> = vec![];
 
-        for candidate in candidates.into_iter().flatten() {
+        if cfg!(target_os = "windows") {
+            if let Some(h) = dirs::home_dir() { candidates.push(h.join("license.dat")); }
+            candidates.push(PathBuf::from(r"C:\license.dat"));
+        } else {
+            // WSL: scan all Windows user homes
+            if let Ok(entries) = std::fs::read_dir("/mnt/c/Users") {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let name = entry.file_name();
+                    let n = name.to_str().unwrap_or("");
+                    if n == "Public" || n == "Default" || n == "Default User" || n == "All Users" {
+                        continue;
+                    }
+                    if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        candidates.push(entry.path().join("license.dat"));
+                    }
+                }
+            }
+            // WSL: scan Radiant install paths
+            for base in &["/mnt/c/lscc/radiant", "/mnt/c/lscc/diamond"] {
+                if let Ok(entries) = std::fs::read_dir(base) {
+                    for entry in entries.filter_map(|e| e.ok()) {
+                        let ver_dir = entry.path();
+                        let lic = ver_dir.join("license").join("license.dat");
+                        if lic.exists() { candidates.push(lic); }
+                    }
+                }
+            }
+            if let Some(h) = dirs::home_dir() { candidates.push(h.join("license.dat")); }
+        }
+
+        for candidate in candidates {
             if candidate.exists() {
-                // Verify it contains a Lattice feature
                 if let Ok(content) = std::fs::read_to_string(&candidate) {
                     if content.contains("LSC_RADIANT") || content.contains("lattice") {
                         return Some(candidate);
