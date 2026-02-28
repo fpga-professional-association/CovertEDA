@@ -1561,6 +1561,56 @@ pub fn refresh_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, St
     detect_tools(state)
 }
 
+/// List all detected versions of a specific backend's tool.
+#[tauri::command]
+pub fn list_tool_versions(backend_id: String) -> Result<Vec<crate::backend::DetectedVersion>, String> {
+    let versions = match backend_id.as_str() {
+        "diamond" => crate::backend::diamond::DiamondBackend::scan_all_versions(),
+        "radiant" => crate::backend::radiant::RadiantBackend::scan_all_versions(),
+        "quartus" => crate::backend::quartus::QuartusBackend::scan_all_versions(),
+        "vivado" => crate::backend::vivado::VivadoBackend::scan_all_versions(),
+        "ace" => crate::backend::ace::AceBackend::scan_all_versions(),
+        "libero" => crate::backend::libero::LiberoBackend::scan_all_versions(),
+        "opensource" => crate::backend::oss::OssBackend::scan_all_versions(),
+        _ => vec![],
+    };
+    Ok(versions)
+}
+
+/// Select a specific tool version by writing its install path to config.
+/// This re-creates the BackendRegistry so the selected version is used.
+#[tauri::command]
+pub fn select_tool_version(
+    backend_id: String,
+    install_path: String,
+    version: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut config = crate::config::AppConfig::load();
+
+    // Write install path to the corresponding tool_paths field
+    let path = std::path::PathBuf::from(&install_path);
+    match backend_id.as_str() {
+        "diamond" => config.tool_paths.diamond = Some(path),
+        "radiant" => config.tool_paths.radiant = Some(path),
+        "quartus" => config.tool_paths.quartus = Some(path),
+        "vivado" => config.tool_paths.vivado = Some(path),
+        "opensource" => config.tool_paths.oss_cad_suite = Some(path),
+        _ => {}
+    }
+
+    // Record which version was selected
+    config.selected_versions.insert(backend_id, version);
+
+    config.save().map_err(|e| e.to_string())?;
+
+    // Re-create registry so backends pick up the new config
+    let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
+    *registry = crate::backend::BackendRegistry::new();
+
+    Ok(())
+}
+
 /// Run `which <cli_tool>` for a backend and return info about it.
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -1,4 +1,4 @@
-use crate::backend::{BackendError, BackendResult, FpgaBackend};
+use crate::backend::{BackendError, BackendResult, FpgaBackend, DetectedVersion};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -49,6 +49,26 @@ impl VivadoBackend {
         }
     }
 
+    /// Extract a version string from a path. Uses the dir name if it looks
+    /// like a version (starts with a digit), otherwise walks up to find one.
+    fn extract_version(path: &Path) -> String {
+        // Check the dir name itself
+        if let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) {
+            if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                return name;
+            }
+        }
+        // Unified layout: <base>/<version>/Vivado — check parent
+        if let Some(parent) = path.parent() {
+            if let Some(name) = parent.file_name().map(|n| n.to_string_lossy().to_string()) {
+                if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    return name;
+                }
+            }
+        }
+        "unknown".to_string()
+    }
+
     fn detect_installation() -> (String, Option<PathBuf>) {
         let config = crate::config::AppConfig::load();
 
@@ -56,20 +76,35 @@ impl VivadoBackend {
         if let Some(ref configured) = config.tool_paths.vivado {
             if configured.as_os_str().len() > 0 {
                 if Self::verify_install(configured) {
-                    let ver = configured.file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
+                    let ver = Self::extract_version(configured);
                     return (ver, Some(configured.clone()));
                 }
                 if let Some((ver, install)) = Self::scan_version_dirs(configured) {
                     return (ver, Some(install));
                 }
+                // Walk upward in case user pointed at bin/ or a subdirectory
+                let mut ancestor = configured.as_path();
+                for _ in 0..3 {
+                    if let Some(parent) = ancestor.parent() {
+                        if Self::verify_install(parent) {
+                            let ver = Self::extract_version(parent);
+                            return (ver, Some(parent.to_path_buf()));
+                        }
+                        if let Some((ver, install)) = Self::scan_version_dirs(parent) {
+                            return (ver, Some(install));
+                        }
+                        ancestor = parent;
+                    } else {
+                        break;
+                    }
+                }
             }
         }
 
         // 2. Scan known directories
-        // Vivado installs to <base>/Vivado/<version>/ (note capital V)
-        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+        // Standard layout: <base>/Vivado/<version>/  (has bin/vivado)
+        // Unified layout:  <base>/<version>/Vivado/  (has bin/vivado)
+        let standard_candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
             vec![
                 PathBuf::from(r"C:\Xilinx\Vivado"),
                 PathBuf::from(r"C:\AMD\Vivado"),
@@ -84,9 +119,50 @@ impl VivadoBackend {
             ]
         };
 
-        for base in &candidates {
+        for base in &standard_candidates {
             if let Some((ver, install)) = Self::scan_version_dirs(base) {
                 return (ver, Some(install));
+            }
+        }
+
+        // Unified installer layout: <base>/<version>/Vivado/ (2024.2+ style)
+        // Scan <base> for version dirs, then check <version>/Vivado/ inside each
+        let unified_candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\Xilinx"),
+                PathBuf::from(r"C:\AMD"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/opt/Xilinx"),
+                PathBuf::from("/opt/AMD"),
+                PathBuf::from("/tools/Xilinx"),
+                PathBuf::from("/amd"),
+                PathBuf::from("/xilinx"),
+                PathBuf::from("/mnt/c/Xilinx"),
+            ]
+        };
+
+        for base in &unified_candidates {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                let mut versions: Vec<(String, PathBuf)> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                            let vivado_dir = e.path().join("Vivado");
+                            if Self::verify_install(&vivado_dir) {
+                                return Some((name, vivado_dir));
+                            }
+                        }
+                        None
+                    })
+                    .collect();
+                versions.sort_by(|a, b| a.0.cmp(&b.0));
+                if let Some((ver, install)) = versions.last() {
+                    return (ver.clone(), Some(install.clone()));
+                }
             }
         }
 
@@ -97,9 +173,7 @@ impl VivadoBackend {
                 let bin_path = PathBuf::from(&path_str);
                 // vivado is at <install>/bin/vivado — go up 2 levels
                 if let Some(install) = bin_path.parent().and_then(|p| p.parent()) {
-                    let ver = install.file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
+                    let ver = Self::extract_version(install);
                     return (ver, Some(install.to_path_buf()));
                 }
             }
@@ -111,6 +185,100 @@ impl VivadoBackend {
     /// Public accessor for the install directory.
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
+    }
+
+    /// Scan all candidate directories and return every verified version found.
+    pub fn scan_all_versions() -> Vec<DetectedVersion> {
+        // Standard layout: <base>/<version>/  (has bin/vivado)
+        let standard: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\Xilinx\Vivado"),
+                PathBuf::from(r"C:\AMD\Vivado"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/opt/Xilinx/Vivado"),
+                PathBuf::from("/opt/AMD/Vivado"),
+                PathBuf::from("/tools/Xilinx/Vivado"),
+                PathBuf::from("/mnt/c/Xilinx/Vivado"),
+                PathBuf::from("/mnt/c/AMD/Vivado"),
+            ]
+        };
+
+        // Unified layout: <base>/<version>/Vivado/  (has bin/vivado)
+        let unified: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\Xilinx"),
+                PathBuf::from(r"C:\AMD"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/opt/Xilinx"),
+                PathBuf::from("/opt/AMD"),
+                PathBuf::from("/tools/Xilinx"),
+                PathBuf::from("/amd"),
+                PathBuf::from("/xilinx"),
+                PathBuf::from("/mnt/c/Xilinx"),
+            ]
+        };
+
+        let mut seen = std::collections::HashSet::new();
+        let mut results = Vec::new();
+
+        // Standard layout scan
+        for base in &standard {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        continue;
+                    }
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        continue;
+                    }
+                    let install = base.join(&name);
+                    let key = install.display().to_string();
+                    if seen.contains(&key) { continue; }
+                    let verified = Self::verify_install(&install);
+                    seen.insert(key.clone());
+                    results.push(DetectedVersion {
+                        version: name,
+                        install_path: key,
+                        verified,
+                    });
+                }
+            }
+        }
+
+        // Unified layout scan
+        for base in &unified {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        continue;
+                    }
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        continue;
+                    }
+                    let vivado_dir = entry.path().join("Vivado");
+                    let key = vivado_dir.display().to_string();
+                    if seen.contains(&key) { continue; }
+                    let verified = Self::verify_install(&vivado_dir);
+                    if verified {
+                        seen.insert(key.clone());
+                        results.push(DetectedVersion {
+                            version: name,
+                            install_path: key,
+                            verified,
+                        });
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.version.cmp(&b.version));
+        results
     }
 }
 

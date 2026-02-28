@@ -24,6 +24,9 @@ pub struct AppConfig {
     pub ai_provider: Option<String>,
     #[serde(default)]
     pub ai_base_url: Option<String>,
+    /// User-selected tool versions keyed by backend id (e.g. "quartus" -> "25.3")
+    #[serde(default)]
+    pub selected_versions: HashMap<String, String>,
 }
 
 fn default_scale() -> f64 {
@@ -70,6 +73,7 @@ impl Default for AppConfig {
             ai_model: None,
             ai_provider: None,
             ai_base_url: None,
+            selected_versions: HashMap::new(),
         }
     }
 }

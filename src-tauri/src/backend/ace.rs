@@ -1,4 +1,4 @@
-use crate::backend::{BackendError, BackendResult, FpgaBackend};
+use crate::backend::{BackendError, BackendResult, FpgaBackend, DetectedVersion};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -99,6 +99,19 @@ impl AceBackend {
     /// Get the installation directory (for external use).
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
+    }
+
+    /// Return the single detected version (ACE rarely has multiple installs).
+    pub fn scan_all_versions() -> Vec<DetectedVersion> {
+        let (ver, path) = Self::detect_installation();
+        match path {
+            Some(p) => vec![DetectedVersion {
+                version: ver,
+                install_path: p.display().to_string(),
+                verified: true,
+            }],
+            None => vec![],
+        }
     }
 
     /// Public accessor for the ace executable path.

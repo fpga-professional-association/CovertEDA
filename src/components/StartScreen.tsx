@@ -14,9 +14,12 @@ import {
   refreshTools,
   whichTool,
   addToolToPath,
+  listToolVersions,
+  selectToolVersion,
   checkLicenses,
   exitApp,
   type WhichResult,
+  type DetectedVersion,
 } from "../hooks/useTauri";
 import NewProjectWizard from "./NewProjectWizard";
 
@@ -54,6 +57,8 @@ export default function StartScreen({
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const [whichInfo, setWhichInfo] = useState<Record<string, WhichResult & { status: string }>>({});
+  const [allVersions, setAllVersions] = useState<Record<string, DetectedVersion[]>>({});
+  const [selectingVersion, setSelectingVersion] = useState<string | null>(null);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -337,6 +342,10 @@ export default function StartScreen({
                                 [t.backendId]: { whichPath: null, detectedBinDir: null, status: "error" },
                               }))
                             );
+                            // Fetch all versions in parallel
+                            listToolVersions(t.backendId).then((v) =>
+                              setAllVersions((prev) => ({ ...prev, [t.backendId]: v }))
+                            ).catch(() => {});
                           }
                         } : undefined}
                         onMouseEnter={() => setHover(`tool-${t.backendId}`)}
@@ -395,6 +404,56 @@ export default function StartScreen({
                             <span style={{ color: C.t3 }}>detecting...</span>
                           ) : (
                             <>
+                              {/* Version pills — only show when multiple versions detected */}
+                              {(allVersions[t.backendId]?.length ?? 0) > 1 && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                                  <span style={{ color: C.t3 }}>versions:</span>
+                                  {allVersions[t.backendId].map((v) => {
+                                    const isActive = t.installPath === v.installPath;
+                                    const isSelecting = selectingVersion === `${t.backendId}-${v.version}`;
+                                    return (
+                                      <span
+                                        key={v.version}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isActive || isSelecting) return;
+                                          setSelectingVersion(`${t.backendId}-${v.version}`);
+                                          selectToolVersion(t.backendId, v.installPath, v.version)
+                                            .then(() => refreshTools())
+                                            .then((updated) => {
+                                              setTools(updated);
+                                              setSelectingVersion(null);
+                                              // Refresh which info
+                                              whichTool(t.backendId).then((r) =>
+                                                setWhichInfo((prev) => ({
+                                                  ...prev,
+                                                  [t.backendId]: { ...r, status: "done" },
+                                                }))
+                                              );
+                                            })
+                                            .catch(() => setSelectingVersion(null));
+                                        }}
+                                        onMouseEnter={() => setHover(`ver-${t.backendId}-${v.version}`)}
+                                        onMouseLeave={() => setHover(null)}
+                                        style={{
+                                          padding: "1px 6px",
+                                          borderRadius: 3,
+                                          fontSize: 8,
+                                          fontWeight: isActive ? 700 : 500,
+                                          cursor: isActive ? "default" : isSelecting ? "wait" : "pointer",
+                                          border: `1px solid ${isActive ? bm.color : hover === `ver-${t.backendId}-${v.version}` ? `${bm.color}60` : C.b1}`,
+                                          background: isActive ? `${bm.color}20` : "transparent",
+                                          color: isActive ? bm.color : C.t2,
+                                          opacity: v.verified ? 1 : 0.5,
+                                          transition: "all .15s",
+                                        }}
+                                      >
+                                        {v.version}{isActive ? " \u2713" : ""}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {/* which result */}
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 <span style={{ color: C.t3 }}>which:</span>

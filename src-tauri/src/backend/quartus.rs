@@ -1,4 +1,4 @@
-use crate::backend::{BackendError, BackendResult, FpgaBackend};
+use crate::backend::{BackendError, BackendResult, FpgaBackend, DetectedVersion};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -64,6 +64,24 @@ impl QuartusBackend {
                 }
                 if let Some((ver, install)) = Self::scan_version_dirs(configured) {
                     return (ver, Some(install));
+                }
+                // Walk upward in case user pointed at quartus/bin64/, etc.
+                let mut ancestor = configured.as_path();
+                for _ in 0..3 {
+                    if let Some(parent) = ancestor.parent() {
+                        if Self::verify_install(parent) {
+                            let ver = parent.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "unknown".to_string());
+                            return (ver, Some(parent.to_path_buf()));
+                        }
+                        if let Some((ver, install)) = Self::scan_version_dirs(parent) {
+                            return (ver, Some(install));
+                        }
+                        ancestor = parent;
+                    } else {
+                        break;
+                    }
                 }
             }
         }
@@ -147,6 +165,61 @@ impl QuartusBackend {
     /// Get the installation directory.
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
+    }
+
+    /// Scan all candidate directories and return every verified version found.
+    pub fn scan_all_versions() -> Vec<DetectedVersion> {
+        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\intelFPGA_pro"),
+                PathBuf::from(r"C:\intelFPGA"),
+                PathBuf::from(r"C:\intelFPGA_lite"),
+                PathBuf::from(r"C:\altera_pro"),
+                PathBuf::from(r"C:\altera"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/mnt/c/intelFPGA_pro"),
+                PathBuf::from("/mnt/c/intelFPGA"),
+                PathBuf::from("/mnt/c/intelFPGA_lite"),
+                PathBuf::from("/mnt/c/altera_pro"),
+                PathBuf::from("/mnt/c/altera"),
+                PathBuf::from("/mnt/d/intelFPGA_pro"),
+                PathBuf::from("/mnt/d/intelFPGA"),
+                PathBuf::from("/mnt/d/intelFPGA_lite"),
+                PathBuf::from("/mnt/d/altera_pro"),
+                PathBuf::from("/mnt/d/altera"),
+                PathBuf::from("/opt/intelFPGA_pro"),
+                PathBuf::from("/opt/intelFPGA"),
+                PathBuf::from("/opt/intelFPGA_lite"),
+                PathBuf::from("/opt/altera_pro"),
+                PathBuf::from("/opt/altera"),
+            ]
+        };
+
+        let mut results = Vec::new();
+        for base in &candidates {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        continue;
+                    }
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        continue;
+                    }
+                    let install = base.join(&name);
+                    let verified = Self::verify_install(&install);
+                    results.push(DetectedVersion {
+                        version: name,
+                        install_path: install.display().to_string(),
+                        verified,
+                    });
+                }
+            }
+        }
+        results.sort_by(|a, b| a.version.cmp(&b.version));
+        results
     }
 
     /// Search for a Quartus/Intel FlexLM license file.

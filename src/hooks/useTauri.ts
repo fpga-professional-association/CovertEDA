@@ -411,6 +411,24 @@ export async function addToolToPath(backendId: string): Promise<string> {
   return invoke<string>("add_tool_to_path", { backendId });
 }
 
+// ── Multi-version tool detection ──
+
+export interface DetectedVersion {
+  version: string;
+  installPath: string;
+  verified: boolean;
+}
+
+export async function listToolVersions(backendId: string): Promise<DetectedVersion[]> {
+  if (!isTauri) return [];
+  return invoke<DetectedVersion[]>("list_tool_versions", { backendId });
+}
+
+export async function selectToolVersion(backendId: string, installPath: string, version: string): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("select_tool_version", { backendId, installPath, version });
+}
+
 export async function checkLicenses(): Promise<LicenseCheckResult> {
   if (!isTauri) {
     return {
@@ -451,6 +469,7 @@ export interface AppConfig {
   ai_model: string | null;
   ai_provider: string | null;
   ai_base_url: string | null;
+  selected_versions: Record<string, string>;
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
@@ -467,6 +486,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       ai_model: null,
       ai_provider: null,
       ai_base_url: null,
+      selected_versions: {},
     };
   }
   return invoke<AppConfig>("get_app_config");

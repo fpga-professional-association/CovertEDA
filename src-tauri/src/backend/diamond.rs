@@ -1,4 +1,4 @@
-use crate::backend::{BackendResult, FpgaBackend, BackendError};
+use crate::backend::{BackendResult, FpgaBackend, BackendError, DetectedVersion};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -66,6 +66,24 @@ impl DiamondBackend {
                 // Maybe it's a base dir with version subdirs (e.g., user set /home/user/lscc/diamond)
                 if let Some((ver, install)) = Self::scan_version_dirs(configured) {
                     return (ver, Some(install));
+                }
+                // Walk upward in case user pointed at bin/, bin/lin64/, etc.
+                let mut ancestor = configured.as_path();
+                for _ in 0..3 {
+                    if let Some(parent) = ancestor.parent() {
+                        if Self::verify_install(parent) {
+                            let ver = parent.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "unknown".to_string());
+                            return (ver, Some(parent.to_path_buf()));
+                        }
+                        if let Some((ver, install)) = Self::scan_version_dirs(parent) {
+                            return (ver, Some(install));
+                        }
+                        ancestor = parent;
+                    } else {
+                        break;
+                    }
                 }
             }
         }
@@ -138,6 +156,53 @@ impl DiamondBackend {
     /// Public accessor for the install directory.
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
+    }
+
+    /// Scan all candidate directories and return every verified version found.
+    pub fn scan_all_versions() -> Vec<DetectedVersion> {
+        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\lscc\diamond"),
+                PathBuf::from(r"C:\Lattice\diamond"),
+            ]
+        } else {
+            let mut paths = vec![
+                PathBuf::from("/usr/local/diamond"),
+                PathBuf::from("/opt/lscc/diamond"),
+                PathBuf::from("/opt/lattice/diamond"),
+                PathBuf::from("/mnt/c/lscc/diamond"),
+                PathBuf::from("/mnt/d/lscc/diamond"),
+                PathBuf::from("/mnt/c/Lattice/diamond"),
+            ];
+            if let Some(home) = std::env::var_os("HOME") {
+                paths.push(PathBuf::from(home).join("lscc").join("diamond"));
+            }
+            paths
+        };
+
+        let mut results = Vec::new();
+        for base in &candidates {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        continue;
+                    }
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        continue;
+                    }
+                    let install = base.join(&name);
+                    let verified = Self::verify_install(&install);
+                    results.push(DetectedVersion {
+                        version: name,
+                        install_path: install.display().to_string(),
+                        verified,
+                    });
+                }
+            }
+        }
+        results.sort_by(|a, b| a.version.cmp(&b.version));
+        results
     }
 }
 

@@ -55,6 +55,8 @@ pub fn run() {
             commands::remove_recent_project,
             commands::detect_tools,
             commands::refresh_tools,
+            commands::list_tool_versions,
+            commands::select_tool_version,
             commands::which_tool,
             commands::add_tool_to_path,
             commands::check_licenses,

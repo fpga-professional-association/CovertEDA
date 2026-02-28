@@ -7,9 +7,19 @@ pub mod radiant;
 pub mod vivado;
 
 use crate::types::*;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
+
+/// A detected tool version found during filesystem scanning.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedVersion {
+    pub version: String,
+    pub install_path: String,
+    pub verified: bool,
+}
 
 #[derive(Error, Debug)]
 pub enum BackendError {
