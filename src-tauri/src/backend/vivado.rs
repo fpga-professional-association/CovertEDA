@@ -1,18 +1,116 @@
 use crate::backend::{BackendError, BackendResult, FpgaBackend};
 use crate::types::*;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// AMD Vivado backend — drives vivado in batch/TCL mode.
 pub struct VivadoBackend {
     version: String,
+    install_dir: Option<PathBuf>,
 }
 
 impl VivadoBackend {
     pub fn new() -> Self {
+        let (version, install_dir) = Self::detect_installation();
         Self {
-            version: "2024.1".to_string(),
+            version,
+            install_dir,
         }
+    }
+
+    /// Verify a candidate install dir has the vivado binary.
+    fn verify_install(install: &Path) -> bool {
+        install.join("bin").join("vivado").exists()
+            || install.join("bin").join("vivado.bat").exists()
+    }
+
+    /// Scan a directory for Vivado version subdirectories.
+    fn scan_version_dirs(base: &Path) -> Option<(String, PathBuf)> {
+        let entries = std::fs::read_dir(base).ok()?;
+        let mut versions: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        versions.sort();
+        let ver = versions.last()?;
+        let install = base.join(ver);
+        if Self::verify_install(&install) {
+            Some((ver.clone(), install))
+        } else {
+            None
+        }
+    }
+
+    fn detect_installation() -> (String, Option<PathBuf>) {
+        let config = crate::config::AppConfig::load();
+
+        // 1. User-configured path
+        if let Some(ref configured) = config.tool_paths.vivado {
+            if configured.as_os_str().len() > 0 {
+                if Self::verify_install(configured) {
+                    let ver = configured.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(configured.clone()));
+                }
+                if let Some((ver, install)) = Self::scan_version_dirs(configured) {
+                    return (ver, Some(install));
+                }
+            }
+        }
+
+        // 2. Scan known directories
+        // Vivado installs to <base>/Vivado/<version>/ (note capital V)
+        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\Xilinx\Vivado"),
+                PathBuf::from(r"C:\AMD\Vivado"),
+            ]
+        } else {
+            vec![
+                PathBuf::from("/opt/Xilinx/Vivado"),
+                PathBuf::from("/opt/AMD/Vivado"),
+                PathBuf::from("/tools/Xilinx/Vivado"),
+                PathBuf::from("/mnt/c/Xilinx/Vivado"),
+                PathBuf::from("/mnt/c/AMD/Vivado"),
+            ]
+        };
+
+        for base in &candidates {
+            if let Some((ver, install)) = Self::scan_version_dirs(base) {
+                return (ver, Some(install));
+            }
+        }
+
+        // 3. Fallback: which vivado
+        if let Ok(output) = std::process::Command::new("which").arg("vivado").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let bin_path = PathBuf::from(&path_str);
+                // vivado is at <install>/bin/vivado — go up 2 levels
+                if let Some(install) = bin_path.parent().and_then(|p| p.parent()) {
+                    let ver = install.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(install.to_path_buf()));
+                }
+            }
+        }
+
+        ("unknown".to_string(), None)
+    }
+
+    /// Public accessor for the install directory.
+    pub fn install_dir(&self) -> Option<&Path> {
+        self.install_dir.as_deref()
     }
 }
 
@@ -114,7 +212,7 @@ close_project
     }
 
     fn detect_tool(&self) -> bool {
-        which::which("vivado").is_ok()
+        self.install_dir.is_some() || which::which("vivado").is_ok()
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {

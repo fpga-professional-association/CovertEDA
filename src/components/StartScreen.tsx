@@ -12,8 +12,11 @@ import {
   removeRecentProject,
   detectTools,
   refreshTools,
+  whichTool,
+  addToolToPath,
   checkLicenses,
   exitApp,
+  type WhichResult,
 } from "../hooks/useTauri";
 import NewProjectWizard from "./NewProjectWizard";
 
@@ -50,6 +53,7 @@ export default function StartScreen({
   const [noProjectMsg, setNoProjectMsg] = useState<string | null>(null);
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
+  const [whichInfo, setWhichInfo] = useState<Record<string, WhichResult & { status: string }>>({});
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -304,41 +308,163 @@ export default function StartScreen({
                 {tools.map((t) => {
                   const bm = backendMeta(t.backendId);
                   const isPlaceholder = PLACEHOLDER_IDS.has(t.backendId);
+                  const wi = whichInfo[t.backendId];
+                  const expanded = wi !== undefined;
+                  const clickable = !isPlaceholder;
                   return (
-                    <div
-                      key={t.backendId}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "4px 8px",
-                        borderRadius: 4,
-                        background: t.available ? `${bm.color}08` : "transparent",
-                        border: `1px solid ${t.available ? `${bm.color}30` : C.b1}`,
-                        opacity: isPlaceholder ? 0.6 : 1,
-                      }}
-                    >
-                      <span style={{ color: bm.color, fontSize: 13 }}>{bm.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
-                        {t.name}
-                      </span>
-                      {t.available && (
-                        <span style={{ fontSize: 9, fontFamily: MONO, color: bm.color }}>{t.version}</span>
-                      )}
-                      <div style={{ flex: 1 }} />
-                      <span
+                    <div key={t.backendId}>
+                      <div
+                        onClick={clickable ? () => {
+                          if (expanded) {
+                            setWhichInfo((prev) => {
+                              const next = { ...prev };
+                              delete next[t.backendId];
+                              return next;
+                            });
+                          } else {
+                            setWhichInfo((prev) => ({
+                              ...prev,
+                              [t.backendId]: { whichPath: null, detectedBinDir: null, status: "loading" },
+                            }));
+                            whichTool(t.backendId).then((r) =>
+                              setWhichInfo((prev) => ({
+                                ...prev,
+                                [t.backendId]: { ...r, status: "done" },
+                              }))
+                            ).catch(() =>
+                              setWhichInfo((prev) => ({
+                                ...prev,
+                                [t.backendId]: { whichPath: null, detectedBinDir: null, status: "error" },
+                              }))
+                            );
+                          }
+                        } : undefined}
+                        onMouseEnter={() => setHover(`tool-${t.backendId}`)}
+                        onMouseLeave={() => setHover(null)}
                         style={{
-                          fontSize: 8,
-                          fontFamily: MONO,
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          borderRadius: 3,
-                          color: t.available ? C.ok : isPlaceholder ? C.warn : C.t3,
-                          background: isPlaceholder ? `${C.warn}12` : "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "4px 8px",
+                          borderRadius: expanded ? "4px 4px 0 0" : 4,
+                          background: t.available ? `${bm.color}08` : "transparent",
+                          border: `1px solid ${t.available ? `${bm.color}30` : C.b1}`,
+                          opacity: isPlaceholder ? 0.6 : hover === `tool-${t.backendId}` ? 1 : clickable ? 0.9 : 1,
+                          cursor: clickable ? "pointer" : "default",
+                          transition: "opacity .15s",
                         }}
                       >
-                        {t.available ? "FOUND" : isPlaceholder ? "IN DEVELOPMENT" : "NOT FOUND"}
-                      </span>
+                        <span style={{ color: bm.color, fontSize: 13 }}>{bm.icon}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
+                          {t.name}
+                        </span>
+                        {t.available && (
+                          <span style={{ fontSize: 9, fontFamily: MONO, color: bm.color }}>{t.version}</span>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontFamily: MONO,
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: 3,
+                            color: t.available ? C.ok : isPlaceholder ? C.warn : C.t3,
+                            background: isPlaceholder ? `${C.warn}12` : "transparent",
+                          }}
+                        >
+                          {t.available ? "FOUND" : isPlaceholder ? "IN DEVELOPMENT" : "NOT FOUND"}
+                        </span>
+                      </div>
+                      {expanded && (
+                        <div
+                          style={{
+                            fontSize: 9,
+                            fontFamily: MONO,
+                            padding: "4px 8px",
+                            background: `${bm.color}06`,
+                            border: `1px solid ${t.available ? `${bm.color}30` : C.b1}`,
+                            borderTop: "none",
+                            borderRadius: "0 0 4px 4px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 3,
+                          }}
+                        >
+                          {wi.status === "loading" ? (
+                            <span style={{ color: C.t3 }}>detecting...</span>
+                          ) : (
+                            <>
+                              {/* which result */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ color: C.t3 }}>which:</span>
+                                <span style={{ color: wi.whichPath ? C.ok : C.t3, wordBreak: "break-all" }}>
+                                  {wi.whichPath ?? "not on PATH"}
+                                </span>
+                              </div>
+                              {/* detected bin dir */}
+                              {wi.detectedBinDir && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ color: C.t3 }}>detected:</span>
+                                  <span style={{ color: C.t2, wordBreak: "break-all" }}>{wi.detectedBinDir}</span>
+                                </div>
+                              )}
+                              {/* Add to PATH button — show when detected but not on PATH */}
+                              {!wi.whichPath && wi.detectedBinDir && wi.status !== "added" && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setWhichInfo((prev) => ({
+                                        ...prev,
+                                        [t.backendId]: { ...prev[t.backendId], status: "adding" },
+                                      }));
+                                      addToolToPath(t.backendId).then((msg) => {
+                                        setWhichInfo((prev) => ({
+                                          ...prev,
+                                          [t.backendId]: { ...prev[t.backendId], status: "added", whichPath: msg },
+                                        }));
+                                      }).catch((err) => {
+                                        setWhichInfo((prev) => ({
+                                          ...prev,
+                                          [t.backendId]: { ...prev[t.backendId], status: `error: ${err}` },
+                                        }));
+                                      });
+                                    }}
+                                    onMouseEnter={() => setHover(`addpath-${t.backendId}`)}
+                                    onMouseLeave={() => setHover(null)}
+                                    style={{
+                                      cursor: wi.status === "adding" ? "wait" : "pointer",
+                                      padding: "2px 8px",
+                                      borderRadius: 3,
+                                      background: hover === `addpath-${t.backendId}` ? `${bm.color}30` : `${bm.color}15`,
+                                      color: bm.color,
+                                      fontWeight: 700,
+                                      fontSize: 8,
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {wi.status === "adding" ? "ADDING..." : "ADD TO PATH"}
+                                  </span>
+                                  <span style={{ color: C.t3, fontSize: 8 }}>
+                                    writes to ~/.bashrc or ~/.zshrc
+                                  </span>
+                                </div>
+                              )}
+                              {/* Success message after adding */}
+                              {wi.status === "added" && (
+                                <span style={{ color: C.ok, fontSize: 8 }}>
+                                  {wi.whichPath} (restart terminal to take effect)
+                                </span>
+                              )}
+                              {/* Error message */}
+                              {typeof wi.status === "string" && wi.status.startsWith("error:") && (
+                                <span style={{ color: C.err, fontSize: 8 }}>{wi.status}</span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

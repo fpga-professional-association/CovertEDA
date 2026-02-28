@@ -396,6 +396,21 @@ export async function refreshTools(): Promise<DetectedTool[]> {
   return invoke<DetectedTool[]>("refresh_tools");
 }
 
+export interface WhichResult {
+  whichPath: string | null;
+  detectedBinDir: string | null;
+}
+
+export async function whichTool(backendId: string): Promise<WhichResult> {
+  if (!isTauri) return { whichPath: null, detectedBinDir: null };
+  return invoke<WhichResult>("which_tool", { backendId });
+}
+
+export async function addToolToPath(backendId: string): Promise<string> {
+  if (!isTauri) throw new Error("Not in Tauri");
+  return invoke<string>("add_tool_to_path", { backendId });
+}
+
 export async function checkLicenses(): Promise<LicenseCheckResult> {
   if (!isTauri) {
     return {

@@ -19,8 +19,56 @@ impl QuartusBackend {
         }
     }
 
+    /// Verify a candidate install dir has a quartus/ subdirectory.
+    fn verify_install(install: &Path) -> bool {
+        install.join("quartus").exists()
+    }
+
+    /// Scan a directory for version subdirectories containing quartus.
+    fn scan_version_dirs(base: &Path) -> Option<(String, PathBuf)> {
+        let entries = std::fs::read_dir(base).ok()?;
+        let mut versions: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        versions.sort();
+        let ver = versions.last()?;
+        let install = base.join(ver);
+        if Self::verify_install(&install) {
+            Some((ver.clone(), install))
+        } else {
+            None
+        }
+    }
+
     /// Scan known installation paths for Intel Quartus Prime.
     fn detect_installation() -> (String, Option<PathBuf>) {
+        let config = crate::config::AppConfig::load();
+
+        // 1. User-configured path takes priority
+        if let Some(ref configured) = config.tool_paths.quartus {
+            if configured.as_os_str().len() > 0 {
+                if Self::verify_install(configured) {
+                    let ver = configured.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(configured.clone()));
+                }
+                if let Some((ver, install)) = Self::scan_version_dirs(configured) {
+                    return (ver, Some(install));
+                }
+            }
+        }
+
+        // 2. Scan known directories
         let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
             vec![
                 PathBuf::from(r"C:\intelFPGA_pro"),
@@ -30,41 +78,42 @@ impl QuartusBackend {
                 PathBuf::from(r"C:\altera"),
             ]
         } else {
-            // Linux + WSL paths
             vec![
                 PathBuf::from("/mnt/c/intelFPGA_pro"),
                 PathBuf::from("/mnt/c/intelFPGA"),
                 PathBuf::from("/mnt/c/intelFPGA_lite"),
                 PathBuf::from("/mnt/c/altera_pro"),
                 PathBuf::from("/mnt/c/altera"),
+                PathBuf::from("/mnt/d/intelFPGA_pro"),
+                PathBuf::from("/mnt/d/intelFPGA"),
+                PathBuf::from("/mnt/d/intelFPGA_lite"),
+                PathBuf::from("/mnt/d/altera_pro"),
+                PathBuf::from("/mnt/d/altera"),
                 PathBuf::from("/opt/intelFPGA_pro"),
                 PathBuf::from("/opt/intelFPGA"),
                 PathBuf::from("/opt/intelFPGA_lite"),
+                PathBuf::from("/opt/altera_pro"),
                 PathBuf::from("/opt/altera"),
             ]
         };
 
         for base in &candidates {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                let mut versions: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
-                    .filter_map(|e| {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-                            Some(name)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                versions.sort();
-                if let Some(ver) = versions.last() {
-                    let install = base.join(ver);
-                    // Verify quartus/ directory exists
-                    if install.join("quartus").exists() {
-                        return (ver.clone(), Some(install));
-                    }
+            if let Some((ver, install)) = Self::scan_version_dirs(base) {
+                return (ver, Some(install));
+            }
+        }
+
+        // 3. Fallback: which quartus_sh
+        if let Ok(output) = std::process::Command::new("which").arg("quartus_sh").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let bin_path = PathBuf::from(&path_str);
+                // quartus_sh is at <install>/quartus/bin64/quartus_sh — go up 3 levels
+                if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                    let ver = install.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(install.to_path_buf()));
                 }
             }
         }
@@ -349,9 +398,22 @@ foreach f [glob -nocomplain {project_path_tcl}/*.v {project_path_tcl}/*.sv {proj
     set_global_assignment -name VERILOG_FILE $f
 }}
 
-# Add constraint files
-foreach f [glob -nocomplain {project_path_tcl}/*.sdc] {{
-    set_global_assignment -name SDC_FILE $f
+# Add constraint files (or generate default clock constraints if none found)
+set sdc_files [glob -nocomplain {project_path_tcl}/*.sdc]
+if {{[llength $sdc_files] > 0}} {{
+    foreach f $sdc_files {{
+        set_global_assignment -name SDC_FILE $f
+    }}
+}} else {{
+    set default_sdc "{project_path_tcl}/.coverteda_default.sdc"
+    set fh [open $default_sdc w]
+    puts $fh {{# Auto-generated by CovertEDA - default clock constraints}}
+    puts $fh {{# Replace with a proper .sdc file for accurate timing analysis}}
+    puts $fh {{derive_clocks -period "10.000"}}
+    puts $fh {{derive_pll_clocks}}
+    close $fh
+    set_global_assignment -name SDC_FILE $default_sdc
+    puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constraints"
 }}
 "#,
         ));

@@ -19,40 +19,90 @@ impl RadiantBackend {
         }
     }
 
+    /// Verify a candidate install dir has radiantc.
+    fn verify_install(install: &Path) -> bool {
+        install.join("bin").join("lin64").join("radiantc").exists()
+            || install.join("bin").join("nt64").join("radiantc.exe").exists()
+    }
+
+    /// Scan a directory for version subdirectories containing radiantc.
+    fn scan_version_dirs(base: &Path) -> Option<(String, PathBuf)> {
+        let entries = std::fs::read_dir(base).ok()?;
+        let mut versions: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        versions.sort();
+        let ver = versions.last()?;
+        let install = base.join(ver);
+        if Self::verify_install(&install) {
+            Some((ver.clone(), install))
+        } else {
+            // Still accept if directory exists (backward compat — some installs lack radiantc)
+            Some((ver.clone(), install))
+        }
+    }
+
     /// Scan known installation paths for Lattice Radiant.
     fn detect_installation() -> (String, Option<PathBuf>) {
+        let config = crate::config::AppConfig::load();
+
+        // 1. User-configured path takes priority
+        if let Some(ref configured) = config.tool_paths.radiant {
+            if configured.as_os_str().len() > 0 {
+                if Self::verify_install(configured) {
+                    let ver = configured.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(configured.clone()));
+                }
+                if let Some((ver, install)) = Self::scan_version_dirs(configured) {
+                    return (ver, Some(install));
+                }
+            }
+        }
+
+        // 2. Scan known directories
         let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
-            // Standard Windows install paths
             vec![PathBuf::from(r"C:\lscc\radiant")]
         } else {
-            // Linux + WSL: check both native and /mnt/c
-            vec![
+            let mut paths = vec![
                 PathBuf::from("/usr/local/radiant"),
                 PathBuf::from("/opt/lscc/radiant"),
                 PathBuf::from("/mnt/c/lscc/radiant"),
-            ]
+                PathBuf::from("/mnt/d/lscc/radiant"),
+            ];
+            if let Some(home) = std::env::var_os("HOME") {
+                paths.push(PathBuf::from(home).join("lscc").join("radiant"));
+            }
+            paths
         };
 
         for base in &candidates {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                // Find the newest version directory (e.g., "2025.2")
-                let mut versions: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
-                    .filter_map(|e| {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        // Version dirs look like "2025.2", "2024.1", etc.
-                        if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-                            Some(name)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                versions.sort();
-                if let Some(ver) = versions.last() {
-                    let install = base.join(ver);
-                    return (ver.clone(), Some(install));
+            if let Some((ver, install)) = Self::scan_version_dirs(base) {
+                return (ver, Some(install));
+            }
+        }
+
+        // 3. Fallback: which radiantc
+        if let Ok(output) = std::process::Command::new("which").arg("radiantc").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let bin_path = PathBuf::from(&path_str);
+                // radiantc is at <install>/bin/lin64/radiantc — go up 3 levels
+                if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                    let ver = install.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(install.to_path_buf()));
                 }
             }
         }

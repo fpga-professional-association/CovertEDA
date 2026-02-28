@@ -418,6 +418,34 @@ pub fn start_build(
         }
     }
 
+    // For Quartus on WSL, use a batch file wrapper to ensure environment
+    // variables reach the Windows process. Command.env() doesn't work reliably
+    // for WSL→Windows process interop — the DDM crashes without QUARTUS_ROOTDIR.
+    let bat_wrapper_path: Option<String> = if backend_id == "quartus" && executable.contains(".exe") {
+        let bat_path = project_path.join(".coverteda_build.bat");
+        let win_exe = wsl_to_windows_path(&PathBuf::from(&executable));
+        let mut bat = String::from("@echo off\r\n");
+        for (key, val) in &env_vars {
+            if key == "PATH" {
+                // For PATH, extract only Windows-style paths and prepend to %PATH%
+                let quartus_paths: Vec<&str> = val.split(';')
+                    .filter(|p| !p.starts_with('/')) // Skip WSL paths
+                    .collect();
+                if !quartus_paths.is_empty() {
+                    bat.push_str(&format!("set \"PATH={};%PATH%\"\r\n", quartus_paths.join(";")));
+                }
+            } else {
+                bat.push_str(&format!("set \"{}={}\"\r\n", key, val));
+            }
+        }
+        bat.push_str(&format!("\"{}\" -t \"{}\"\r\n", win_exe, &script_arg));
+        std::fs::write(&bat_path, &bat)
+            .map_err(|e| format!("Failed to write batch wrapper: {}", e))?;
+        Some(wsl_to_windows_path(&bat_path))
+    } else {
+        None
+    };
+
     // Record the build with a cancel flag
     let bid = build_id.clone();
     let cancel_flag = Arc::new(AtomicBool::new(false));
@@ -472,25 +500,40 @@ pub fn start_build(
             }
         }
         emit_info("────────────────────────");
-        emit_info(&format!("Spawning: {} {}", &executable, &script_arg));
+        if let Some(ref bat_path) = bat_wrapper_path {
+            emit_info(&format!("Spawning via batch wrapper: cmd.exe /c {}", bat_path));
+        } else {
+            emit_info(&format!("Spawning: {} {}", &executable, &script_arg));
+        }
         emit_info(&format!("Working dir: {}", project_path.display()));
         emit_info("");
 
-        let mut cmd = Command::new(&executable);
-        // Backend-specific CLI flags before the script path
-        match backend_id.as_str() {
-            "quartus" => { cmd.arg("-t"); }
-            "vivado" => { cmd.args(["-mode", "batch", "-source"]); }
-            "ace" => { cmd.args(["-batch", "-script_file"]); }
-            _ => {} // radiant, diamond, oss: bare argument
-        }
-        cmd.arg(&script_arg)
-            .current_dir(&project_path)
+        let mut cmd = if let Some(ref bat_path) = bat_wrapper_path {
+            // Use batch wrapper (Quartus on WSL) — env vars are set inside the .bat
+            let mut c = Command::new("cmd.exe");
+            c.args(["/c", bat_path]);
+            c
+        } else {
+            let mut c = Command::new(&executable);
+            // Backend-specific CLI flags before the script path
+            match backend_id.as_str() {
+                "quartus" => { c.arg("-t"); }
+                "vivado" => { c.args(["-mode", "batch", "-source"]); }
+                "ace" => { c.args(["-batch", "-script_file"]); }
+                _ => {} // radiant, diamond, oss: bare argument
+            }
+            c.arg(&script_arg);
+            c
+        };
+        cmd.current_dir(&project_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        for (key, val) in &env_vars {
-            cmd.env(key, val);
+        // Only set env vars directly when not using batch wrapper
+        if bat_wrapper_path.is_none() {
+            for (key, val) in &env_vars {
+                cmd.env(key, val);
+            }
         }
 
         match cmd.spawn() {
@@ -949,7 +992,9 @@ pub async fn clean_build(project_dir: String) -> Result<u32, String> {
         let artifacts = [
             ".coverteda_build.tcl",
             ".coverteda_build.sh",
+            ".coverteda_build.bat",
             ".coverteda_build.log",
+            ".coverteda_default.sdc",
         ];
         for name in &artifacts {
             let p = project_path.join(name);
@@ -1456,6 +1501,14 @@ pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, Str
                     let quartus = crate::backend::quartus::QuartusBackend::new();
                     quartus.install_dir().map(|p| p.display().to_string())
                 }
+                "diamond" => {
+                    let diamond = crate::backend::diamond::DiamondBackend::new();
+                    diamond.install_dir().map(|p| p.display().to_string())
+                }
+                "vivado" => {
+                    let vivado = crate::backend::vivado::VivadoBackend::new();
+                    vivado.install_dir().map(|p| p.display().to_string())
+                }
                 "opensource" => {
                     let oss = crate::backend::oss::OssBackend::new();
                     oss.install_dir().map(|p| p.display().to_string())
@@ -1506,6 +1559,163 @@ pub fn refresh_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, St
     }
     // Re-use detect_tools to return the updated list
     detect_tools(state)
+}
+
+/// Run `which <cli_tool>` for a backend and return info about it.
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WhichResult {
+    /// Resolved path from `which`, if on PATH
+    pub which_path: Option<String>,
+    /// The bin directory CovertEDA detected (may not be on PATH)
+    pub detected_bin_dir: Option<String>,
+}
+
+#[tauri::command]
+pub fn which_tool(backend_id: String) -> Result<WhichResult, String> {
+    let cli_names: Vec<&str> = match backend_id.as_str() {
+        "diamond" => vec!["pnmainc", "diamond"],
+        "radiant" => vec!["radiantc"],
+        "quartus" => vec!["quartus_sh"],
+        "vivado" => vec!["vivado"],
+        "opensource" => vec!["yosys"],
+        "ace" => vec!["ace"],
+        "libero" => vec!["libero"],
+        _ => return Ok(WhichResult { which_path: None, detected_bin_dir: None }),
+    };
+
+    // which
+    let mut which_path = None;
+    for name in &cli_names {
+        if let Ok(output) = std::process::Command::new("which").arg(name).output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    which_path = Some(path);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Derive detected bin dir from install path
+    let detected_bin_dir = get_backend_bin_dir(&backend_id);
+
+    Ok(WhichResult { which_path, detected_bin_dir })
+}
+
+/// Get the bin directory for a backend from its detected install path.
+fn get_backend_bin_dir(backend_id: &str) -> Option<String> {
+    let install: std::path::PathBuf = match backend_id {
+        "diamond" => crate::backend::diamond::DiamondBackend::new().install_dir()?.to_path_buf(),
+        "radiant" => crate::backend::radiant::RadiantBackend::new().install_dir()?.to_path_buf(),
+        "quartus" => crate::backend::quartus::QuartusBackend::new().install_dir()?.to_path_buf(),
+        "vivado" => crate::backend::vivado::VivadoBackend::new().install_dir()?.to_path_buf(),
+        "opensource" => crate::backend::oss::OssBackend::new().install_dir()?.to_path_buf(),
+        "ace" => crate::backend::ace::AceBackend::new().install_dir()?.to_path_buf(),
+        _ => return None,
+    };
+
+    let bin_dir = match backend_id {
+        "diamond" | "radiant" => {
+            let lin = install.join("bin").join("lin64");
+            let nt = install.join("bin").join("nt64");
+            if lin.exists() { lin } else if nt.exists() { nt } else { install.join("bin") }
+        }
+        "quartus" => {
+            let q64 = install.join("quartus").join("bin64");
+            let qbin = install.join("quartus").join("bin");
+            if q64.exists() { q64 } else if qbin.exists() { qbin } else { install.join("bin") }
+        }
+        _ => install.join("bin"),
+    };
+
+    if bin_dir.exists() {
+        Some(bin_dir.display().to_string())
+    } else {
+        None
+    }
+}
+
+/// Add a detected tool's bin directory to the user's shell PATH config.
+/// Detects bash/zsh on Unix, uses `setx` on Windows.
+/// Returns a message describing what was done.
+#[tauri::command]
+pub fn add_tool_to_path(backend_id: String) -> Result<String, String> {
+    let bin_str = get_backend_bin_dir(&backend_id)
+        .ok_or_else(|| format!("{} is not detected — cannot determine bin path", backend_id))?;
+
+    let backend_name = match backend_id.as_str() {
+        "diamond" => "Lattice Diamond",
+        "radiant" => "Lattice Radiant",
+        "quartus" => "Intel Quartus",
+        "vivado" => "AMD Vivado",
+        "opensource" => "OSS CAD Suite",
+        "ace" => "Achronix ACE",
+        _ => &backend_id,
+    };
+
+    if cfg!(target_os = "windows") {
+        // Windows: use setx to add to user PATH
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        if current_path.contains(&bin_str) {
+            return Ok(format!("{} (already in PATH)", bin_str));
+        }
+        let new_path = format!("{};{}", bin_str, current_path);
+        let output = std::process::Command::new("setx")
+            .args(["PATH", &new_path])
+            .output()
+            .map_err(|e| format!("Failed to run setx: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("setx failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        return Ok(format!("{} → added via setx (restart terminal to take effect)", bin_str));
+    }
+
+    // Unix: detect shell from $SHELL env var, write to appropriate rc file
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let home_path = std::path::PathBuf::from(&home);
+    let shell = std::env::var("SHELL").unwrap_or_default();
+
+    let rc_file = if shell.ends_with("/zsh") {
+        home_path.join(".zshrc")
+    } else if shell.ends_with("/fish") {
+        // fish uses a different syntax — handle separately
+        home_path.join(".config").join("fish").join("config.fish")
+    } else {
+        // Default to .bashrc (bash, sh, etc.)
+        home_path.join(".bashrc")
+    };
+
+    let rc_name = rc_file.file_name().unwrap_or_default().to_string_lossy().to_string();
+
+    // Check if already present
+    let existing = std::fs::read_to_string(&rc_file).unwrap_or_default();
+    if existing.contains(&bin_str) {
+        return Ok(format!("{} (already in {})", bin_str, rc_name));
+    }
+
+    // Build the export line based on shell type
+    let line = if shell.ends_with("/fish") {
+        format!("\n# {} (added by CovertEDA)\nfish_add_path {}\n", backend_name, bin_str)
+    } else {
+        format!("\n# {} (added by CovertEDA)\nexport PATH=\"{}:$PATH\"\n", backend_name, bin_str)
+    };
+
+    // Ensure parent dir exists (for fish config)
+    if let Some(parent) = rc_file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&rc_file)
+        .map_err(|e| format!("Failed to open {}: {}", rc_name, e))?;
+    std::io::Write::write_all(&mut file, line.as_bytes())
+        .map_err(|e| format!("Failed to write to {}: {}", rc_name, e))?;
+
+    Ok(format!("{} → added to {}", bin_str, rc_name))
 }
 
 #[tauri::command]
@@ -2095,7 +2305,7 @@ pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String
     // Includes vendor-specific patterns and OSS log file names
     let patterns: Vec<&str> = match report_type.as_str() {
         "synth" => vec!["srr", "srp", "syn.rpt", "synth.log"],
-        "map" => vec!["mrp", "map.rpt", "synth.log"],
+        "map" => vec!["mrp", "map.rpt", "fit.rpt", "synth.log"],
         "par" => vec!["par", "fit.rpt", "pnr.log"],
         "bitstream" => vec!["bgn", "bitstream.log"],
         "timing" => vec!["twr", "sta.rpt"],

@@ -1,35 +1,143 @@
 use crate::backend::{BackendResult, FpgaBackend, BackendError};
 use crate::types::*;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Lattice Diamond backend — drives pnmainc (TCL shell) for MachXO3/ECP5 families.
 pub struct DiamondBackend {
     version: String,
+    install_dir: Option<PathBuf>,
 }
 
 impl DiamondBackend {
     pub fn new() -> Self {
+        let (version, install_dir) = Self::detect_installation();
         Self {
-            version: "3.13".to_string(),
+            version,
+            install_dir,
         }
     }
 
-    /// Platform-specific path to pnmainc
-    fn tool_path(&self) -> std::path::PathBuf {
-        if cfg!(target_os = "windows") {
-            // C:\lscc\diamond\<ver>\bin\nt64\pnmainc.exe
-            std::path::PathBuf::from(format!(
-                r"C:\lscc\diamond\{}\bin\nt64\pnmainc.exe",
-                self.version
-            ))
+    /// Scan known installation paths for Lattice Diamond.
+    /// Scan a directory for version subdirectories containing pnmainc.
+    fn scan_version_dirs(base: &Path) -> Option<(String, PathBuf)> {
+        let entries = std::fs::read_dir(base).ok()?;
+        let mut versions: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        versions.sort();
+        let ver = versions.last()?;
+        let install = base.join(ver);
+        if Self::verify_install(&install) {
+            Some((ver.clone(), install))
         } else {
-            // /usr/local/diamond/<ver>/bin/lin64/pnmainc
-            std::path::PathBuf::from(format!(
-                "/usr/local/diamond/{}/bin/lin64/pnmainc",
-                self.version
-            ))
+            None
         }
+    }
+
+    /// Verify a candidate install dir has pnmainc.
+    fn verify_install(install: &Path) -> bool {
+        install.join("bin").join("lin64").join("pnmainc").exists()
+            || install.join("bin").join("nt64").join("pnmainc.exe").exists()
+    }
+
+    fn detect_installation() -> (String, Option<PathBuf>) {
+        let config = crate::config::AppConfig::load();
+
+        // 1. User-configured path takes priority
+        if let Some(ref configured) = config.tool_paths.diamond {
+            if configured.as_os_str().len() > 0 {
+                // Could be the install dir directly, or a parent with version subdirs
+                if Self::verify_install(configured) {
+                    let ver = configured.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(configured.clone()));
+                }
+                // Maybe it's a base dir with version subdirs (e.g., user set /home/user/lscc/diamond)
+                if let Some((ver, install)) = Self::scan_version_dirs(configured) {
+                    return (ver, Some(install));
+                }
+            }
+        }
+
+        // 2. Scan known installation directories
+        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+            vec![
+                PathBuf::from(r"C:\lscc\diamond"),
+                PathBuf::from(r"C:\Lattice\diamond"),
+            ]
+        } else {
+            let mut paths = vec![
+                PathBuf::from("/usr/local/diamond"),
+                PathBuf::from("/opt/lscc/diamond"),
+                PathBuf::from("/opt/lattice/diamond"),
+                // WSL paths
+                PathBuf::from("/mnt/c/lscc/diamond"),
+                PathBuf::from("/mnt/d/lscc/diamond"),
+                PathBuf::from("/mnt/c/Lattice/diamond"),
+            ];
+            // Also check ~/lscc/diamond/ (common Linux install location)
+            if let Some(home) = std::env::var_os("HOME") {
+                paths.push(PathBuf::from(home).join("lscc").join("diamond"));
+            }
+            paths
+        };
+
+        for base in &candidates {
+            if let Some((ver, install)) = Self::scan_version_dirs(base) {
+                return (ver, Some(install));
+            }
+        }
+
+        // Fallback: check if pnmainc is on PATH
+        if let Ok(output) = std::process::Command::new("which").arg("pnmainc").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let pnmainc_path = PathBuf::from(&path_str);
+                // pnmainc is at <install>/bin/lin64/pnmainc — go up 3 levels
+                if let Some(install) = pnmainc_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                    let ver = install.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(install.to_path_buf()));
+                }
+            }
+        }
+
+        ("unknown".to_string(), None)
+    }
+
+    /// Path to pnmainc executable.
+    fn tool_path(&self) -> Option<PathBuf> {
+        let dir = self.install_dir.as_ref()?;
+        let bin = if cfg!(target_os = "windows") {
+            dir.join("bin").join("nt64").join("pnmainc.exe")
+        } else if dir.starts_with("/mnt/c") || dir.starts_with("/mnt/d") {
+            // WSL accessing Windows install
+            dir.join("bin").join("nt64").join("pnmainc.exe")
+        } else {
+            dir.join("bin").join("lin64").join("pnmainc")
+        };
+        if bin.exists() {
+            Some(bin)
+        } else {
+            None
+        }
+    }
+
+    /// Public accessor for the install directory.
+    pub fn install_dir(&self) -> Option<&Path> {
+        self.install_dir.as_deref()
     }
 }
 
@@ -125,7 +233,7 @@ prj_project close
     }
 
     fn detect_tool(&self) -> bool {
-        self.tool_path().exists()
+        self.tool_path().is_some()
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
