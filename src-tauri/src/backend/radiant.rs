@@ -19,6 +19,13 @@ impl RadiantBackend {
         }
     }
 
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Verify a candidate install dir has radiantc.
     fn verify_install(install: &Path) -> bool {
         install.join("bin").join("lin64").join("radiantc").exists()
@@ -571,6 +578,10 @@ impl FpgaBackend for RadiantBackend {
 
     fn detect_tool(&self) -> bool {
         self.radiantc_path().is_some()
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {

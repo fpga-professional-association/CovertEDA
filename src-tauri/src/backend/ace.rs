@@ -20,6 +20,13 @@ impl AceBackend {
         }
     }
 
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Scan known installation paths for Achronix ACE.
     fn detect_installation() -> (String, Option<PathBuf>) {
         let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
@@ -350,6 +357,10 @@ impl FpgaBackend for AceBackend {
 
     fn detect_tool(&self) -> bool {
         self.ace_path().is_some()
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {

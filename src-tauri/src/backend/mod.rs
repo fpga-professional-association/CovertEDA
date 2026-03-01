@@ -82,6 +82,11 @@ pub trait FpgaBackend: Send + Sync {
     /// Check if the vendor tool is installed and available on this system
     fn detect_tool(&self) -> bool;
 
+    /// Return the install directory path as a string, if known.
+    fn install_path_str(&self) -> Option<String> {
+        None
+    }
+
     /// Parse a timing report from the implementation directory
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport>;
 
@@ -136,6 +141,7 @@ pub trait FpgaBackend: Send + Sync {
             constraint_ext: self.constraint_ext().to_string(),
             pipeline: self.pipeline_stages(),
             available: self.detect_tool(),
+            install_path: self.install_path_str(),
         }
     }
 }
@@ -147,6 +153,8 @@ pub struct BackendRegistry {
 }
 
 impl BackendRegistry {
+    /// Create registry with full detection — scans filesystem for all tools.
+    /// Use for `detect_tools` / `refresh_tools` commands.
     pub fn new() -> Self {
         Self {
             backends: vec![
@@ -157,6 +165,23 @@ impl BackendRegistry {
                 Box::new(libero::LiberoBackend::new()),
                 Box::new(oss::OssBackend::new()),
                 Box::new(ace::AceBackend::new()),
+            ],
+            active_idx: 0,
+        }
+    }
+
+    /// Create registry instantly with no filesystem I/O.
+    /// Backends report version="" and available=false until `detect_tools` runs.
+    pub fn new_deferred() -> Self {
+        Self {
+            backends: vec![
+                Box::new(diamond::DiamondBackend::new_deferred()),
+                Box::new(radiant::RadiantBackend::new_deferred()),
+                Box::new(quartus::QuartusBackend::new_deferred()),
+                Box::new(vivado::VivadoBackend::new_deferred()),
+                Box::new(libero::LiberoBackend::new_deferred()),
+                Box::new(oss::OssBackend::new_deferred()),
+                Box::new(ace::AceBackend::new_deferred()),
             ],
             active_idx: 0,
         }

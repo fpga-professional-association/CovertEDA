@@ -306,6 +306,8 @@ pub struct BackendInfo {
     pub constraint_ext: String,
     pub pipeline: Vec<PipelineStage>,
     pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_path: Option<String>,
 }
 
 // ── License ──

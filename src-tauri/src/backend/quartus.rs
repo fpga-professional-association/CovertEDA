@@ -19,6 +19,13 @@ impl QuartusBackend {
         }
     }
 
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Verify a candidate install dir has a quartus/ subdirectory.
     fn verify_install(install: &Path) -> bool {
         install.join("quartus").exists()
@@ -544,6 +551,10 @@ if {{[llength $sdc_files] > 0}} {{
 
     fn detect_tool(&self) -> bool {
         self.quartus_sh_path().is_some()
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {

@@ -18,6 +18,14 @@ impl DiamondBackend {
         }
     }
 
+    /// Create without running detection — instant, zero I/O.
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Scan known installation paths for Lattice Diamond.
     /// Scan a directory for version subdirectories containing pnmainc.
     fn scan_version_dirs(base: &Path) -> Option<(String, PathBuf)> {
@@ -299,6 +307,10 @@ prj_project close
 
     fn detect_tool(&self) -> bool {
         self.tool_path().is_some()
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {

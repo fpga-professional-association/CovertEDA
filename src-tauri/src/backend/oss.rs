@@ -123,6 +123,13 @@ impl OssBackend {
         }
     }
 
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Get the installation directory.
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
@@ -880,6 +887,10 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
 "#,
             project_dir = project_dir.display(),
         ))
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn detect_tool(&self) -> bool {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 
@@ -1003,97 +1003,135 @@ const SECTION_COMPONENTS: Record<string, () => JSX.Element> = {
   "about": AboutSection,
 };
 
+// ── CSS injected once for hover effects (no JS state needed) ──
+
+const SIDEBAR_STYLE_ID = "doc-sidebar-css";
+function ensureSidebarCSS() {
+  if (document.getElementById(SIDEBAR_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = SIDEBAR_STYLE_ID;
+  style.textContent = `
+    .doc-sidebar-item { transition: background .08s, color .08s; }
+    .doc-sidebar-item:hover:not(.doc-sidebar-active) { background: var(--doc-hover-bg) !important; }
+    .doc-sidebar-item:hover:not(.doc-sidebar-active) .doc-sidebar-label { color: var(--doc-hover-text) !important; }
+  `;
+  document.head.appendChild(style);
+}
+
+// ── Sidebar extracted into its own component ──
+// Hover state is local — never causes content area to re-render.
+
+const DocSidebar = memo(function DocSidebar({
+  activeSection,
+  onSelect,
+}: {
+  activeSection: string;
+  onSelect: (id: string) => void;
+}) {
+  const { C, MONO, SANS } = useTheme();
+
+  // Inject CSS once (no-op after first call)
+  ensureSidebarCSS();
+
+  const colorMap: Record<string, string> = {
+    accent: C.accent, cyan: C.cyan, purple: C.purple,
+    pink: C.pink, orange: C.orange, warn: C.warn, ok: C.ok,
+  };
+  const resolve = (k: string) => colorMap[k] ?? C.accent;
+
+  return (
+    <div style={{
+      width: 220, flexShrink: 0, background: C.s1, borderRight: `1px solid ${C.b1}`,
+      display: "flex", flexDirection: "column", overflow: "hidden",
+      // CSS custom properties for hover styles
+      ["--doc-hover-bg" as string]: C.s3,
+      ["--doc-hover-text" as string]: C.t2,
+    }}>
+      <div style={{
+        padding: "14px 16px 10px", borderBottom: `1px solid ${C.b1}`,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, fontFamily: SANS, marginBottom: 2 }}>
+          Documentation
+        </div>
+        <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, letterSpacing: 0.5 }}>
+          COVERTEDA USER GUIDE
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
+        {DOC_SECTIONS.map((sec) => {
+          const isActive = activeSection === sec.id;
+          const color = resolve(sec.color);
+          return (
+            <div
+              key={sec.id}
+              className={`doc-sidebar-item${isActive ? " doc-sidebar-active" : ""}`}
+              onClick={() => onSelect(sec.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "6px 10px", borderRadius: 5, cursor: "pointer",
+                marginBottom: 1,
+                background: isActive ? C.accentDim : "transparent",
+                borderLeft: isActive ? `2px solid ${color}` : "2px solid transparent",
+              }}
+            >
+              <span style={{ fontSize: 11, color: isActive ? color : C.t3, width: 16, textAlign: "center" }}>
+                {sec.icon}
+              </span>
+              <span
+                className="doc-sidebar-label"
+                style={{
+                  fontSize: 10, fontWeight: isActive ? 700 : 500,
+                  color: isActive ? C.t1 : C.t3,
+                }}
+              >
+                {sec.title}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{
+        padding: "8px 16px", borderTop: `1px solid ${C.b1}`,
+        fontSize: 7, fontFamily: MONO, color: C.t3, lineHeight: 1.6,
+      }}>
+        CovertEDA v0.1.0 Beta<br />
+        FPGA Professional Association<br />
+        Last updated: 2026-02-19
+      </div>
+    </div>
+  );
+});
+
+// ── Memoized content wrapper — only re-renders when activeSection changes ──
+
+const DocContent = memo(function DocContent({ activeSection }: { activeSection: string }) {
+  const SectionComponent = SECTION_COMPONENTS[activeSection];
+  return (
+    <div style={{
+      flex: 1, overflowY: "auto", padding: "20px 32px 40px",
+      maxWidth: 800,
+    }}>
+      {SectionComponent && <SectionComponent />}
+    </div>
+  );
+});
+
 // ── Main Documentation component ──
 
 export default function Documentation() {
-  const { C, MONO, SANS } = useTheme();
+  const { SANS } = useTheme();
   const [activeSection, setActiveSection] = useState("getting-started");
-  const [sidebarHover, setSidebarHover] = useState<string | null>(null);
 
-  const resolveColor = useCallback((colorKey: string) => {
-    const map: Record<string, string> = {
-      accent: C.accent, cyan: C.cyan, purple: C.purple,
-      pink: C.pink, orange: C.orange, warn: C.warn, ok: C.ok,
-    };
-    return map[colorKey] ?? C.accent;
-  }, [C]);
-
-  const SectionComponent = SECTION_COMPONENTS[activeSection];
+  const onSelect = useCallback((id: string) => setActiveSection(id), []);
 
   return (
     <div style={{
       display: "flex", height: "100%", overflow: "hidden", fontFamily: SANS,
     }}>
-      {/* ══════ SIDEBAR ══════ */}
-      <div style={{
-        width: 220, flexShrink: 0, background: C.s1, borderRight: `1px solid ${C.b1}`,
-        display: "flex", flexDirection: "column", overflow: "hidden",
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: "14px 16px 10px", borderBottom: `1px solid ${C.b1}`,
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 2 }}>
-            Documentation
-          </div>
-          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, letterSpacing: 0.5 }}>
-            COVERTEDA USER GUIDE
-          </div>
-        </div>
-
-        {/* Section list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
-          {DOC_SECTIONS.map((sec) => {
-            const isActive = activeSection === sec.id;
-            const isHover = sidebarHover === sec.id;
-            const color = resolveColor(sec.color);
-            return (
-              <div
-                key={sec.id}
-                onClick={() => setActiveSection(sec.id)}
-                onMouseEnter={() => setSidebarHover(sec.id)}
-                onMouseLeave={() => setSidebarHover(null)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 10px", borderRadius: 5, cursor: "pointer",
-                  marginBottom: 1,
-                  background: isActive ? C.accentDim : isHover ? C.s3 : "transparent",
-                  borderLeft: isActive ? `2px solid ${color}` : "2px solid transparent",
-                  transition: "all .1s",
-                }}
-              >
-                <span style={{ fontSize: 11, color: isActive ? color : C.t3, width: 16, textAlign: "center" }}>
-                  {sec.icon}
-                </span>
-                <span style={{
-                  fontSize: 10, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? C.t1 : isHover ? C.t2 : C.t3,
-                }}>
-                  {sec.title}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: "8px 16px", borderTop: `1px solid ${C.b1}`,
-          fontSize: 7, fontFamily: MONO, color: C.t3, lineHeight: 1.6,
-        }}>
-          CovertEDA v0.1.0 Beta<br />
-          FPGA Professional Association<br />
-          Last updated: 2026-02-19
-        </div>
-      </div>
-
-      {/* ══════ CONTENT ══════ */}
-      <div style={{
-        flex: 1, overflowY: "auto", padding: "20px 32px 40px",
-        maxWidth: 800,
-      }}>
-        {SectionComponent && <SectionComponent />}
-      </div>
+      <DocSidebar activeSection={activeSection} onSelect={onSelect} />
+      <DocContent activeSection={activeSection} />
     </div>
   );
 }

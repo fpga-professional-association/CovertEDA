@@ -25,6 +25,13 @@ impl LiberoBackend {
         }
     }
 
+    pub fn new_deferred() -> Self {
+        Self {
+            version: String::new(),
+            install_dir: None,
+        }
+    }
+
     /// Scan known Libero SoC installation paths and return (version, install_dir).
     fn detect_installation() -> (String, Option<PathBuf>) {
         let base_candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
@@ -281,6 +288,10 @@ impl FpgaBackend for LiberoBackend {
                 detail: ".stp bitstream generation".into(),
             },
         ]
+    }
+
+    fn install_path_str(&self) -> Option<String> {
+        self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
     fn detect_tool(&self) -> bool {

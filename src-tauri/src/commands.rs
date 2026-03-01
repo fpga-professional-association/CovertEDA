@@ -22,8 +22,10 @@ pub struct BuildHandle {
 
 impl Default for AppState {
     fn default() -> Self {
+        // Use deferred registry — zero filesystem I/O at startup.
+        // Backends are detected lazily when detect_tools is first called.
         Self {
-            registry: Mutex::new(BackendRegistry::new()),
+            registry: Mutex::new(BackendRegistry::new_deferred()),
             active_build: Mutex::new(None),
             current_project: Mutex::new(None),
         }
@@ -1484,44 +1486,39 @@ pub struct LicenseCheckResult {
     pub features: Vec<LicenseFeature>,
 }
 
+/// Ensure the registry has run full detection. On first call this upgrades
+/// the deferred registry; subsequent calls are a no-op (use refresh_tools
+/// to force re-detection).
+fn ensure_detected(state: &AppState) -> Result<(), String> {
+    let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
+    // Check if still in deferred state (first backend has empty version and no install_dir)
+    let needs_detect = registry.list().first()
+        .map(|b| b.version.is_empty() && !b.available)
+        .unwrap_or(true);
+    if needs_detect {
+        *registry = crate::backend::BackendRegistry::new();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn detect_tools(state: State<'_, AppState>) -> Result<Vec<DetectedTool>, String> {
+    // Upgrade deferred registry on first call
+    ensure_detected(&state)?;
+
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     let backends = registry.list();
 
+    // install_path now comes from BackendInfo (via the install_path_str trait method)
+    // — no need to re-instantiate backends.
     let mut tools: Vec<DetectedTool> = backends
         .iter()
-        .map(|b| {
-            let install_path = match b.id.as_str() {
-                "radiant" => {
-                    let radiant = crate::backend::radiant::RadiantBackend::new();
-                    radiant.install_dir().map(|p| p.display().to_string())
-                }
-                "quartus" => {
-                    let quartus = crate::backend::quartus::QuartusBackend::new();
-                    quartus.install_dir().map(|p| p.display().to_string())
-                }
-                "diamond" => {
-                    let diamond = crate::backend::diamond::DiamondBackend::new();
-                    diamond.install_dir().map(|p| p.display().to_string())
-                }
-                "vivado" => {
-                    let vivado = crate::backend::vivado::VivadoBackend::new();
-                    vivado.install_dir().map(|p| p.display().to_string())
-                }
-                "opensource" => {
-                    let oss = crate::backend::oss::OssBackend::new();
-                    oss.install_dir().map(|p| p.display().to_string())
-                }
-                _ => None,
-            };
-            DetectedTool {
-                backend_id: b.id.clone(),
-                name: b.name.clone(),
-                version: b.version.clone(),
-                install_path,
-                available: b.available,
-            }
+        .map(|b| DetectedTool {
+            backend_id: b.id.clone(),
+            name: b.name.clone(),
+            version: b.version.clone(),
+            install_path: b.install_path.clone(),
+            available: b.available,
         })
         .collect();
 

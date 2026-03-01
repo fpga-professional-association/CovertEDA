@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Mutex;
+
+/// Cached config to avoid re-reading the TOML file on every backend init.
+/// Cleared by `invalidate_cache()` after a save.
+static CONFIG_CACHE: Mutex<Option<AppConfig>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -86,13 +91,36 @@ impl AppConfig {
             .join("config.toml")
     }
 
+    /// Load config, using an in-memory cache to avoid redundant file reads.
+    /// 7 backends call this during init — the file is read once, cloned 6 times.
     pub fn load() -> Self {
+        if let Ok(guard) = CONFIG_CACHE.lock() {
+            if let Some(ref cached) = *guard {
+                return cached.clone();
+            }
+        }
+        let config = Self::load_from_disk();
+        if let Ok(mut guard) = CONFIG_CACHE.lock() {
+            *guard = Some(config.clone());
+        }
+        config
+    }
+
+    /// Read config directly from disk, bypassing cache.
+    fn load_from_disk() -> Self {
         let path = Self::config_path();
         if path.exists() {
             let content = std::fs::read_to_string(&path).unwrap_or_default();
             toml::from_str(&content).unwrap_or_default()
         } else {
             Self::default()
+        }
+    }
+
+    /// Invalidate the cache so the next `load()` re-reads from disk.
+    pub fn invalidate_cache() {
+        if let Ok(mut guard) = CONFIG_CACHE.lock() {
+            *guard = None;
         }
     }
 
@@ -103,6 +131,8 @@ impl AppConfig {
         }
         let content = toml::to_string_pretty(self)?;
         std::fs::write(&path, content)?;
+        // Invalidate cache so next load() picks up the saved values
+        Self::invalidate_cache();
         Ok(())
     }
 }
