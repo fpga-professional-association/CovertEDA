@@ -3,26 +3,60 @@ use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Distinguishes Quartus Prime Standard/Lite from Quartus Prime Pro.
+/// They are separate installations with different supported device families.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuartusEdition {
+    Standard,
+    Pro,
+}
+
 /// Intel Quartus Prime backend — drives quartus_sh, quartus_syn, quartus_map,
 /// quartus_fit, quartus_asm, quartus_sta (TCL shell and individual tool flow).
 pub struct QuartusBackend {
+    edition: QuartusEdition,
     version: String,
     install_dir: Option<PathBuf>,
     deferred: bool,
 }
 
 impl QuartusBackend {
+    /// Create a Quartus Prime Standard/Lite backend with full detection.
     pub fn new() -> Self {
-        let (version, install_dir) = Self::detect_installation();
+        let (version, install_dir) = Self::detect_installation(QuartusEdition::Standard);
         Self {
+            edition: QuartusEdition::Standard,
             version,
             install_dir,
             deferred: false,
         }
     }
 
+    /// Create a Quartus Prime Pro backend with full detection.
+    pub fn new_pro() -> Self {
+        let (version, install_dir) = Self::detect_installation(QuartusEdition::Pro);
+        Self {
+            edition: QuartusEdition::Pro,
+            version,
+            install_dir,
+            deferred: false,
+        }
+    }
+
+    /// Create a deferred Quartus Prime Standard/Lite backend (no filesystem I/O).
     pub fn new_deferred() -> Self {
         Self {
+            edition: QuartusEdition::Standard,
+            version: String::new(),
+            install_dir: None,
+            deferred: true,
+        }
+    }
+
+    /// Create a deferred Quartus Prime Pro backend (no filesystem I/O).
+    pub fn new_pro_deferred() -> Self {
+        Self {
+            edition: QuartusEdition::Pro,
             version: String::new(),
             install_dir: None,
             deferred: true,
@@ -59,12 +93,60 @@ impl QuartusBackend {
         }
     }
 
+    /// Return the candidate installation directories for a given edition.
+    fn candidate_paths(edition: QuartusEdition) -> Vec<PathBuf> {
+        match edition {
+            QuartusEdition::Standard => {
+                if cfg!(target_os = "windows") {
+                    vec![
+                        PathBuf::from(r"C:\intelFPGA"),
+                        PathBuf::from(r"C:\intelFPGA_lite"),
+                        PathBuf::from(r"C:\altera"),
+                    ]
+                } else {
+                    vec![
+                        PathBuf::from("/mnt/c/intelFPGA"),
+                        PathBuf::from("/mnt/c/intelFPGA_lite"),
+                        PathBuf::from("/mnt/c/altera"),
+                        PathBuf::from("/mnt/d/intelFPGA"),
+                        PathBuf::from("/mnt/d/intelFPGA_lite"),
+                        PathBuf::from("/mnt/d/altera"),
+                        PathBuf::from("/opt/intelFPGA"),
+                        PathBuf::from("/opt/intelFPGA_lite"),
+                        PathBuf::from("/opt/altera"),
+                    ]
+                }
+            }
+            QuartusEdition::Pro => {
+                if cfg!(target_os = "windows") {
+                    vec![
+                        PathBuf::from(r"C:\intelFPGA_pro"),
+                        PathBuf::from(r"C:\altera_pro"),
+                    ]
+                } else {
+                    vec![
+                        PathBuf::from("/mnt/c/intelFPGA_pro"),
+                        PathBuf::from("/mnt/c/altera_pro"),
+                        PathBuf::from("/mnt/d/intelFPGA_pro"),
+                        PathBuf::from("/mnt/d/altera_pro"),
+                        PathBuf::from("/opt/intelFPGA_pro"),
+                        PathBuf::from("/opt/altera_pro"),
+                    ]
+                }
+            }
+        }
+    }
+
     /// Scan known installation paths for Intel Quartus Prime.
-    fn detect_installation() -> (String, Option<PathBuf>) {
+    fn detect_installation(edition: QuartusEdition) -> (String, Option<PathBuf>) {
         let config = crate::config::AppConfig::load();
 
         // 1. User-configured path takes priority
-        if let Some(ref configured) = config.tool_paths.quartus {
+        let configured_path = match edition {
+            QuartusEdition::Standard => &config.tool_paths.quartus,
+            QuartusEdition::Pro => &config.tool_paths.quartus_pro,
+        };
+        if let Some(ref configured) = configured_path {
             if configured.as_os_str().len() > 0 {
                 if Self::verify_install(configured) {
                     let ver = configured.file_name()
@@ -96,34 +178,8 @@ impl QuartusBackend {
             }
         }
 
-        // 2. Scan known directories
-        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
-            vec![
-                PathBuf::from(r"C:\intelFPGA_pro"),
-                PathBuf::from(r"C:\intelFPGA"),
-                PathBuf::from(r"C:\intelFPGA_lite"),
-                PathBuf::from(r"C:\altera_pro"),
-                PathBuf::from(r"C:\altera"),
-            ]
-        } else {
-            vec![
-                PathBuf::from("/mnt/c/intelFPGA_pro"),
-                PathBuf::from("/mnt/c/intelFPGA"),
-                PathBuf::from("/mnt/c/intelFPGA_lite"),
-                PathBuf::from("/mnt/c/altera_pro"),
-                PathBuf::from("/mnt/c/altera"),
-                PathBuf::from("/mnt/d/intelFPGA_pro"),
-                PathBuf::from("/mnt/d/intelFPGA"),
-                PathBuf::from("/mnt/d/intelFPGA_lite"),
-                PathBuf::from("/mnt/d/altera_pro"),
-                PathBuf::from("/mnt/d/altera"),
-                PathBuf::from("/opt/intelFPGA_pro"),
-                PathBuf::from("/opt/intelFPGA"),
-                PathBuf::from("/opt/intelFPGA_lite"),
-                PathBuf::from("/opt/altera_pro"),
-                PathBuf::from("/opt/altera"),
-            ]
-        };
+        // 2. Scan known directories for this edition
+        let candidates = Self::candidate_paths(edition);
 
         for base in &candidates {
             if let Some((ver, install)) = Self::scan_version_dirs(base) {
@@ -174,34 +230,8 @@ impl QuartusBackend {
     }
 
     /// Scan all candidate directories and return every verified version found.
-    pub fn scan_all_versions() -> Vec<DetectedVersion> {
-        let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
-            vec![
-                PathBuf::from(r"C:\intelFPGA_pro"),
-                PathBuf::from(r"C:\intelFPGA"),
-                PathBuf::from(r"C:\intelFPGA_lite"),
-                PathBuf::from(r"C:\altera_pro"),
-                PathBuf::from(r"C:\altera"),
-            ]
-        } else {
-            vec![
-                PathBuf::from("/mnt/c/intelFPGA_pro"),
-                PathBuf::from("/mnt/c/intelFPGA"),
-                PathBuf::from("/mnt/c/intelFPGA_lite"),
-                PathBuf::from("/mnt/c/altera_pro"),
-                PathBuf::from("/mnt/c/altera"),
-                PathBuf::from("/mnt/d/intelFPGA_pro"),
-                PathBuf::from("/mnt/d/intelFPGA"),
-                PathBuf::from("/mnt/d/intelFPGA_lite"),
-                PathBuf::from("/mnt/d/altera_pro"),
-                PathBuf::from("/mnt/d/altera"),
-                PathBuf::from("/opt/intelFPGA_pro"),
-                PathBuf::from("/opt/intelFPGA"),
-                PathBuf::from("/opt/intelFPGA_lite"),
-                PathBuf::from("/opt/altera_pro"),
-                PathBuf::from("/opt/altera"),
-            ]
-        };
+    pub fn scan_all_versions(edition: QuartusEdition) -> Vec<DetectedVersion> {
+        let candidates = Self::candidate_paths(edition);
 
         let mut results = Vec::new();
         for base in &candidates {
@@ -386,13 +416,22 @@ impl QuartusBackend {
 
 impl FpgaBackend for QuartusBackend {
     fn id(&self) -> &str {
-        "quartus"
+        match self.edition {
+            QuartusEdition::Standard => "quartus",
+            QuartusEdition::Pro => "quartus_pro",
+        }
     }
     fn name(&self) -> &str {
-        "Intel Quartus Prime"
+        match self.edition {
+            QuartusEdition::Standard => "Intel Quartus Prime",
+            QuartusEdition::Pro => "Intel Quartus Prime Pro",
+        }
     }
     fn short_name(&self) -> &str {
-        "Quartus"
+        match self.edition {
+            QuartusEdition::Standard => "Quartus",
+            QuartusEdition::Pro => "Quartus Pro",
+        }
     }
     fn version(&self) -> &str {
         &self.version
@@ -401,7 +440,10 @@ impl FpgaBackend for QuartusBackend {
         "quartus_sh"
     }
     fn default_device(&self) -> &str {
-        "10CX220YF780I5G"
+        match self.edition {
+            QuartusEdition::Standard => "5CSEMA5F31C6",
+            QuartusEdition::Pro => "1SG280LU3F50E2VG",
+        }
     }
     fn constraint_ext(&self) -> &str {
         ".sdc"
@@ -626,6 +668,23 @@ if {{[llength $sdc_files] > 0}} {{
         Ok(())
     }
 
+    fn verify_device_part(&self, part: &str) -> BackendResult<bool> {
+        let sh = self.quartus_sh_path().ok_or_else(|| {
+            BackendError::ToolNotFound("quartus_sh not found".into())
+        })?;
+        // Use quartus_sh --tcl_eval to check if part appears in get_part_list
+        let tcl = format!(
+            "if {{[lsearch -exact [get_part_list] \"{}\"] >= 0}} {{ puts VALID }} else {{ puts INVALID }}",
+            part,
+        );
+        let output = std::process::Command::new(&sh)
+            .args(["--tcl_eval", &tcl])
+            .output()
+            .map_err(|e| BackendError::IoError(e))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.contains("VALID"))
+    }
+
     fn generate_ip_script(
         &self,
         project_dir: &Path,
@@ -735,7 +794,11 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_backend() -> QuartusBackend {
-        QuartusBackend { version: "test".into(), install_dir: None, deferred: false }
+        QuartusBackend { edition: QuartusEdition::Standard, version: "test".into(), install_dir: None, deferred: false }
+    }
+
+    fn make_pro_backend() -> QuartusBackend {
+        QuartusBackend { edition: QuartusEdition::Pro, version: "test".into(), install_dir: None, deferred: false }
     }
 
     #[test]
@@ -743,6 +806,15 @@ mod tests {
         let b = make_backend();
         assert_eq!(b.id(), "quartus");
         assert_eq!(b.name(), "Intel Quartus Prime");
+    }
+
+    #[test]
+    fn test_quartus_pro_id_and_name() {
+        let b = make_pro_backend();
+        assert_eq!(b.id(), "quartus_pro");
+        assert_eq!(b.name(), "Intel Quartus Prime Pro");
+        assert_eq!(b.short_name(), "Quartus Pro");
+        assert_eq!(b.default_device(), "1SG280LU3F50E2VG");
     }
 
     #[test]

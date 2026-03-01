@@ -16,6 +16,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
 import { Refresh } from "./Icons";
 import { openInFileManager } from "../hooks/useTauri";
+import DevicePicker from "./DevicePicker";
 
 /** Truncate a path to show the right side with ... at the front */
 function truncatePath(path: string, maxChars: number = 40): string {
@@ -414,12 +415,14 @@ interface FileTreeProps {
   onWidthChange: (w: number) => void;
   projectDir?: string;
   device?: string;
-  onDeviceClick?: () => void;
+  backendId?: string;
+  onDeviceChange?: (part: string) => void;
+  toolEdition?: string | null;
   topModule?: string;
   onSetTopModule?: (file: ProjectFile) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, onDeviceClick, topModule, onSetTopModule }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, backendId, onDeviceChange, toolEdition, topModule, onSetTopModule }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -662,7 +665,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
         </div>
       )}
 
-      {/* Device / Part */}
+      {/* Device / Part — inline dropdown picker */}
       {device && (
         <div
           style={{
@@ -673,26 +676,35 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
             gap: 4,
           }}
         >
-          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600, letterSpacing: 0.3 }}>
+          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600, letterSpacing: 0.3, flexShrink: 0 }}>
             DEVICE
           </span>
-          <span
-            onClick={onDeviceClick}
-            style={{
-              fontSize: 8,
-              fontFamily: MONO,
-              color: C.accent,
-              fontWeight: 600,
-              cursor: onDeviceClick ? "pointer" : "default",
-              borderBottom: onDeviceClick ? `1px dashed ${C.accent}40` : "none",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-            title={onDeviceClick ? "Click to change device/part" : device}
-          >
-            {device}
-          </span>
+          {onDeviceChange && backendId ? (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <DevicePicker
+                compact
+                value={device}
+                onChange={onDeviceChange}
+                backendId={backendId}
+                edition={toolEdition}
+              />
+            </div>
+          ) : (
+            <span
+              style={{
+                fontSize: 8,
+                fontFamily: MONO,
+                color: C.accent,
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={device}
+            >
+              {device}
+            </span>
+          )}
         </div>
       )}
 

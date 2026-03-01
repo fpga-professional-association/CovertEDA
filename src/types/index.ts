@@ -369,6 +369,13 @@ export interface VendorImportResult {
   summary: string[];
 }
 
+// ── Device Verification ──
+export interface VerifyDeviceResult {
+  valid: boolean;
+  cliVerified: boolean;
+  error: string | null;
+}
+
 export interface LicenseFeature {
   feature: string;
   vendor: string;

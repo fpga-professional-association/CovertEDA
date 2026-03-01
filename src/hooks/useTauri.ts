@@ -385,6 +385,7 @@ export async function detectTools(): Promise<DetectedTool[]> {
       { backendId: "radiant", name: "Lattice Radiant", version: "2025.2", installPath: "/mnt/c/lscc/radiant/2025.2", available: true },
       { backendId: "diamond", name: "Lattice Diamond", version: "3.13", installPath: null, available: false },
       { backendId: "quartus", name: "Intel Quartus Prime", version: "23.1", installPath: null, available: false },
+      { backendId: "quartus_pro", name: "Intel Quartus Prime Pro", version: "25.3", installPath: null, available: false },
       { backendId: "vivado", name: "AMD Vivado", version: "2024.1", installPath: null, available: false },
       { backendId: "opensource", name: "OSS CAD Suite", version: "yosys 0.40", installPath: null, available: false },
       { backendId: "libero", name: "Microchip Libero SoC", version: "", installPath: null, available: false },
@@ -863,6 +864,20 @@ export async function importVendorProject(dir: string): Promise<VendorImportResu
     };
   }
   return invoke<VendorImportResult>("import_vendor_project", { dir });
+}
+
+// ── Device Part Verification ──
+
+import type { VerifyDeviceResult } from "../types";
+import { validatePart } from "../data/deviceParts";
+
+export async function verifyDevicePart(backendId: string, part: string): Promise<VerifyDeviceResult> {
+  if (!isTauri) {
+    // Browser fallback: use local validation
+    const result = validatePart(backendId, part);
+    return { valid: result.valid, cliVerified: false, error: null };
+  }
+  return invoke<VerifyDeviceResult>("verify_device_part", { backendId, part });
 }
 
 // ── Tool Edition Detection ──

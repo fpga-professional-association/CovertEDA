@@ -12,6 +12,7 @@ export const RADIANT_DEVICES: DeviceFamily[] = [
     family: "CertusPro-NX",
     parts: [
       "LFCPNX-100-9LFG672I", "LFCPNX-100-9LFG672C", "LFCPNX-100-7LFG672I",
+      "LFCPNX-100-7LFG256C",
       "LFCPNX-50-9ASG400I", "LFCPNX-50-9BBG484I",
     ],
   },
@@ -19,15 +20,29 @@ export const RADIANT_DEVICES: DeviceFamily[] = [
     family: "Certus-NX",
     parts: [
       "LIFCL-40-9BG400I", "LIFCL-40-9BG400C", "LIFCL-40-7BG400I", "LIFCL-40-7BG400C",
+      "LIFCL-40-8BG400C", "LIFCL-40-9BG256C",
       "LIFCL-40-9SG72I", "LIFCL-40-7SG72I",
-      "LIFCL-17-8SG72I", "LIFCL-17-8BG256I",
+      "LIFCL-17-8SG72I", "LIFCL-17-8BG256I", "LIFCL-17-7MG121I", "LIFCL-17-7BG256I",
     ],
   },
   {
     family: "CrossLink-NX",
     parts: [
       "LIFCL-33U-8SG72I", "LIFCL-33U-8BG256I",
+      "LIFCL-33U-7MG121C", "LIFCL-33U-7BG256C",
       "LIFCL-17U-8SG72I",
+    ],
+  },
+  {
+    family: "Avant",
+    parts: [
+      "LFAX-100-9BBG784C", "LFAX-50-9BBG484C", "LFAX-17-7BBG484I",
+    ],
+  },
+  {
+    family: "MachXO5-NX",
+    parts: [
+      "LMXO5-50-7BG256I", "LMXO5-25-6MG121I",
     ],
   },
   {
@@ -58,6 +73,13 @@ export const DIAMOND_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "ECP3",
+    parts: [
+      "LFE3-150EA-8FN672C", "LFE3-95EA-8FN672C", "LFE3-70EA-8FN484C",
+      "LFE3-35EA-8FN256C", "LFE3-17EA-8FN256C",
+    ],
+  },
+  {
     family: "MachXO2",
     parts: [
       "LCMXO2-7000HE-4TG144I", "LCMXO2-7000HE-4TG144C",
@@ -73,6 +95,13 @@ export const DIAMOND_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "MachXO3L",
+    parts: [
+      "LCMXO3L-9400E-5BG256C", "LCMXO3L-6900E-5BG256C",
+      "LCMXO3L-4300E-5BG256C", "LCMXO3L-2100E-5SG72C",
+    ],
+  },
+  {
     family: "LatticeXP2",
     parts: [
       "LFXP2-40E-7FN484I", "LFXP2-30E-7FN484I", "LFXP2-17E-7FN256I",
@@ -81,10 +110,10 @@ export const DIAMOND_DEVICES: DeviceFamily[] = [
   },
 ];
 
+// Quartus Prime Standard/Lite — Cyclone, MAX, Arria families
 export const QUARTUS_DEVICES: DeviceFamily[] = [
   {
     family: "Cyclone V",
-    editions: ["standard", "lite"],
     parts: [
       "5CSXFC6D6F31C6", "5CSEBA6U23I7", "5CEBA4F23C7",
       "5CEFA7F31I7", "5CEFA5F23C8", "5CEBA2F17C8",
@@ -92,8 +121,23 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "Cyclone IV E",
+    parts: [
+      "EP4CE6E22C8", "EP4CE10E22C8", "EP4CE15F17C8",
+      "EP4CE22F17C6", "EP4CE30F23C7", "EP4CE40F23C6",
+      "EP4CE55F23C7", "EP4CE75F23C6", "EP4CE115F29C7",
+    ],
+  },
+  {
+    family: "Cyclone IV GX",
+    parts: [
+      "EP4CGX15BF14C6", "EP4CGX22CF19C6", "EP4CGX30CF23C6",
+      "EP4CGX50CF23C6", "EP4CGX75DF27C6", "EP4CGX110DF27C6",
+      "EP4CGX150DF31C7",
+    ],
+  },
+  {
     family: "Cyclone 10 LP",
-    editions: ["standard", "lite"],
     parts: [
       "10CL025YU256I7G", "10CL025YF256C8G", "10CL016YU256C8G",
       "10CL006YU256C8G", "10CL040YF484C8G",
@@ -101,14 +145,12 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "Cyclone 10 GX",
-    editions: ["standard", "pro"],
     parts: [
       "10CX220YF780I5G", "10CX150YF672I5G", "10CX085YU484I5G",
     ],
   },
   {
     family: "MAX 10",
-    editions: ["standard", "lite"],
     parts: [
       "10M50DAF484C7G", "10M50SAE144I7G", "10M25SAE144C8G",
       "10M16SAU169C8G", "10M08SAE144C8G", "10M04SAE144C8G",
@@ -117,7 +159,6 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "MAX V",
-    editions: ["standard", "lite"],
     parts: [
       "5M40ZE64C5", "5M80ZE64C5", "5M160ZE64C5",
       "5M240ZT100C5", "5M570ZT100C5",
@@ -125,41 +166,93 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "MAX II",
+    parts: [
+      "EPM240T100C5", "EPM570T100C5", "EPM1270T144C5",
+      "EPM2210F324C3",
+    ],
+  },
+  {
+    family: "Arria V",
+    parts: [
+      "5AGXFB3H4F35C5", "5AGTFD7K3F40I3", "5AGXMA3D4F27C5",
+    ],
+  },
+  {
+    family: "Arria V GZ",
+    parts: [
+      "5AGZME1H2F35I3L", "5AGZME3H2F35I3L", "5AGZME5K2F40I3L",
+      "5AGZME7K3F40I3",
+    ],
+  },
+  {
     family: "Arria 10",
-    editions: ["standard", "pro"],
     parts: [
       "10AX115S2F45I1SG", "10AX115N2F45I1SG",
       "10AS066N3F40I2SG", "10AS048H3F34I2SG",
     ],
   },
+];
+
+// Quartus Prime Pro — Stratix 10, Agilex, Arria 10, Cyclone 10 GX
+export const QUARTUS_PRO_DEVICES: DeviceFamily[] = [
+  {
+    family: "Agilex 9",
+    parts: [
+      "A9PD120BF54I1VG",
+    ],
+  },
+  {
+    family: "Agilex 7",
+    parts: [
+      "AGFB014R24B2E2V", "AGFB014R24A2E2V",
+      "AGFB022R25A2E2VR0",
+      "AGIB027R31B1E1VR0", "AGIB027R29A2E2VR0",
+    ],
+  },
+  {
+    family: "Agilex 5",
+    parts: [
+      "A5ED065BB32AE5SR0", "A5ED065BB32AE4SR0",
+      "A5EC030BB17AE5SR0", "A5EC020AB17AE4SR0",
+    ],
+  },
   {
     family: "Stratix 10",
-    editions: ["pro"],
     parts: [
       "1SG280LU3F50E2VG", "1SG280HU2F50E2VG",
       "1SX280LU3F50I2VG",
     ],
   },
   {
-    family: "Agilex 7",
-    editions: ["pro"],
+    family: "Stratix 10 DX",
     parts: [
-      "AGFB014R24B2E2V", "AGFB014R24A2E2V",
-      "AGFB022R25A2E2VR0",
+      "1SD280PT2F55E1VG", "1SD110PT2F55E1VG",
     ],
   },
   {
-    family: "Agilex 5",
-    editions: ["pro"],
+    family: "Stratix 10 MX",
     parts: [
-      "A5ED065BB32AE5SR0", "A5ED065BB32AE4SR0",
+      "1SM21BHU2F53E1VG", "1SM21CHU2F53E1VG",
     ],
   },
   {
-    family: "Agilex 9",
-    editions: ["pro"],
+    family: "Stratix 10 TX",
     parts: [
-      "A9PD120BF54I1VG",
+      "1ST280LH3F55E1VG", "1ST110EH3F55E1VG",
+    ],
+  },
+  {
+    family: "Arria 10",
+    parts: [
+      "10AX115S2F45I1SG", "10AX115N2F45I1SG",
+      "10AS066N3F40I2SG", "10AS048H3F34I2SG",
+    ],
+  },
+  {
+    family: "Cyclone 10 GX",
+    parts: [
+      "10CX220YF780I5G", "10CX150YF672I5G", "10CX085YU484I5G",
     ],
   },
 ];
@@ -202,6 +295,13 @@ export const VIVADO_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "Artix UltraScale+",
+    parts: [
+      "xcau10p-ffvb676-1-e", "xcau15p-ffvb676-2-e",
+      "xcau20p-ffvb676-2-e", "xcau25p-ffvb676-2-e",
+    ],
+  },
+  {
     family: "Kintex UltraScale+",
     parts: [
       "xcku3p-ffva676-1-e", "xcku5p-ffvb676-2-e",
@@ -223,9 +323,29 @@ export const VIVADO_DEVICES: DeviceFamily[] = [
     ],
   },
   {
-    family: "Versal",
+    family: "Versal AI Core",
     parts: [
-      "xcvm1802-vsva2197-2MP-e-S", "xcve2802-vsvh1760-2MP-e-S",
+      "xcvc1502-vsva2197-2MP-e-S", "xcvc1702-vsva2197-2MP-e-S",
+      "xcvc1902-vsva2197-2MP-e-S",
+    ],
+  },
+  {
+    family: "Versal Prime",
+    parts: [
+      "xcvm1802-vsva2197-2MP-e-S", "xcvm2302-vsva2197-2MP-e-S",
+      "xcvm2502-vfvb1760-2MP-e-S",
+    ],
+  },
+  {
+    family: "Versal HBM",
+    parts: [
+      "xcvh1522-vsva3697-2MP-e-S", "xcvh1742-vsva3697-2MP-e-S",
+    ],
+  },
+  {
+    family: "Versal (General)",
+    parts: [
+      "xcve2802-vsvh1760-2MP-e-S",
       "xcvp1202-vsva2785-2MHP-e-S",
     ],
   },
@@ -333,14 +453,52 @@ export const OSS_DEVICES: DeviceFamily[] = [
   },
 ];
 
+// Achronix ACE — Speedster7t FPGAs
+export const ACE_DEVICES: DeviceFamily[] = [
+  {
+    family: "Speedster7t",
+    parts: [
+      "AC7t1500ES0HIIC80", "AC7t1500ES0HIIC120",
+      "AC7t800ES0HIIC80", "AC7t850ES0HIIC80",
+    ],
+  },
+];
+
+// Microchip Libero SoC — PolarFire, SmartFusion2, IGLOO2, RTG4
+export const LIBERO_DEVICE_FAMILIES: DeviceFamily[] = [
+  {
+    family: "PolarFire",
+    parts: ["MPF100T", "MPF200T", "MPF300T", "MPF500T"],
+  },
+  {
+    family: "PolarFire SoC",
+    parts: ["MPFS025T", "MPFS095T", "MPFS160T", "MPFS250T", "MPFS460T"],
+  },
+  {
+    family: "SmartFusion2",
+    parts: ["M2S010", "M2S025", "M2S050", "M2S090"],
+  },
+  {
+    family: "IGLOO2",
+    parts: ["M2GL010", "M2GL025", "M2GL050", "M2GL090"],
+  },
+  {
+    family: "RTG4",
+    parts: ["RT4G150"],
+  },
+];
+
 // Map backend ID to device families
 export const DEVICE_MAP: Record<string, DeviceFamily[]> = {
   radiant: RADIANT_DEVICES,
   diamond: DIAMOND_DEVICES,
   quartus: QUARTUS_DEVICES,
+  quartus_pro: QUARTUS_PRO_DEVICES,
   vivado: VIVADO_DEVICES,
   oss: OSS_DEVICES,
   opensource: OSS_DEVICES,
+  ace: ACE_DEVICES,
+  libero: LIBERO_DEVICE_FAMILIES,
 };
 
 // Flatten all parts for a backend into a searchable list

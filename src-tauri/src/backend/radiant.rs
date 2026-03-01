@@ -575,6 +575,44 @@ impl FpgaBackend for RadiantBackend {
         Ok(script)
     }
 
+    fn verify_device_part(&self, part: &str) -> BackendResult<bool> {
+        let radiantc = self.radiantc_path().ok_or_else(|| {
+            BackendError::ToolNotFound("radiantc not found".into())
+        })?;
+        // Write a temp TCL that lists devices and checks if the part is in the list
+        let tmp_path = std::env::temp_dir().join("coverteda_verify_dev.tcl");
+        let tcl = format!(
+            "if {{[catch {{prj_dev_list}} devs]}} {{ puts UNKNOWN; exit 0 }}\n\
+             if {{[lsearch -exact $devs \"{}\"] >= 0}} {{ puts VALID }} else {{ puts INVALID }}\n\
+             exit 0\n",
+            part,
+        );
+        std::fs::write(&tmp_path, &tcl)?;
+
+        // Set license env if available
+        let mut cmd = std::process::Command::new(&radiantc);
+        cmd.arg(&tmp_path);
+        if let Some(install) = &self.install_dir {
+            let lic_dir = install.join("license");
+            if lic_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&lic_dir) {
+                    for e in entries.filter_map(|e| e.ok()) {
+                        let p = e.path();
+                        if p.extension().map(|ext| ext == "dat" || ext == "lic").unwrap_or(false) {
+                            cmd.env("LM_LICENSE_FILE", &p);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let output = cmd.output().map_err(|e| BackendError::IoError(e))?;
+        let _ = std::fs::remove_file(&tmp_path);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.contains("VALID"))
+    }
+
     fn detect_tool(&self) -> bool {
         if self.deferred { return false; }
         self.radiantc_path().is_some()

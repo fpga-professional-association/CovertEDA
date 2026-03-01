@@ -114,6 +114,15 @@ pub trait FpgaBackend: Send + Sync {
         output_file: &Path,
     ) -> BackendResult<()>;
 
+    /// Verify a device part number using the vendor CLI.
+    /// Returns Ok(true) if the part is valid, Ok(false) if invalid,
+    /// or Err if the CLI is not available or verification is unsupported.
+    fn verify_device_part(&self, _part: &str) -> BackendResult<bool> {
+        Err(BackendError::ConfigError(
+            "CLI device verification not supported for this backend".into(),
+        ))
+    }
+
     /// Generate a TCL/shell script to create and configure an IP core.
     /// Returns the script content and the expected output directory.
     /// `ip_name` is the vendor IP component name (e.g., "FIFO_DC", "altsyncram").
@@ -167,6 +176,7 @@ impl BackendRegistry {
                 Box::new(diamond::DiamondBackend::new()),
                 Box::new(radiant::RadiantBackend::new()),
                 Box::new(quartus::QuartusBackend::new()),
+                Box::new(quartus::QuartusBackend::new_pro()),
                 Box::new(vivado::VivadoBackend::new()),
                 Box::new(libero::LiberoBackend::new()),
                 Box::new(oss::OssBackend::new()),
@@ -184,6 +194,7 @@ impl BackendRegistry {
                 Box::new(diamond::DiamondBackend::new_deferred()),
                 Box::new(radiant::RadiantBackend::new_deferred()),
                 Box::new(quartus::QuartusBackend::new_deferred()),
+                Box::new(quartus::QuartusBackend::new_pro_deferred()),
                 Box::new(vivado::VivadoBackend::new_deferred()),
                 Box::new(libero::LiberoBackend::new_deferred()),
                 Box::new(oss::OssBackend::new_deferred()),
@@ -233,9 +244,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_registry_new_has_seven_backends() {
+    fn test_registry_new_has_eight_backends() {
         let reg = BackendRegistry::new();
-        assert_eq!(reg.list().len(), 7);
+        assert_eq!(reg.list().len(), 8);
     }
 
     #[test]
@@ -285,6 +296,7 @@ mod tests {
         assert!(ids.contains(&"diamond".to_string()));
         assert!(ids.contains(&"radiant".to_string()));
         assert!(ids.contains(&"quartus".to_string()));
+        assert!(ids.contains(&"quartus_pro".to_string()));
         assert!(ids.contains(&"vivado".to_string()));
         assert!(ids.contains(&"libero".to_string()));
         assert!(ids.contains(&"opensource".to_string()));

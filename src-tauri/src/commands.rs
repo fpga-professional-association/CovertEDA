@@ -1569,7 +1569,8 @@ pub fn list_tool_versions(backend_id: String) -> Result<Vec<crate::backend::Dete
     let versions = match backend_id.as_str() {
         "diamond" => crate::backend::diamond::DiamondBackend::scan_all_versions(),
         "radiant" => crate::backend::radiant::RadiantBackend::scan_all_versions(),
-        "quartus" => crate::backend::quartus::QuartusBackend::scan_all_versions(),
+        "quartus" => crate::backend::quartus::QuartusBackend::scan_all_versions(crate::backend::quartus::QuartusEdition::Standard),
+        "quartus_pro" => crate::backend::quartus::QuartusBackend::scan_all_versions(crate::backend::quartus::QuartusEdition::Pro),
         "vivado" => crate::backend::vivado::VivadoBackend::scan_all_versions(),
         "ace" => crate::backend::ace::AceBackend::scan_all_versions(),
         "libero" => crate::backend::libero::LiberoBackend::scan_all_versions(),
@@ -1596,6 +1597,7 @@ pub fn select_tool_version(
         "diamond" => config.tool_paths.diamond = Some(path),
         "radiant" => config.tool_paths.radiant = Some(path),
         "quartus" => config.tool_paths.quartus = Some(path),
+        "quartus_pro" => config.tool_paths.quartus_pro = Some(path),
         "vivado" => config.tool_paths.vivado = Some(path),
         "opensource" => config.tool_paths.oss_cad_suite = Some(path),
         _ => {}
@@ -3518,8 +3520,9 @@ pub async fn import_vendor_project(dir: String) -> Result<VendorImportResult, St
 pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, String> {
     tokio::task::spawn_blocking(move || {
         match backend_id.as_str() {
-            "quartus" => {
-                // Try to run quartus_sh --version and parse output
+            "quartus" | "quartus_pro" => {
+                // Edition is now determined by which backend the user selected,
+                // but still detect for informational purposes
                 let result = std::process::Command::new("quartus_sh")
                     .arg("--version")
                     .output();
@@ -3535,7 +3538,6 @@ pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, S
                         } else if combined.contains("standard edition") || combined.contains("quartus prime standard") {
                             Ok(Some("standard".to_string()))
                         } else if !stdout.is_empty() || !stderr.is_empty() {
-                            // Quartus found but edition unclear — default to standard
                             Ok(Some("standard".to_string()))
                         } else {
                             Ok(None)
@@ -3563,6 +3565,48 @@ pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, S
                 }
             }
             _ => Ok(None),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ── Device Part Verification ──
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyDeviceResult {
+    pub valid: bool,
+    pub cli_verified: bool,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn verify_device_part(
+    backend_id: String,
+    part: String,
+) -> Result<VerifyDeviceResult, String> {
+    tokio::task::spawn_blocking(move || {
+        // Construct the backend inside spawn_blocking to avoid holding Mutex across await
+        let registry = BackendRegistry::new();
+        let backend = registry.get(&backend_id).ok_or_else(|| {
+            format!("Unknown backend: {}", backend_id)
+        })?;
+
+        match backend.verify_device_part(&part) {
+            Ok(valid) => Ok(VerifyDeviceResult {
+                valid,
+                cli_verified: true,
+                error: None,
+            }),
+            Err(e) => {
+                // CLI verification not available — return without error
+                Ok(VerifyDeviceResult {
+                    valid: false,
+                    cli_verified: false,
+                    error: Some(e.to_string()),
+                })
+            }
         }
     })
     .await

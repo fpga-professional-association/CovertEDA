@@ -396,6 +396,37 @@ close_project
         self.install_dir.as_ref().map(|p| p.display().to_string())
     }
 
+    fn verify_device_part(&self, part: &str) -> BackendResult<bool> {
+        // Find vivado binary
+        let vivado_bin = self.install_dir.as_ref()
+            .and_then(|d| {
+                let bin = d.join("bin").join("vivado");
+                if bin.exists() { Some(bin) } else {
+                    let bat = d.join("bin").join("vivado.bat");
+                    if bat.exists() { Some(bat) } else { None }
+                }
+            })
+            .or_else(|| which::which("vivado").ok())
+            .ok_or_else(|| BackendError::ToolNotFound("vivado not found".into()))?;
+
+        // Write a temp TCL script that checks for the part
+        let tmp_path = std::env::temp_dir().join("coverteda_verify_dev.tcl");
+        let tcl_content = format!(
+            "set parts [get_parts -quiet {}]\nif {{[llength $parts] > 0}} {{ puts VALID }} else {{ puts INVALID }}\nexit",
+            part,
+        );
+        std::fs::write(&tmp_path, &tcl_content)?;
+
+        let output = std::process::Command::new(&vivado_bin)
+            .args(["-mode", "batch", "-source"])
+            .arg(&tmp_path)
+            .output()
+            .map_err(|e| BackendError::IoError(e))?;
+        let _ = std::fs::remove_file(&tmp_path);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.contains("VALID"))
+    }
+
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
         let rpt = impl_dir.join("timing_summary.rpt");
         if !rpt.exists() {

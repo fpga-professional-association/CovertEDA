@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { Section, ReportTab, LogEntry, AppView, ProjectConfig, ProjectFile, FileContent, TimingReportData, UtilizationReportData, PowerReportData, DrcReportData, IoBankData, RuntimeBackend, LicenseCheckResult, GitState } from "./types";
-import { DEVICE_MAP, validatePart } from "./data/deviceParts";
 import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn } from "./components/shared";
 import {
@@ -96,120 +95,6 @@ const FALLBACK_BACKEND: RuntimeBackend = {
   available: false,
 };
 
-function DevicePicker({ backendId, value, onChange, onSelect, onCancel, edition }: {
-  backendId: string; value: string;
-  onChange: (v: string) => void; onSelect: (part: string) => void; onCancel: () => void;
-  edition?: string | null;
-}) {
-  const { C, MONO } = useTheme();
-  const [open, setOpen] = useState(true);
-  const ref = useRef<HTMLDivElement>(null);
-  const allFamilies = DEVICE_MAP[backendId] ?? [];
-  const lower = value.toLowerCase();
-
-  // Filter by edition
-  const { families, hiddenCount } = useMemo(() => {
-    if (!edition || allFamilies.length === 0) return { families: allFamilies, hiddenCount: 0 };
-    const visible = allFamilies.filter((f) => !f.editions || f.editions.includes(edition));
-    const hidden = allFamilies.filter((f) => f.editions && !f.editions.includes(edition))
-      .reduce((sum, f) => sum + f.parts.length, 0);
-    return { families: visible, hiddenCount: hidden };
-  }, [allFamilies, edition]);
-
-  // Filter families/parts by search text
-  const filteredFamilies = useMemo(() => {
-    if (!lower) return families;
-    return families
-      .map((f) => ({
-        ...f,
-        parts: f.parts.filter((p) => p.toLowerCase().includes(lower) || f.family.toLowerCase().includes(lower)),
-      }))
-      .filter((f) => f.parts.length > 0);
-  }, [families, lower]);
-
-  const validation = useMemo(() => validatePart(backendId, value), [backendId, value]);
-
-  // Close on outside click
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onCancel();
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [onCancel]);
-
-  return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && value.trim()) onSelect(validation.match ?? value.trim());
-            if (e.key === "Escape") onCancel();
-          }}
-          placeholder="Search parts..."
-          style={{
-            fontSize: 9, fontFamily: MONO, background: C.bg, color: C.t1,
-            border: `1px solid ${validation.valid ? C.ok : value.length > 3 ? C.warn : C.accent}`,
-            borderRadius: 3, padding: "1px 6px", width: 200, outline: "none",
-          }}
-        />
-        {validation.valid && (
-          <span style={{ fontSize: 7, color: C.ok, fontFamily: MONO, fontWeight: 600 }}>
-            {"\u2713"} {validation.family}
-          </span>
-        )}
-        {!validation.valid && value.length > 3 && (
-          <span style={{ fontSize: 7, color: C.warn, fontFamily: MONO }}>
-            Unknown part
-          </span>
-        )}
-      </div>
-      {open && filteredFamilies.length > 0 && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, marginTop: 2,
-          width: 320, maxHeight: 300, overflowY: "auto", background: C.s1,
-          border: `1px solid ${C.b1}`, borderRadius: 6, zIndex: 999,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-        }}>
-          {filteredFamilies.map((f) => (
-            <div key={f.family}>
-              <div style={{
-                fontSize: 7, fontFamily: MONO, fontWeight: 700, color: C.t3,
-                padding: "4px 8px", letterSpacing: 0.5, background: C.bg,
-                borderBottom: `1px solid ${C.b1}`,
-              }}>
-                {f.family.toUpperCase()}
-              </div>
-              {f.parts.map((p) => (
-                <div
-                  key={p}
-                  onClick={() => { onSelect(p); setOpen(false); }}
-                  style={{
-                    padding: "3px 10px", fontSize: 8, fontFamily: MONO, color: C.t1,
-                    cursor: "pointer", borderBottom: `1px solid ${C.b1}10`,
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = C.s3; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  {p}
-                </div>
-              ))}
-            </div>
-          ))}
-          {hiddenCount > 0 && (
-            <div style={{ padding: "4px 8px", fontSize: 7, fontFamily: MONO, color: C.t3, borderTop: `1px solid ${C.b1}` }}>
-              {hiddenCount} part{hiddenCount !== 1 ? "s" : ""} hidden (requires different Quartus edition)
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Startup performance helpers ──
 const perfOnce = new Set<string>();
 function perf(name: string) {
@@ -288,8 +173,6 @@ export default function App() {
   const [buildStages, setBuildStages] = useState<string[]>([]);
   const [buildOptions, setBuildOptions] = useState<Record<string, string>>({});
   const [sourcesStale, setSourcesStale] = useState(false);
-  const [editingDevice, setEditingDevice] = useState(false);
-  const [deviceDraft, setDeviceDraft] = useState("");
   const [toolEdition, setToolEdition] = useState<string | null>(null);
   const [commitModal, setCommitModal] = useState<"checking" | "prompt" | "committing" | null>(null);
   const [cleaning, setCleaning] = useState(false);
@@ -1378,7 +1261,14 @@ export default function App() {
             onToggleSynth={handleToggleSynth}
             projectDir={projectDir}
             device={project?.device ?? B.defaultDev}
-            onDeviceClick={() => { if (project) { setDeviceDraft(project.device); setEditingDevice(true); } }}
+            backendId={bid}
+            toolEdition={toolEdition}
+            onDeviceChange={(part) => {
+              if (!project || !projectDir) return;
+              const updated = { ...project, device: part };
+              setProject(updated);
+              saveProject(projectDir, updated).catch(() => {});
+            }}
             topModule={project?.topModule}
             onSetTopModule={(file) => {
               if (!project || !projectDir) return;
@@ -1824,24 +1714,6 @@ export default function App() {
           </Suspense>
         </div>
       </div>
-      {/* Device picker overlay */}
-      {editingDevice && project && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1500, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 120, background: "rgba(0,0,0,0.5)" }}>
-          <DevicePicker
-            backendId={bid}
-            value={deviceDraft}
-            onChange={setDeviceDraft}
-            onSelect={(part) => {
-              const updated = { ...project, device: part };
-              setProject(updated);
-              setEditingDevice(false);
-              if (projectDir) saveProject(projectDir, updated).catch(() => {});
-            }}
-            onCancel={() => setEditingDevice(false)}
-            edition={toolEdition}
-          />
-        </div>
-      )}
       <PerfOverlay visible={perfOverlay} />
     </div>
   );
