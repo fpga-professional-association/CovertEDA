@@ -1,6 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback, ReactNode } from "react";
 import { useTheme } from "../context/ThemeContext";
 
+// ── Inject CSS hover rules once ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-shared-hover")) {
+  const style = document.createElement("style");
+  style.id = "ceda-shared-hover";
+  style.textContent = `
+    .ceda-btn:not(:disabled):hover { background: var(--ceda-hover-bg) !important; }
+    .ceda-hover-row:hover { background: var(--ceda-hover-bg) !important; }
+    .ceda-nav-btn:not(.ceda-nav-active):hover { background: var(--ceda-hover-bg) !important; color: var(--ceda-hover-color) !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 // ── Badge ──
 export function Badge({
   children,
@@ -53,14 +65,13 @@ export function Btn({
   icon?: ReactNode;
 }) {
   const { C, MONO } = useTheme();
-  const [h, setH] = useState(false);
   return (
     <button
+      className="ceda-btn"
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
       style={{
+        ["--ceda-hover-bg" as string]: primary ? "#4da6ff" : C.s3,
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
@@ -70,17 +81,10 @@ export function Btn({
         fontFamily: MONO,
         fontSize: small ? 9 : 10,
         fontWeight: 600,
-        background: primary
-          ? h
-            ? "#4da6ff"
-            : C.accent
-          : h
-            ? C.s3
-            : "transparent",
+        background: primary ? C.accent : "transparent",
         color: primary ? "#fff" : C.t2,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
-        transition: "all .1s",
         ...sx,
       }}
     >
@@ -101,16 +105,14 @@ export function HoverRow({
   onClick?: () => void;
 }) {
   const { C } = useTheme();
-  const [h, setH] = useState(false);
   return (
     <div
+      className="ceda-hover-row"
       onClick={onClick}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
       style={{
-        background: h ? C.s3 : "transparent",
+        ["--ceda-hover-bg" as string]: C.s3,
+        background: "transparent",
         cursor: onClick ? "pointer" : "default",
-        transition: "background .06s",
         ...sx,
       }}
     >
@@ -138,14 +140,14 @@ export function NavBtn({
   tooltip?: string;
 }) {
   const { C, MONO } = useTheme();
-  const [h, setH] = useState(false);
   return (
     <div
+      className={`ceda-nav-btn${active ? " ceda-nav-active" : ""}`}
       onClick={onClick}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
       title={tooltip ?? label}
       style={{
+        ["--ceda-hover-bg" as string]: C.s3,
+        ["--ceda-hover-color" as string]: C.t2,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -154,12 +156,11 @@ export function NavBtn({
         cursor: "pointer",
         borderRadius: 5,
         position: "relative",
-        background: active ? C.accentDim : h ? C.s3 : "transparent",
-        color: active ? accent || C.accent : h ? C.t2 : C.t3,
+        background: active ? C.accentDim : "transparent",
+        color: active ? accent || C.accent : C.t3,
         borderLeft: active
           ? `2px solid ${accent || C.accent}`
           : "2px solid transparent",
-        transition: "all .1s",
         minWidth: 52,
       }}
     >
@@ -283,7 +284,6 @@ export function Select({
           fontWeight: 600,
           cursor: "pointer",
           minWidth: compact ? 80 : 100,
-          transition: "border-color .1s",
           whiteSpace: "nowrap",
         }}
       >

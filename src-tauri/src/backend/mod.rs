@@ -87,6 +87,11 @@ pub trait FpgaBackend: Send + Sync {
         None
     }
 
+    /// Whether this backend was created in deferred (zero-I/O) mode.
+    fn is_deferred(&self) -> bool {
+        false
+    }
+
     /// Parse a timing report from the implementation directory
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport>;
 
@@ -129,7 +134,8 @@ pub trait FpgaBackend: Send + Sync {
         )))
     }
 
-    /// Get backend info for the frontend
+    /// Get backend info for the frontend.
+    /// Deferred backends skip pipeline_stages() allocation for fast startup.
     fn info(&self) -> BackendInfo {
         BackendInfo {
             id: self.id().to_string(),
@@ -139,7 +145,7 @@ pub trait FpgaBackend: Send + Sync {
             cli: self.cli_tool().to_string(),
             default_device: self.default_device().to_string(),
             constraint_ext: self.constraint_ext().to_string(),
-            pipeline: self.pipeline_stages(),
+            pipeline: if self.is_deferred() { vec![] } else { self.pipeline_stages() },
             available: self.detect_tool(),
             install_path: self.install_path_str(),
         }

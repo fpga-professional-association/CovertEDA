@@ -1,6 +1,14 @@
 import { useEffect, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
 
+// ── Inject CSS hover for context menu items ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-ctx-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-ctx-hover";
+  s.textContent = `.ceda-ctx-item:not([data-disabled]):hover { background: var(--ceda-hover-bg) !important; }`;
+  document.head.appendChild(s);
+}
+
 export interface ContextMenuItem {
   label: string;
   onClick: () => void;
@@ -86,20 +94,15 @@ export default function ContextMenu({ x, y, items, onClose }: ContextMenuProps) 
         return (
           <div
             key={i}
+            className="ceda-ctx-item"
+            data-disabled={item.disabled || undefined}
             onClick={() => {
               if (item.disabled) return;
               item.onClick();
               onClose();
             }}
-            onMouseEnter={(e) => {
-              if (!item.disabled) {
-                (e.currentTarget as HTMLElement).style.background = `${C.s3}88`;
-              }
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-            }}
             style={{
+              ["--ceda-hover-bg" as string]: `${C.s3}88`,
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -109,7 +112,6 @@ export default function ContextMenu({ x, y, items, onClose }: ContextMenuProps) 
               color: item.disabled ? C.t3 : item.danger ? C.err : C.t2,
               cursor: item.disabled ? "default" : "pointer",
               opacity: item.disabled ? 0.5 : 1,
-              transition: "background .08s",
             }}
           >
             {item.icon && (

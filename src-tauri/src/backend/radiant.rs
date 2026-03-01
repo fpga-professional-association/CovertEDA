@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct RadiantBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl RadiantBackend {
@@ -16,6 +17,7 @@ impl RadiantBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -23,6 +25,7 @@ impl RadiantBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -577,8 +580,11 @@ impl FpgaBackend for RadiantBackend {
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         self.radiantc_path().is_some()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn install_path_str(&self) -> Option<String> {
         self.install_dir.as_ref().map(|p| p.display().to_string())
@@ -849,7 +855,7 @@ mod tests {
 
     #[test]
     fn test_radiant_id_and_name() {
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         assert_eq!(b.id(), "radiant");
         assert_eq!(b.name(), "Lattice Radiant");
         assert_eq!(b.short_name(), "Radiant");
@@ -857,13 +863,13 @@ mod tests {
 
     #[test]
     fn test_radiant_default_device() {
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         assert_eq!(b.default_device(), "LIFCL-40-7BG400I");
     }
 
     #[test]
     fn test_radiant_pipeline_has_four_stages() {
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let stages = b.pipeline_stages();
         assert_eq!(stages.len(), 4);
         assert_eq!(stages[0].id, "synth");
@@ -874,7 +880,7 @@ mod tests {
 
     #[test]
     fn test_radiant_constraint_ext() {
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         assert_eq!(b.constraint_ext(), ".pdc");
     }
 
@@ -882,7 +888,7 @@ mod tests {
     fn test_radiant_build_script_opens_rdf() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let script = b.generate_build_script(
             tmp.path(), "LIFCL-40", "test", &[], &HashMap::new(),
         ).unwrap();
@@ -893,7 +899,7 @@ mod tests {
     fn test_radiant_build_script_runs_all_stages() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let script = b.generate_build_script(
             tmp.path(), "LIFCL-40", "top", &[], &HashMap::new(),
         ).unwrap();
@@ -907,7 +913,7 @@ mod tests {
     fn test_radiant_build_script_selective_stages() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let stages = vec!["synth".into(), "par".into()];
         let script = b.generate_build_script(
             tmp.path(), "LIFCL-40", "top", &stages, &HashMap::new(),
@@ -922,7 +928,7 @@ mod tests {
     fn test_radiant_build_script_synplify_engine() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let mut opts = HashMap::new();
         opts.insert("synth_engine".into(), "synplify".into());
         let script = b.generate_build_script(
@@ -936,7 +942,7 @@ mod tests {
         // Empty option values should NOT emit impl_opt commands
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("top.rdf"), "").unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let mut opts = HashMap::new();
         opts.insert("synth_engine".into(), "".into());
         opts.insert("syn_optimization".into(), "".into());
@@ -951,7 +957,7 @@ mod tests {
     fn test_radiant_build_script_no_rdf_no_sources_errors() {
         // No .rdf and no source files → should error
         let tmp = tempfile::tempdir().unwrap();
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let result = b.generate_build_script(
             tmp.path(), "LIFCL-40", "top", &[], &HashMap::new(),
         );
@@ -967,7 +973,7 @@ mod tests {
         std::fs::write(src_dir.join("counter.v"), "module counter(); endmodule").unwrap();
         std::fs::write(src_dir.join("counter.pdc"), "# constraints").unwrap();
 
-        let b = RadiantBackend { version: "test".into(), install_dir: None };
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
         let script = b.generate_build_script(
             tmp.path(), "LIFCL-40-7BG400I", "counter", &[], &HashMap::new(),
         ).unwrap();

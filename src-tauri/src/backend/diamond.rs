@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct DiamondBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl DiamondBackend {
@@ -15,6 +16,7 @@ impl DiamondBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -23,6 +25,7 @@ impl DiamondBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -306,8 +309,11 @@ prj_project close
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         self.tool_path().is_some()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn install_path_str(&self) -> Option<String> {
         self.install_dir.as_ref().map(|p| p.display().to_string())

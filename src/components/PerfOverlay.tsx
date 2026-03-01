@@ -25,6 +25,7 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
   const lastTime = useRef(performance.now());
   const appStart = useRef(performance.timeOrigin);
   const sysStats = useRef<SystemStats | null>(null);
+  const domNodeCount = useRef(0);
 
   useEffect(() => {
     if (!visible) return;
@@ -40,15 +41,21 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
     };
     rafId = requestAnimationFrame(countFrame);
 
+    // Track DOM node count via MutationObserver (fires only on actual changes)
+    domNodeCount.current = document.getElementsByTagName("*").length;
+    const observer = new MutationObserver(() => {
+      domNodeCount.current = document.getElementsByTagName("*").length;
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
     // Poll system stats from Rust backend every 1s
-    // (the Rust side sleeps ~200ms internally for CPU/disk sampling, so don't poll too fast)
     const fetchSysStats = () => {
       getSystemStats().then((s) => { if (s) sysStats.current = s; }).catch(() => {});
     };
     fetchSysStats();
     sysIntervalId = setInterval(fetchSysStats, 1000);
 
-    // Sample stats every 500ms
+    // Sample stats every 1000ms
     intervalId = setInterval(() => {
       const now = performance.now();
       const elapsed = (now - lastTime.current) / 1000;
@@ -62,8 +69,8 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       const jsHeapLimitMB = mem ? Math.round(mem.jsHeapSizeLimit / 1048576) : 0;
       const jsHeapPct = jsHeapLimitMB > 0 ? Math.round((jsHeapMB / jsHeapLimitMB) * 100) : 0;
 
-      // DOM node count
-      const domNodes = document.querySelectorAll("*").length;
+      // DOM node count (cached by MutationObserver)
+      const domNodes = domNodeCount.current;
 
       // Uptime
       const uptimeSec = Math.round((Date.now() - appStart.current) / 1000);
@@ -93,12 +100,13 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
         memPct: sys?.memPct ?? 0,
         diskWritePct: sys?.diskWritePct ?? 0,
       });
-    }, 500);
+    }, 1000);
 
     return () => {
       cancelAnimationFrame(rafId);
       clearInterval(intervalId);
       clearInterval(sysIntervalId);
+      observer.disconnect();
     };
   }, [visible]);
 

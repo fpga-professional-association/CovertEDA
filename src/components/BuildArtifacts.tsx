@@ -2,6 +2,14 @@ import { useMemo } from "react";
 import { ProjectFile } from "../types";
 import { useTheme } from "../context/ThemeContext";
 
+// ── Inject CSS hover for build artifact rows ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-ba-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-ba-hover";
+  s.textContent = `.ceda-ba-row:hover { background: var(--ceda-hover-bg) !important; }`;
+  document.head.appendChild(s);
+}
+
 interface BuildArtifactsProps {
   files: ProjectFile[];
   implDir: string;
@@ -121,8 +129,10 @@ function BuildArtifacts({ files, implDir, onOpenFile }: BuildArtifactsProps) {
         {artifacts.map((a) => (
           <div
             key={a.path}
+            className="ceda-ba-row"
             onClick={() => onOpenFile(a.path)}
             style={{
+              ["--ceda-hover-bg" as string]: `${C.s3}88`,
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -131,13 +141,6 @@ function BuildArtifacts({ files, implDir, onOpenFile }: BuildArtifactsProps) {
               cursor: "pointer",
               fontSize: 10,
               fontFamily: MONO,
-              transition: "background .08s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = `${C.s3}88`;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
             }}
           >
             <span

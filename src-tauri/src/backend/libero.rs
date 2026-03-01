@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 pub struct LiberoBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl LiberoBackend {
@@ -22,6 +23,7 @@ impl LiberoBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -29,6 +31,7 @@ impl LiberoBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -295,12 +298,15 @@ impl FpgaBackend for LiberoBackend {
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         // Check if exe path resolves, or fall back to PATH
         if self.libero_exe().is_some() {
             return true;
         }
         which::which("libero").is_ok() || which::which("libero.exe").is_ok()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn generate_build_script(
         &self,

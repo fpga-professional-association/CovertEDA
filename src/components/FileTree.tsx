@@ -1,4 +1,16 @@
 import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
+
+// ── Inject CSS hover rules for file tree ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-filetree-hover")) {
+  const style = document.createElement("style");
+  style.id = "ceda-filetree-hover";
+  style.textContent = [
+    `.ceda-ft-row:hover { background: var(--ceda-hover-bg) !important; }`,
+    `.ceda-ft-icon:hover { color: var(--ceda-hover-color) !important; }`,
+    `.ceda-ft-resize:hover { background: var(--ceda-hover-bg) !important; }`,
+  ].join("\n");
+  document.head.appendChild(style);
+}
 import { ProjectFile } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
@@ -182,7 +194,6 @@ const FileTreeRow = memo(function FileTreeRow({
   onToggleSynth?: () => void;
 }) {
   const { C, MONO } = useTheme();
-  const [h, setH] = useState(false);
 
   // File type colors
   const FTC: Record<string, string> = {
@@ -246,11 +257,11 @@ const FileTreeRow = memo(function FileTreeRow({
 
   return (
     <div
+      className={active ? undefined : "ceda-ft-row"}
       onClick={onPick}
       onContextMenu={handleCtx}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
       style={{
+        ["--ceda-hover-bg" as string]: `${C.s3}88`,
         display: "grid",
         gridTemplateColumns: "1fr 14px 14px",
         gap: 2,
@@ -258,12 +269,11 @@ const FileTreeRow = memo(function FileTreeRow({
         padding: `3px 6px 3px ${8 + f.d * 12}px`,
         fontSize: 10,
         fontFamily: MONO,
-        background: active ? C.accentDim : h ? `${C.s3}88` : "transparent",
+        background: active ? C.accentDim : "transparent",
         borderLeft: active
           ? `2px solid ${C.accent}`
           : "2px solid transparent",
         cursor: "pointer",
-        transition: "all .08s",
       }}
     >
       <div
@@ -561,7 +571,9 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
           <span
             onClick={onRefresh}
             title="Refresh file tree & git status"
+            className="ceda-ft-icon"
             style={{
+              ["--ceda-hover-color" as string]: C.t1,
               cursor: "pointer",
               color: C.t3,
               display: "flex",
@@ -569,8 +581,6 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
               padding: 2,
               borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
           >
             <Refresh size={11} />
           </span>
@@ -612,7 +622,9 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
           <span
             title="Open project location"
             onClick={() => openInFileManager(projectDir)}
+            className="ceda-ft-icon"
             style={{
+              ["--ceda-hover-color" as string]: C.accent,
               fontSize: 10,
               cursor: "pointer",
               color: C.t3,
@@ -620,8 +632,6 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
               padding: 2,
               borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.accent; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
           >
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
               <path d="M2 3h4l1.5 1.5H12a1 1 0 011 1V11a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" />
@@ -778,15 +788,15 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
     {/* Resize handle */}
     <div
       onMouseDown={onMouseDown}
+      className="ceda-ft-resize"
       style={{
+        ["--ceda-hover-bg" as string]: `${C.accent}40`,
         width: 4,
         cursor: "col-resize",
         background: "transparent",
         flexShrink: 0,
         borderRight: `1px solid ${C.b1}`,
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${C.accent}40`; }}
-      onMouseLeave={(e) => { if (!dragging.current) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
     />
     </div>
   );

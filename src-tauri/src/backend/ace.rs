@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub struct AceBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl AceBackend {
@@ -17,6 +18,7 @@ impl AceBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -24,6 +26,7 @@ impl AceBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -356,8 +359,11 @@ impl FpgaBackend for AceBackend {
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         self.ace_path().is_some()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn install_path_str(&self) -> Option<String> {
         self.install_dir.as_ref().map(|p| p.display().to_string())
@@ -570,6 +576,7 @@ mod tests {
         AceBackend {
             version: "test".into(),
             install_dir: None,
+            deferred: false,
         }
     }
 

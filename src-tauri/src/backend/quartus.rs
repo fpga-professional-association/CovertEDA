@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct QuartusBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl QuartusBackend {
@@ -16,6 +17,7 @@ impl QuartusBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -23,6 +25,7 @@ impl QuartusBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -550,8 +553,11 @@ if {{[llength $sdc_files] > 0}} {{
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         self.quartus_sh_path().is_some()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn install_path_str(&self) -> Option<String> {
         self.install_dir.as_ref().map(|p| p.display().to_string())
@@ -733,7 +739,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_backend() -> QuartusBackend {
-        QuartusBackend { version: "test".into(), install_dir: None }
+        QuartusBackend { version: "test".into(), install_dir: None, deferred: false }
     }
 
     #[test]

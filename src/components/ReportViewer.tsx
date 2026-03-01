@@ -1,4 +1,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from "react";
+
+// ── Inject CSS hover for report viewer rows ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-rv-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-rv-hover";
+  s.textContent = `.ceda-rv-row:hover { background: var(--ceda-hover-bg) !important; }`;
+  document.head.appendChild(s);
+}
+
 import {
   ReportTab,
   ReportFileEntry,
@@ -685,12 +694,11 @@ function ReportFilesPanel({ projectDir, building }: { projectDir: string; buildi
                 onClick={() => setSelectedFile(f.path)}
                 style={{
                   display: "grid", gridTemplateColumns: "1fr 70px 120px",
+                  ["--ceda-hover-bg" as string]: C.s2,
                   gap: 8, padding: "8px 14px", fontSize: 10, fontFamily: MONO,
                   borderBottom: `1px solid ${C.b1}10`, cursor: "pointer",
-                  transition: "background .1s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = C.s2; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                className="ceda-rv-row"
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
                   <span style={{
@@ -893,7 +901,7 @@ export default function ReportViewer({
               border: "none", borderRadius: 4,
               color: rptTab === t.id ? C.t1 : C.t3,
               fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 600,
-              cursor: "pointer", transition: "all .1s",
+              cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}
           >
@@ -911,7 +919,7 @@ export default function ReportViewer({
               border: "none", borderRadius: 4,
               color: rptTab === t.id ? C.t1 : C.t3,
               fontSize: 9, fontFamily: MONO, fontWeight: 600,
-              cursor: "pointer", transition: "all .1s",
+              cursor: "pointer",
             }}
           >
             {t.l}

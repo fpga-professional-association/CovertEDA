@@ -1,7 +1,14 @@
-import { useState } from "react";
 import { RuntimeBackend } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
+
+// ── Inject CSS hover for backend options ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-bs-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-bs-hover";
+  s.textContent = `.ceda-bs-opt:not([data-active]):hover { background: var(--ceda-hover-bg) !important; }`;
+  document.head.appendChild(s);
+}
 
 function BackendOption({
   b,
@@ -13,21 +20,20 @@ function BackendOption({
   onPick: () => void;
 }) {
   const { C, MONO, SANS } = useTheme();
-  const [h, setH] = useState(false);
   return (
     <div
+      className="ceda-bs-opt"
+      data-active={active || undefined}
       onClick={onPick}
-      onMouseEnter={() => setH(true)}
-      onMouseLeave={() => setH(false)}
       style={{
+        ["--ceda-hover-bg" as string]: C.s3,
         display: "flex",
         alignItems: "center",
         gap: 10,
         padding: "10px 12px",
-        background: active ? `${b.color}15` : h ? C.s3 : "transparent",
+        background: active ? `${b.color}15` : "transparent",
         borderLeft: `3px solid ${active ? b.color : "transparent"}`,
         cursor: b.available ? "pointer" : "default",
-        transition: "all .1s",
         opacity: b.available ? 1 : 0.5,
       }}
     >

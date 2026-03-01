@@ -2857,7 +2857,7 @@ pub fn save_app_config(config: crate::config::AppConfig) -> Result<(), String> {
 
 // ── System stats for "Stats for Nerds" overlay ──
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct SystemStats {
     pub cpu_pct: f64,
     pub mem_used_mb: u64,
@@ -2867,20 +2867,37 @@ pub struct SystemStats {
     pub disk_write_pct: f64,
 }
 
+/// Cached system stats to avoid blocking 200ms per call.
+static SYS_STATS_CACHE: std::sync::Mutex<Option<(std::time::Instant, SystemStats)>> =
+    std::sync::Mutex::new(None);
+
 #[tauri::command]
 pub async fn get_system_stats() -> Result<SystemStats, String> {
+    // Return cached value if sampled within last 500ms
+    if let Ok(guard) = SYS_STATS_CACHE.lock() {
+        if let Some((ts, ref cached)) = *guard {
+            if ts.elapsed() < std::time::Duration::from_millis(500) {
+                return Ok(cached.clone());
+            }
+        }
+    }
+
     tokio::task::spawn_blocking(|| {
         let cpu_pct = read_cpu_usage().unwrap_or(0.0);
         let (mem_used_mb, mem_total_mb, mem_pct) = read_mem_usage().unwrap_or((0, 0, 0.0));
         let (disk_write_bytes, disk_write_pct) = read_disk_write().unwrap_or((0, 0.0));
-        Ok(SystemStats {
+        let stats = SystemStats {
             cpu_pct,
             mem_used_mb,
             mem_total_mb,
             mem_pct,
             disk_write_bytes,
             disk_write_pct,
-        })
+        };
+        if let Ok(mut guard) = SYS_STATS_CACHE.lock() {
+            *guard = Some((std::time::Instant::now(), stats.clone()));
+        }
+        Ok(stats)
     })
     .await
     .map_err(|e| e.to_string())?

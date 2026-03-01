@@ -377,7 +377,6 @@ export default function AiAssistant({ projectContext }: { projectContext?: strin
                       border: `1.5px solid ${sel ? C.accent : C.b1}`,
                       background: sel ? `${C.accent}10` : C.bg,
                       cursor: "pointer",
-                      transition: "all .1s",
                     }}
                   >
                     <div style={{ fontSize: 9, fontWeight: 600, color: sel ? C.t1 : C.t2 }}>

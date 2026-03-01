@@ -3,6 +3,17 @@ import { RecentProject, ProjectConfig, BackendMeta, DetectedTool, LicenseCheckRe
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
 import { Chip, Zap, Key, Settings } from "./Icons";
+
+// ── Inject CSS hover for start screen elements ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-ss-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-ss-hover";
+  s.textContent = [
+    `.ceda-ss-icon:hover { color: var(--ceda-hover-color) !important; }`,
+    `.ceda-ss-divider:hover { background: var(--ceda-hover-bg) !important; }`,
+  ].join("\n");
+  document.head.appendChild(s);
+}
 import { BACKEND_META } from "../data/mockData";
 import {
   getRecentProjects,
@@ -124,7 +135,6 @@ export default function StartScreen({
     borderRadius: 8,
     padding: "20px 24px",
     cursor: "pointer",
-    transition: "all .15s",
   };
 
   const hasLicense = licenseResult && licenseResult.features.length > 0;
@@ -163,7 +173,9 @@ export default function StartScreen({
         {onOpenSettings && (
           <span
             onClick={onOpenSettings}
+            className="ceda-ss-icon"
             style={{
+              ["--ceda-hover-color" as string]: C.t1,
               cursor: "pointer",
               color: C.t3,
               padding: "4px 8px",
@@ -174,10 +186,7 @@ export default function StartScreen({
               fontSize: 9,
               fontFamily: MONO,
               fontWeight: 600,
-              transition: "color .1s",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
           >
             <Settings />
             Settings
@@ -277,7 +286,6 @@ export default function StartScreen({
               fontWeight: 600,
               fontFamily: MONO,
               color: hover === "exit" ? C.err : C.t3,
-              transition: "all .15s",
             }}
           >
             Exit
@@ -445,7 +453,6 @@ export default function StartScreen({
                                           background: isActive ? `${bm.color}20` : "transparent",
                                           color: isActive ? bm.color : C.t2,
                                           opacity: v.verified ? 1 : 0.5,
-                                          transition: "all .15s",
                                         }}
                                       >
                                         {v.version}{isActive ? " \u2713" : ""}
@@ -611,10 +618,7 @@ export default function StartScreen({
             justifyContent: "center",
           }}
         >
-          <div style={{ width: 2, height: 40, borderRadius: 1, background: C.b1, transition: "background .15s" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = C.accent; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = C.b1; }}
-          />
+          <div className="ceda-ss-divider" style={{ ["--ceda-hover-bg" as string]: C.accent, width: 2, height: 40, borderRadius: 1, background: C.b1 }} />
         </div>
 
         {/* Right: Recent Projects */}
@@ -670,7 +674,6 @@ export default function StartScreen({
                       borderRadius: 6,
                       background: hover === r.path ? C.s2 : "transparent",
                       cursor: "pointer",
-                      transition: "background .1s",
                       marginBottom: 2,
                     }}
                   >

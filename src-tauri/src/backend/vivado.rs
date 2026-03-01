@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct VivadoBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl VivadoBackend {
@@ -15,6 +16,7 @@ impl VivadoBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -22,6 +24,7 @@ impl VivadoBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -387,8 +390,11 @@ close_project
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         self.install_dir.is_some() || which::which("vivado").is_ok()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
     fn install_path_str(&self) -> Option<String> {
         self.install_dir.as_ref().map(|p| p.display().to_string())

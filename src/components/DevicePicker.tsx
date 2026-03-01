@@ -2,6 +2,14 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { RADIANT_DEVICES, DeviceInfo } from "../data/devices";
 
+// ── Inject CSS hover for device picker rows ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-dp-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-dp-hover";
+  s.textContent = `.ceda-dp-row:hover { background: var(--ceda-hover-bg) !important; }`;
+  document.head.appendChild(s);
+}
+
 interface DevicePickerProps {
   value: string;
   onChange: (partNumber: string) => void;
@@ -159,13 +167,9 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
                       setOpen(false);
                       setQuery("");
                     }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = `${C.s3}88`;
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = selected ? `${C.accent}10` : "transparent";
-                    }}
+                    className="ceda-dp-row"
                     style={{
+                      ["--ceda-hover-bg" as string]: `${C.s3}88`,
                       display: "grid",
                       gridTemplateColumns: "1fr 60px 50px 80px",
                       gap: 8,
@@ -174,7 +178,6 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
                       fontFamily: MONO,
                       cursor: "pointer",
                       background: selected ? `${C.accent}10` : "transparent",
-                      transition: "background .08s",
                     }}
                   >
                     <span style={{ color: selected ? C.accent : C.t1, fontWeight: selected ? 600 : 400, whiteSpace: "nowrap" }}>

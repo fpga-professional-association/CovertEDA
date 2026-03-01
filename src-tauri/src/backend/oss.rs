@@ -112,6 +112,7 @@ impl OssArch {
 pub struct OssBackend {
     version: String,
     install_dir: Option<PathBuf>,
+    deferred: bool,
 }
 
 impl OssBackend {
@@ -120,6 +121,7 @@ impl OssBackend {
         Self {
             version,
             install_dir,
+            deferred: false,
         }
     }
 
@@ -127,6 +129,7 @@ impl OssBackend {
         Self {
             version: String::new(),
             install_dir: None,
+            deferred: true,
         }
     }
 
@@ -894,12 +897,15 @@ echo "=== Done (output: build/out.{bitstream_ext}) ==="
     }
 
     fn detect_tool(&self) -> bool {
+        if self.deferred { return false; }
         // Yosys is always required; check installed path first, then PATH
         if self.yosys_path().is_some() {
             return true;
         }
         which::which("yosys").is_ok()
     }
+
+    fn is_deferred(&self) -> bool { self.deferred }
 
 
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
@@ -1225,6 +1231,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         assert_eq!(b.id(), "opensource");
         assert_eq!(b.name(), "OSS CAD Suite");
@@ -1235,6 +1242,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         assert_eq!(b.cli_tool(), "bash");
     }
@@ -1244,6 +1252,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let stages = b.pipeline_stages();
         assert_eq!(stages.len(), 3);
@@ -1257,6 +1266,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1270,6 +1280,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1285,6 +1296,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1304,6 +1316,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1322,6 +1335,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         let tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1348,6 +1362,7 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: Some(root.to_path_buf()),
+            deferred: false,
         };
         let project_tmp = tempfile::tempdir().unwrap();
         let script = b.generate_build_script(
@@ -1499,12 +1514,14 @@ mod tests {
         let b = OssBackend {
             version: "test".to_string(),
             install_dir: Some(PathBuf::from("/opt/oss-cad-suite")),
+            deferred: false,
         };
         assert_eq!(b.install_dir(), Some(Path::new("/opt/oss-cad-suite")));
 
         let b2 = OssBackend {
             version: "test".to_string(),
             install_dir: None,
+            deferred: false,
         };
         assert!(b2.install_dir().is_none());
     }

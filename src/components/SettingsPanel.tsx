@@ -260,7 +260,6 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     border: `1.5px solid ${selected ? C.accent : C.b1}`,
                     background: selected ? `${C.accent}10` : hovered ? C.s2 : C.bg,
                     cursor: "pointer",
-                    transition: "all .1s",
                     textAlign: "center",
                   }}
                 >
@@ -309,7 +308,6 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     fontFamily: MONO,
                     fontWeight: 600,
                     color: selected ? C.accent : C.t2,
-                    transition: "all .1s",
                   }}
                 >
                   {s.label}

@@ -3,6 +3,14 @@ import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, HoverRow } from "./shared";
 import { Branch, Git, Refresh } from "./Icons";
 
+// ── Inject CSS hover for git status icons ──
+if (typeof document !== "undefined" && !document.getElementById("ceda-git-hover")) {
+  const s = document.createElement("style");
+  s.id = "ceda-git-hover";
+  s.textContent = `.ceda-git-icon:hover { color: var(--ceda-hover-color) !important; }`;
+  document.head.appendChild(s);
+}
+
 interface GitStatusBarProps {
   git: GitState | null;
   projectName?: string;
@@ -55,9 +63,8 @@ export default function GitStatusBar({
           <span
             onClick={onRefresh}
             title="Refresh git status"
-            style={{ cursor: "pointer", color: C.t3, display: "flex", alignItems: "center" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+            className="ceda-git-icon"
+            style={{ ["--ceda-hover-color" as string]: C.t1, cursor: "pointer", color: C.t3, display: "flex", alignItems: "center" }}
           >
             <Refresh size={10} />
           </span>
@@ -156,9 +163,8 @@ export default function GitStatusBar({
           <span
             onClick={onRefresh}
             title="Refresh git status"
-            style={{ cursor: "pointer", color: C.t3, display: "flex", alignItems: "center", padding: "0 2px" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = C.t1; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = C.t3; }}
+            className="ceda-git-icon"
+            style={{ ["--ceda-hover-color" as string]: C.t1, cursor: "pointer", color: C.t3, display: "flex", alignItems: "center", padding: "0 2px" }}
           >
             <Refresh size={10} />
           </span>

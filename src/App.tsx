@@ -237,6 +237,7 @@ export default function App() {
 
   // ── IDE state ──
   const [sec, setSec] = useState<Section>("build");
+  const [visitedSecs, setVisitedSecs] = useState<Set<Section>>(() => new Set(["build"]));
   const [building, setBuilding] = useState(false);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [bStep, setBStep] = useState(-1);
@@ -926,19 +927,28 @@ export default function App() {
   }, []);
 
   const navClick = useCallback((s: Section) => {
+    setVisitedSecs((prev) => {
+      if (prev.has(s)) return prev;
+      const next = new Set(prev);
+      next.add(s);
+      return next;
+    });
     setSec((prev) => {
       navHistory.current.push(prev);
       return s;
     });
     setViewingFile(null);
-    // Auto-load reports from disk when navigating to Reports tab
-    if (s === "reports" && isTauri && projectDir) {
-      // Use auto-detection — works regardless of backend ID
+  }, []);
+
+  // Auto-load reports when Reports tab is first visited
+  useEffect(() => {
+    if (sec === "reports" && isTauri && projectDir) {
       if (!realTimingReport || !realUtilReport || !realPowerReport || !realDrcReport) {
         loadReportsFromDisk(projectDir, B.name);
       }
     }
-  }, [projectDir, B.name, realTimingReport, realUtilReport, realPowerReport, realDrcReport, loadReportsFromDisk]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sec]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1484,18 +1494,22 @@ export default function App() {
           </div>
 
           <Suspense fallback={null}>
-          <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-            {/* File Viewer (overrides section content) */}
+          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+            {/* File Viewer (overlay — does not unmount panel beneath) */}
             {viewingFile && (
-              <FileViewer
-                file={viewingFile}
-                onClose={() => setViewingFile(null)}
-              />
+              <div style={{ position: "absolute", inset: 0, zIndex: 10, overflow: "auto", padding: 12, background: C.bg }}>
+                <FileViewer
+                  file={viewingFile}
+                  onClose={() => setViewingFile(null)}
+                />
+              </div>
             )}
 
+            {/* Panels: mounted once on first visit, kept alive with display:none */}
+
             {/* Build Section */}
-            {sec === "build" && !viewingFile && (
-              <>
+            {visitedSecs.has("build") && (
+              <div style={{ display: sec === "build" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
                 <BuildPipeline
                   backend={B}
                   building={building}
@@ -1522,60 +1536,68 @@ export default function App() {
                     }
                   }}
                 />
-              </>
+              </div>
             )}
 
             {/* Reports Section */}
-            {sec === "reports" && !viewingFile && (
-              <ReportViewer
-                rptTab={rptTab}
-                setRptTab={setRptTab}
-                reports={{
-                  timing: realTimingReport,
-                  utilization: realUtilReport,
-                  power: realPowerReport,
-                  drc: realDrcReport,
-                  io: realIoReport,
-                }}
-                device={project?.device ?? B.defaultDev}
-                projectDir={projectDir}
-                building={building}
-              />
+            {visitedSecs.has("reports") && (
+              <div style={{ display: sec === "reports" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <ReportViewer
+                  rptTab={rptTab}
+                  setRptTab={setRptTab}
+                  reports={{
+                    timing: realTimingReport,
+                    utilization: realUtilReport,
+                    power: realPowerReport,
+                    drc: realDrcReport,
+                    io: realIoReport,
+                  }}
+                  device={project?.device ?? B.defaultDev}
+                  projectDir={projectDir}
+                  building={building}
+                />
+              </div>
             )}
 
-
             {/* Console */}
-            {sec === "console" && !viewingFile && (
-              <Console
-                logs={logs}
-                building={building}
-                backendShort={B.short}
-                backendColor={B.color}
-                backendVersion={B.version}
-                live={isTauri && B.available}
-                onClear={() => setLogs([])}
-              />
+            {visitedSecs.has("console") && (
+              <div style={{ display: sec === "console" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <Console
+                  logs={logs}
+                  building={building}
+                  backendShort={B.short}
+                  backendColor={B.color}
+                  backendVersion={B.version}
+                  live={isTauri && B.available}
+                  onClear={() => setLogs([])}
+                />
+              </div>
             )}
 
             {/* Constraint Editor */}
-            {sec === "constraints" && !viewingFile && (
-              <ConstraintEditor
-                backendId={bid}
-                device={project?.device ?? B.defaultDev}
-                constraintFile={constraintFilePath}
-              />
+            {visitedSecs.has("constraints") && (
+              <div style={{ display: sec === "constraints" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <ConstraintEditor
+                  backendId={bid}
+                  device={project?.device ?? B.defaultDev}
+                  constraintFile={constraintFilePath}
+                />
+              </div>
             )}
 
             {/* Device Programmer */}
-            {sec === "programmer" && !viewingFile && (
-              <Programmer
-                device={project?.device ?? B.defaultDev}
-                backendId={bid}
-              />
+            {visitedSecs.has("programmer") && (
+              <div style={{ display: sec === "programmer" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <Programmer
+                  device={project?.device ?? B.defaultDev}
+                  backendId={bid}
+                />
+              </div>
             )}
 
             {/* License Section */}
-            {sec === "license" && !viewingFile && (
+            {visitedSecs.has("license") && (
+              <div style={{ display: sec === "license" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
               <div style={panelP}>
                 <div
                   style={{
@@ -1675,30 +1697,34 @@ export default function App() {
                   </>
                 )}
               </div>
+              </div>
             )}
 
             {/* IP Catalog */}
-            {sec === "ip" && !viewingFile && <IpCatalogSection backendId={bid} projectDir={projectDir} device={project?.device ?? B.defaultDev}
+            {visitedSecs.has("ip") && (
+              <div style={{ display: sec === "ip" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <IpCatalogSection backendId={bid} projectDir={projectDir} device={project?.device ?? B.defaultDev}
                   onRefreshFiles={() => { if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}); }}
                   onAddToSynth={(ipInstanceName) => {
                     if (!projectDir) return;
-                    // Refresh file tree, then mark IP files matching instance name as synth-included
                     getFileTreeMapped(projectDir).then((files) => {
                       const lower = ipInstanceName.toLowerCase();
                       setRealFiles(files.map((f) => {
                         if (f.ty === "folder" || f.ty === "config" || f.ty === "output") return f;
                         const nameL = f.n.toLowerCase();
-                        // Match files whose name contains the instance name, or are inside an ip_cores dir
                         const isIpFile = nameL.includes(lower) ||
                           (f.path?.toLowerCase().includes("ip_cores") && (nameL.endsWith(".v") || nameL.endsWith(".sv") || nameL.endsWith(".vhd") || nameL.endsWith(".vhdl")));
                         return isIpFile ? { ...f, synth: true, ty: "ip" as const } : f;
                       }));
                     }).catch(() => {});
                   }}
-                />}
+                />
+              </div>
+            )}
 
             {/* Interconnect */}
-            {sec === "interconnect" && !viewingFile && (
+            {visitedSecs.has("interconnect") && (
+              <div style={{ display: sec === "interconnect" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
               <div style={panelP}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
                   <Link />
@@ -1708,26 +1734,37 @@ export default function App() {
                   Run a build to generate interconnect data. Block-level routing visualization will appear here.
                 </div>
               </div>
+              </div>
             )}
 
             {/* AI Assistant */}
-            {sec === "ai" && !viewingFile && (
+            {visitedSecs.has("ai") && (
+              <div style={{ display: sec === "ai" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
               <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
                 <AiAssistant
                   projectContext={project ? `Project: ${project.name}, Backend: ${B.name}, Device: ${project.device}, Top: ${project.topModule}` : undefined}
                 />
               </div>
+              </div>
             )}
 
             {/* Build History */}
-            {sec === "history" && !viewingFile && <BuildHistory projectDir={projectDir} onViewReport={() => { setSec("reports"); }} />}
-
+            {visitedSecs.has("history") && (
+              <div style={{ display: sec === "history" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <BuildHistory projectDir={projectDir} onViewReport={() => { setSec("reports"); }} />
+              </div>
+            )}
 
             {/* Documentation */}
-            {sec === "docs" && !viewingFile && <Documentation />}
+            {visitedSecs.has("docs") && (
+              <div style={{ display: sec === "docs" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <Documentation />
+              </div>
+            )}
 
             {/* Register Map */}
-            {sec === "regmap" && !viewingFile && (
+            {visitedSecs.has("regmap") && (
+              <div style={{ display: sec === "regmap" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
               <div style={panelP}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
                   <MapIcon />
@@ -1736,6 +1773,7 @@ export default function App() {
                 <div style={{ color: C.t3, fontSize: 10, fontFamily: MONO }}>
                   No register map defined. Add a register description file (.rdl, .json) to your project.
                 </div>
+              </div>
               </div>
             )}
           </div>

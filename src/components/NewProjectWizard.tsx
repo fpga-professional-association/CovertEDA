@@ -149,7 +149,6 @@ export default function NewProjectWizard({
                     border: `1.5px solid ${selected ? b.color : C.b1}`,
                     background: selected ? `${b.color}10` : hovered ? C.s2 : C.bg,
                     cursor: "pointer",
-                    transition: "all .1s",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

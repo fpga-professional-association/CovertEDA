@@ -402,7 +402,6 @@ function PathFilterToolbar({ C, MONO, pathView, setPathView, sortKey, setSortKey
     cursor: "pointer", userSelect: "none", border: `1px solid ${active ? C.accent : C.b1}`,
     background: active ? `${C.accent}15` : "transparent",
     color: active ? C.accent : C.t3, fontWeight: active ? 600 : 400,
-    transition: "all .1s",
   });
 
   const selectStyle: React.CSSProperties = {
