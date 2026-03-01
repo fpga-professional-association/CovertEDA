@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { ProjectConfig, BackendMeta } from "../types";
+import { ProjectConfig, BackendMeta, SourceDirSuggestion } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge, Input } from "./shared";
 import { BACKEND_META } from "../data/mockData";
 import DevicePicker from "./DevicePicker";
-import { createProject, pickDirectory } from "../hooks/useTauri";
+import {
+  createProject,
+  pickDirectory,
+  scanSourceDirectories,
+  detectTopModule,
+} from "../hooks/useTauri";
 
 export default function NewProjectWizard({
   initialDir,
@@ -31,6 +36,12 @@ export default function NewProjectWizard({
   const [error, setError] = useState("");
   const [hover, setHover] = useState<string | null>(null);
 
+  // Source directory state
+  const [sourcePatterns, setSourcePatterns] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SourceDirSuggestion[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [detectingTop, setDetectingTop] = useState(false);
+
   const selectedBackend = BACKEND_META.find((b) => b.id === backendId) || BACKEND_META[0];
 
   const handleBrowse = async () => {
@@ -49,6 +60,50 @@ export default function NewProjectWizard({
     setDevice(b.defaultDevice);
   };
 
+  const handleAutoDetect = async () => {
+    if (!dir) return;
+    setScanning(true);
+    try {
+      const results = await scanSourceDirectories(dir);
+      setSuggestions(results);
+      // Auto-select directories with HDL files
+      if (results.length > 0 && sourcePatterns.length === 0) {
+        const patterns = results.map((s) => {
+          const base = s.dir === "." ? "" : `${s.dir}/`;
+          const exts = s.extensions.map((e) => `*.${e}`).join(",");
+          return s.extensions.length === 1
+            ? `${base}**/*.${s.extensions[0]}`
+            : `${base}**/{${exts}}`;
+        });
+        setSourcePatterns(patterns);
+      }
+    } catch {
+      /* ignore */
+    }
+    setScanning(false);
+  };
+
+  const handleDetectTop = async () => {
+    if (!dir || sourcePatterns.length === 0) return;
+    setDetectingTop(true);
+    try {
+      const top = await detectTopModule(dir, sourcePatterns);
+      if (top) setTopModule(top);
+    } catch {
+      /* ignore */
+    }
+    setDetectingTop(false);
+  };
+
+  const handleRemovePattern = (idx: number) => {
+    setSourcePatterns((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleAddPattern = () => {
+    const pattern = window.prompt("Enter source pattern (e.g. rtl/**/*.v):");
+    if (pattern) setSourcePatterns((prev) => [...prev, pattern]);
+  };
+
   const handleCreate = async () => {
     if (!dir || !name || !backendId) {
       setError("Please fill in all required fields.");
@@ -57,7 +112,10 @@ export default function NewProjectWizard({
     setCreating(true);
     setError("");
     try {
-      const config = await createProject(dir, name, backendId, device, topModule);
+      const config = await createProject(
+        dir, name, backendId, device, topModule,
+        sourcePatterns.length > 0 ? sourcePatterns : undefined,
+      );
       onCreate(dir, config);
     } catch (e) {
       setError(String(e));
@@ -182,13 +240,81 @@ export default function NewProjectWizard({
         </div>
 
         {/* Top Module */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 16 }}>
           <span style={label}>TOP MODULE</span>
-          <Input
-            value={topModule}
-            onChange={setTopModule}
-            placeholder="top_level"
-          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input
+              value={topModule}
+              onChange={setTopModule}
+              placeholder="top_level"
+              style={{ flex: 1 }}
+            />
+            {dir && sourcePatterns.length > 0 && (
+              <Btn small onClick={handleDetectTop} disabled={detectingTop}>
+                {detectingTop ? "Detecting..." : "Auto-detect"}
+              </Btn>
+            )}
+          </div>
+        </div>
+
+        {/* Source Directories */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={label}>SOURCE DIRECTORIES</span>
+          {sourcePatterns.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+              {sourcePatterns.map((p, i) => (
+                <span
+                  key={i}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background: `${C.accent}15`,
+                    border: `1px solid ${C.accent}30`,
+                    fontSize: 9,
+                    fontFamily: MONO,
+                    color: C.t2,
+                  }}
+                >
+                  {p}
+                  <span
+                    onClick={() => handleRemovePattern(i)}
+                    style={{ cursor: "pointer", color: C.t3, fontSize: 10, fontWeight: 700 }}
+                    title="Remove pattern"
+                  >
+                    {"\u2715"}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <Btn small onClick={handleAddPattern}>+ Add Pattern</Btn>
+            {dir && (
+              <Btn small onClick={handleAutoDetect} disabled={scanning}>
+                {scanning ? "Scanning..." : "Auto-Detect"}
+              </Btn>
+            )}
+          </div>
+          {suggestions.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 9, fontFamily: MONO, color: C.t3 }}>
+              <div style={{ marginBottom: 4, fontWeight: 600 }}>Detected directories:</div>
+              {suggestions.map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  <span style={{ color: C.ok }}>{s.dir}/</span>
+                  <span>{s.fileCount} file{s.fileCount !== 1 ? "s" : ""}</span>
+                  <span style={{ color: C.t3 }}>({s.extensions.join(", ")})</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {sourcePatterns.length === 0 && (
+            <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 4 }}>
+              Leave empty to use backend defaults (e.g. src/**/*.v)
+            </div>
+          )}
         </div>
 
         {/* Error */}

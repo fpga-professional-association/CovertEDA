@@ -29,9 +29,12 @@ import {
   selectToolVersion,
   checkLicenses,
   exitApp,
+  importVendorProject,
+  createProject,
   type WhichResult,
   type DetectedVersion,
 } from "../hooks/useTauri";
+import type { VendorImportResult } from "../types";
 import NewProjectWizard from "./NewProjectWizard";
 
 function relativeTime(iso: string): string {
@@ -65,6 +68,9 @@ export default function StartScreen({
   const [wizardDir, setWizardDir] = useState<string | undefined>();
   const [hover, setHover] = useState<string | null>(null);
   const [noProjectMsg, setNoProjectMsg] = useState<string | null>(null);
+  const [vendorImport, setVendorImport] = useState<VendorImportResult | null>(null);
+  const [importDir, setImportDir] = useState<string>("");
+  const [importing, setImporting] = useState(false);
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const [whichInfo, setWhichInfo] = useState<Record<string, WhichResult & { status: string }>>({});
@@ -99,6 +105,7 @@ export default function StartScreen({
 
   const handleOpenDir = async () => {
     setNoProjectMsg(null);
+    setVendorImport(null);
     const dir = await pickDirectory();
     if (!dir) return;
     const existing = await checkProjectDir(dir);
@@ -107,10 +114,46 @@ export default function StartScreen({
       const config = await openProject(dir);
       onOpenProject(dir, config);
     } else {
+      // Try to detect vendor project files
+      try {
+        const result = await importVendorProject(dir);
+        if (result.found) {
+          setVendorImport(result);
+          setImportDir(dir);
+          return;
+        }
+      } catch { /* ignore */ }
       setNoProjectMsg(
         `No .coverteda project file found in "${dir}". Use "Create New Project" to initialize this directory as a CovertEDA project.`
       );
     }
+  };
+
+  const handleVendorImport = async () => {
+    if (!vendorImport || !importDir) return;
+    setImporting(true);
+    try {
+      await createProject(
+        importDir,
+        vendorImport.projectName || importDir.split("/").pop() || "project",
+        vendorImport.backendId,
+        vendorImport.device,
+        vendorImport.topModule || "top_level",
+        vendorImport.sourceFiles.length > 0
+          ? vendorImport.sourceFiles.map((f) => f)
+          : undefined,
+        vendorImport.constraintFiles.length > 0
+          ? vendorImport.constraintFiles.map((f) => f)
+          : undefined,
+      );
+      setVendorImport(null);
+      const opened = await openProject(importDir);
+      onOpenProject(importDir, opened);
+    } catch (e) {
+      setNoProjectMsg(`Import failed: ${e}`);
+      setVendorImport(null);
+    }
+    setImporting(false);
   };
 
   const handleRecentClick = async (r: RecentProject) => {
@@ -264,6 +307,48 @@ export default function StartScreen({
             }}>
               <span style={{ fontSize: 14, flexShrink: 0 }}>&#9888;</span>
               <span>{noProjectMsg}</span>
+            </div>
+          )}
+
+          {/* Vendor project import dialog */}
+          {vendorImport && (
+            <div style={{
+              padding: "12px 14px",
+              background: `${C.accent}08`,
+              border: `1px solid ${C.accent}30`,
+              borderRadius: 6,
+              fontSize: 10,
+              lineHeight: 1.6,
+            }}>
+              <div style={{ fontWeight: 700, color: C.t1, marginBottom: 8, fontSize: 12 }}>
+                Import {vendorImport.vendorType.toUpperCase()} Project
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: C.t3, marginBottom: 8 }}>
+                Found: {vendorImport.vendorFile}
+              </div>
+              {vendorImport.summary.map((s, i) => (
+                <div key={i} style={{ fontFamily: MONO, fontSize: 9, color: C.t2 }}>{s}</div>
+              ))}
+              {vendorImport.warnings.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  {vendorImport.warnings.map((w, i) => (
+                    <div key={i} style={{ fontSize: 9, color: C.warn, fontFamily: MONO }}>{w}</div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <Btn primary small onClick={handleVendorImport} disabled={importing}>
+                  {importing ? "Importing..." : "Import Project"}
+                </Btn>
+                <Btn small onClick={() => {
+                  setVendorImport(null);
+                  setWizardDir(importDir);
+                  setWizardOpen(true);
+                }}>
+                  Create New Instead
+                </Btn>
+                <Btn small onClick={() => setVendorImport(null)}>Cancel</Btn>
+              </div>
             </div>
           )}
 

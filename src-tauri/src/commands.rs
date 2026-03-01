@@ -1341,13 +1341,18 @@ pub fn create_project(
     backend_id: String,
     device: String,
     top_module: String,
+    source_patterns: Option<Vec<String>>,
+    constraint_files: Option<Vec<String>>,
 ) -> Result<ProjectConfig, String> {
     let project_dir = PathBuf::from(&dir);
     if !project_dir.exists() {
         std::fs::create_dir_all(&project_dir)
             .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
-    let mut config = ProjectConfig::new_with_defaults(&name, &backend_id, &device, &top_module);
+    let mut config = ProjectConfig::new_with_options(
+        &name, &backend_id, &device, &top_module,
+        source_patterns, constraint_files,
+    );
     config.save(&project_dir)?;
 
     let mut list = RecentProjectsList::load();
@@ -3123,6 +3128,442 @@ pub async fn list_report_files(project_dir: String) -> Result<Vec<ReportFileEntr
 
         files.sort_by(|a, b| b.modified_epoch_ms.cmp(&a.modified_epoch_ms));
         Ok(files)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ── Feature 2: Source directory scanning & top module detection ──
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceDirSuggestion {
+    pub dir: String,
+    pub file_count: usize,
+    pub extensions: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn scan_source_directories(project_dir: String) -> Result<Vec<SourceDirSuggestion>, String> {
+    tokio::task::spawn_blocking(move || {
+        use std::collections::{HashMap, HashSet};
+        use walkdir::WalkDir;
+
+        let root = PathBuf::from(&project_dir);
+        let hdl_exts: HashSet<&str> = [
+            "v", "sv", "vhd", "vhdl",
+        ].into_iter().collect();
+        let skip_dirs: HashSet<&str> = [
+            "node_modules", "target", "__pycache__", ".git", "db", "dni",
+            "qdb", "incremental_db", "greybox_tmp", "simulation",
+        ].into_iter().collect();
+
+        // dir path -> (file_count, set of extensions)
+        let mut dir_stats: HashMap<String, (usize, HashSet<String>)> = HashMap::new();
+
+        for entry in WalkDir::new(&root)
+            .max_depth(4)
+            .into_iter()
+            .filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                if name.starts_with('.') { return false; }
+                !skip_dirs.contains(name.as_ref())
+            })
+        {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            if entry.file_type().is_dir() { continue; }
+
+            let path = entry.path();
+            let ext = path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+
+            if !hdl_exts.contains(ext) { continue; }
+
+            let parent = match path.parent() {
+                Some(p) => p,
+                None => continue,
+            };
+            // Make relative to project root
+            let rel = match parent.strip_prefix(&root) {
+                Ok(r) => r.to_string_lossy().to_string(),
+                Err(_) => continue,
+            };
+            let dir_key = if rel.is_empty() { ".".to_string() } else { rel };
+
+            let entry = dir_stats.entry(dir_key).or_insert_with(|| (0, HashSet::new()));
+            entry.0 += 1;
+            entry.1.insert(ext.to_string());
+        }
+
+        let mut suggestions: Vec<SourceDirSuggestion> = dir_stats
+            .into_iter()
+            .map(|(dir, (file_count, exts))| {
+                let mut extensions: Vec<String> = exts.into_iter().collect();
+                extensions.sort();
+                SourceDirSuggestion { dir, file_count, extensions }
+            })
+            .collect();
+        suggestions.sort_by(|a, b| b.file_count.cmp(&a.file_count));
+
+        Ok(suggestions)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn detect_top_module(
+    project_dir: String,
+    source_patterns: Vec<String>,
+) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        use std::collections::{HashMap, HashSet};
+        use regex::Regex;
+
+        let root = PathBuf::from(&project_dir);
+
+        // Collect all HDL files matching the source patterns
+        let mut hdl_files: Vec<PathBuf> = Vec::new();
+        for pattern in &source_patterns {
+            let full_pattern = root.join(pattern).to_string_lossy().to_string();
+            for entry in glob::glob(&full_pattern).map_err(|e| e.to_string())? {
+                if let Ok(path) = entry {
+                    if path.is_file() {
+                        hdl_files.push(path);
+                    }
+                }
+            }
+        }
+
+        if hdl_files.is_empty() {
+            return Ok(None);
+        }
+
+        // Parse module declarations and instantiations
+        let module_decl_re = Regex::new(r"(?m)^\s*module\s+(\w+)").unwrap();
+        let inst_re = Regex::new(r"(?m)^\s*(\w+)\s+(?:#\s*\([\s\S]*?\)\s*)?(\w+)\s*\(").unwrap();
+
+        let mut declared: HashMap<String, String> = HashMap::new(); // module_name -> file_stem
+        let mut instantiated: HashSet<String> = HashSet::new();
+
+        for path in &hdl_files {
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if ext != "v" && ext != "sv" { continue; }
+
+            let content = match std::fs::read_to_string(path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let file_stem = path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Find module declarations
+            for caps in module_decl_re.captures_iter(&content) {
+                let mod_name = caps[1].to_string();
+                declared.entry(mod_name).or_insert(file_stem.clone());
+            }
+
+            // Find instantiations (identifier followed by instance name and parens)
+            for caps in inst_re.captures_iter(&content) {
+                let mod_name = caps[1].to_string();
+                // Skip Verilog keywords that look like instantiations
+                let keywords: HashSet<&str> = [
+                    "module", "endmodule", "input", "output", "inout", "wire", "reg",
+                    "assign", "always", "initial", "begin", "end", "if", "else",
+                    "case", "for", "while", "generate", "parameter", "localparam",
+                    "function", "task", "integer", "real", "time", "genvar",
+                ].into_iter().collect();
+                if !keywords.contains(mod_name.as_str()) {
+                    instantiated.insert(mod_name);
+                }
+            }
+        }
+
+        // Top module = declared but never instantiated by another module
+        let top_candidates: Vec<&String> = declared.keys()
+            .filter(|m| !instantiated.contains(m.as_str()))
+            .collect();
+
+        if top_candidates.len() == 1 {
+            return Ok(Some(top_candidates[0].clone()));
+        }
+
+        if top_candidates.is_empty() {
+            return Ok(None);
+        }
+
+        // Multiple candidates — prefer common top names
+        let project_name = root.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let preferred = ["top", "top_level", "main", &project_name];
+        for pref in &preferred {
+            if let Some(m) = top_candidates.iter().find(|m| m.to_lowercase() == **pref) {
+                return Ok(Some((*m).clone()));
+            }
+        }
+
+        // Return the first one alphabetically
+        let mut sorted = top_candidates;
+        sorted.sort();
+        Ok(Some(sorted[0].clone()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ── Feature 3: Vendor project file import ──
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorImportResult {
+    pub found: bool,
+    pub vendor_file: String,
+    pub vendor_type: String, // "qsf", "xpr", "ldf", "rdf"
+    pub backend_id: String,
+    pub device: String,
+    pub top_module: String,
+    pub source_files: Vec<String>,
+    pub constraint_files: Vec<String>,
+    pub project_name: String,
+    pub warnings: Vec<String>,
+    pub summary: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn import_vendor_project(dir: String) -> Result<VendorImportResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let project_dir = PathBuf::from(&dir);
+
+        // Scan for vendor project files (priority order)
+        let extensions = [
+            ("qsf", "quartus"),
+            ("qpf", "quartus"),
+            ("xpr", "vivado"),
+            ("ldf", "diamond"),
+            ("rdf", "radiant"),
+        ];
+
+        let mut found_file: Option<(PathBuf, &str, &str)> = None;
+        if let Ok(entries) = std::fs::read_dir(&project_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() { continue; }
+                let ext = path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                for (target_ext, backend_id) in &extensions {
+                    if ext == *target_ext {
+                        found_file = Some((path.clone(), target_ext, backend_id));
+                        break;
+                    }
+                }
+                if found_file.is_some() { break; }
+            }
+        }
+
+        let (vendor_path, vendor_type, backend_id) = match found_file {
+            Some(f) => f,
+            None => {
+                return Ok(VendorImportResult {
+                    found: false,
+                    vendor_file: String::new(),
+                    vendor_type: String::new(),
+                    backend_id: String::new(),
+                    device: String::new(),
+                    top_module: String::new(),
+                    source_files: Vec::new(),
+                    constraint_files: Vec::new(),
+                    project_name: String::new(),
+                    warnings: Vec::new(),
+                    summary: Vec::new(),
+                });
+            }
+        };
+
+        let vendor_file = vendor_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        match vendor_type {
+            "qsf" => {
+                let content = std::fs::read_to_string(&vendor_path)
+                    .map_err(|e| format!("Failed to read {}: {}", vendor_file, e))?;
+                let result = crate::parser::qsf::parse_qsf(&content);
+
+                // Also try to find companion .qpf for project name
+                let mut project_name = result.project_name.clone();
+                if project_name.is_empty() {
+                    let qpf_path = vendor_path.with_extension("qpf");
+                    if qpf_path.exists() {
+                        if let Ok(qpf_content) = std::fs::read_to_string(&qpf_path) {
+                            if let Some(name) = crate::parser::qsf::parse_qpf_project_name(&qpf_content) {
+                                project_name = name;
+                            }
+                        }
+                    }
+                }
+                if project_name.is_empty() {
+                    project_name = vendor_path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("project")
+                        .to_string();
+                }
+
+                Ok(VendorImportResult {
+                    found: true,
+                    vendor_file,
+                    vendor_type: vendor_type.to_string(),
+                    backend_id: backend_id.to_string(),
+                    device: result.device,
+                    top_module: result.top_module,
+                    source_files: result.source_files,
+                    constraint_files: result.constraint_files,
+                    project_name,
+                    warnings: result.warnings,
+                    summary: result.summary,
+                })
+            }
+            "qpf" => {
+                // For .qpf, look for matching .qsf file
+                let stem = vendor_path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                let qsf_path = project_dir.join(format!("{}.qsf", stem));
+                if qsf_path.exists() {
+                    let content = std::fs::read_to_string(&qsf_path)
+                        .map_err(|e| format!("Failed to read QSF: {}", e))?;
+                    let result = crate::parser::qsf::parse_qsf(&content);
+                    let mut project_name = String::new();
+                    let qpf_content = std::fs::read_to_string(&vendor_path).unwrap_or_default();
+                    if let Some(name) = crate::parser::qsf::parse_qpf_project_name(&qpf_content) {
+                        project_name = name;
+                    }
+                    if project_name.is_empty() {
+                        project_name = stem.to_string();
+                    }
+
+                    Ok(VendorImportResult {
+                        found: true,
+                        vendor_file: format!("{}.qsf", stem),
+                        vendor_type: "qsf".to_string(),
+                        backend_id: backend_id.to_string(),
+                        device: result.device,
+                        top_module: result.top_module,
+                        source_files: result.source_files,
+                        constraint_files: result.constraint_files,
+                        project_name,
+                        warnings: result.warnings,
+                        summary: result.summary,
+                    })
+                } else {
+                    Ok(VendorImportResult {
+                        found: true,
+                        vendor_file,
+                        vendor_type: vendor_type.to_string(),
+                        backend_id: backend_id.to_string(),
+                        device: String::new(),
+                        top_module: String::new(),
+                        source_files: Vec::new(),
+                        constraint_files: Vec::new(),
+                        project_name: stem.to_string(),
+                        warnings: vec![format!("Found .qpf but no matching .qsf file")],
+                        summary: vec![format!("Quartus project: {}", stem)],
+                    })
+                }
+            }
+            _ => {
+                // For other vendor types, return basic info and let user configure
+                let project_name = vendor_path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("project")
+                    .to_string();
+
+                let summary_msg = format!("Found {} project file: {}", backend_id, &vendor_file);
+                Ok(VendorImportResult {
+                    found: true,
+                    vendor_file,
+                    vendor_type: vendor_type.to_string(),
+                    backend_id: backend_id.to_string(),
+                    device: String::new(),
+                    top_module: String::new(),
+                    source_files: Vec::new(),
+                    constraint_files: Vec::new(),
+                    project_name,
+                    warnings: vec![
+                        format!("Import from .{} files is not yet fully supported. Settings may need manual adjustment.", vendor_type),
+                    ],
+                    summary: vec![summary_msg],
+                })
+            }
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ── Feature 4: Tool edition detection ──
+
+#[tauri::command]
+pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        match backend_id.as_str() {
+            "quartus" => {
+                // Try to run quartus_sh --version and parse output
+                let result = std::process::Command::new("quartus_sh")
+                    .arg("--version")
+                    .output();
+                match result {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+                        let combined = format!("{} {}", stdout, stderr);
+                        if combined.contains("pro edition") || combined.contains("quartus prime pro") {
+                            Ok(Some("pro".to_string()))
+                        } else if combined.contains("lite edition") || combined.contains("quartus prime lite") {
+                            Ok(Some("lite".to_string()))
+                        } else if combined.contains("standard edition") || combined.contains("quartus prime standard") {
+                            Ok(Some("standard".to_string()))
+                        } else if !stdout.is_empty() || !stderr.is_empty() {
+                            // Quartus found but edition unclear — default to standard
+                            Ok(Some("standard".to_string()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    Err(_) => Ok(None),
+                }
+            }
+            "vivado" => {
+                let result = std::process::Command::new("vivado")
+                    .arg("-version")
+                    .output();
+                match result {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                        if stdout.contains("vivado ml") {
+                            Ok(Some("ml_standard".to_string()))
+                        } else if stdout.contains("vivado") {
+                            Ok(Some("standard".to_string()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    Err(_) => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
     })
     .await
     .map_err(|e| e.to_string())?

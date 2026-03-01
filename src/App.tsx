@@ -51,6 +51,7 @@ import {
   getGitStatus,
   saveBuildRecord,
   getProjectConfigAtHead,
+  detectToolEdition,
 } from "./hooks/useTauri";
 import type { RustGitStatus } from "./hooks/useTauri";
 
@@ -95,15 +96,25 @@ const FALLBACK_BACKEND: RuntimeBackend = {
   available: false,
 };
 
-function DevicePicker({ backendId, value, onChange, onSelect, onCancel }: {
+function DevicePicker({ backendId, value, onChange, onSelect, onCancel, edition }: {
   backendId: string; value: string;
   onChange: (v: string) => void; onSelect: (part: string) => void; onCancel: () => void;
+  edition?: string | null;
 }) {
   const { C, MONO } = useTheme();
   const [open, setOpen] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
-  const families = DEVICE_MAP[backendId] ?? [];
+  const allFamilies = DEVICE_MAP[backendId] ?? [];
   const lower = value.toLowerCase();
+
+  // Filter by edition
+  const { families, hiddenCount } = useMemo(() => {
+    if (!edition || allFamilies.length === 0) return { families: allFamilies, hiddenCount: 0 };
+    const visible = allFamilies.filter((f) => !f.editions || f.editions.includes(edition));
+    const hidden = allFamilies.filter((f) => f.editions && !f.editions.includes(edition))
+      .reduce((sum, f) => sum + f.parts.length, 0);
+    return { families: visible, hiddenCount: hidden };
+  }, [allFamilies, edition]);
 
   // Filter families/parts by search text
   const filteredFamilies = useMemo(() => {
@@ -188,6 +199,11 @@ function DevicePicker({ backendId, value, onChange, onSelect, onCancel }: {
               ))}
             </div>
           ))}
+          {hiddenCount > 0 && (
+            <div style={{ padding: "4px 8px", fontSize: 7, fontFamily: MONO, color: C.t3, borderTop: `1px solid ${C.b1}` }}>
+              {hiddenCount} part{hiddenCount !== 1 ? "s" : ""} hidden (requires different Quartus edition)
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -274,6 +290,7 @@ export default function App() {
   const [sourcesStale, setSourcesStale] = useState(false);
   const [editingDevice, setEditingDevice] = useState(false);
   const [deviceDraft, setDeviceDraft] = useState("");
+  const [toolEdition, setToolEdition] = useState<string | null>(null);
   const [commitModal, setCommitModal] = useState<"checking" | "prompt" | "committing" | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -337,6 +354,12 @@ export default function App() {
       }
     }, 100);
   }, []);
+
+  // Detect tool edition when backend changes
+  useEffect(() => {
+    if (!bid) return;
+    detectToolEdition(bid).then(setToolEdition).catch(() => setToolEdition(null));
+  }, [bid]);
 
   const stopLogFlush = useCallback(() => {
     if (flushTimer.current) {
@@ -1356,6 +1379,14 @@ export default function App() {
             projectDir={projectDir}
             device={project?.device ?? B.defaultDev}
             onDeviceClick={() => { if (project) { setDeviceDraft(project.device); setEditingDevice(true); } }}
+            topModule={project?.topModule}
+            onSetTopModule={(file) => {
+              if (!project || !projectDir) return;
+              const mod = file.n.replace(/\.[^.]+$/, "");
+              const updated = { ...project, topModule: mod };
+              setProject(updated);
+              saveProject(projectDir, updated).catch(() => {});
+            }}
             onFileContextMenu={(file, x, y) => {
               const isSynthable = file.ty === "rtl" || file.ty === "tb" || file.ty === "constr";
               const items: ContextMenuItem[] = file.ty === "folder"
@@ -1387,6 +1418,19 @@ export default function App() {
                         label: file.synth ? "Remove from Synthesis" : "Add to Synthesis",
                         icon: file.synth ? "\u2212" : "+",
                         onClick: () => handleToggleSynth(file),
+                      },
+                    ] : []),
+                    ...(file.ty === "rtl" ? [
+                      {
+                        label: "Set as Top Module",
+                        icon: "T",
+                        onClick: () => {
+                          if (!project || !projectDir) return;
+                          const mod = file.n.replace(/\.[^.]+$/, "");
+                          const updated = { ...project, topModule: mod };
+                          setProject(updated);
+                          saveProject(projectDir, updated).catch(() => {});
+                        },
                       },
                     ] : []),
                     { label: "", separator: true, onClick: () => {} },
@@ -1794,6 +1838,7 @@ export default function App() {
               if (projectDir) saveProject(projectDir, updated).catch(() => {});
             }}
             onCancel={() => setEditingDevice(false)}
+            edition={toolEdition}
           />
         </div>
       )}

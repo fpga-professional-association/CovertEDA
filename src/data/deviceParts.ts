@@ -4,6 +4,7 @@
 export interface DeviceFamily {
   family: string;
   parts: string[];
+  editions?: string[];  // e.g., ["pro"] or ["standard"] or ["pro", "standard"]
 }
 
 export const RADIANT_DEVICES: DeviceFamily[] = [
@@ -83,6 +84,7 @@ export const DIAMOND_DEVICES: DeviceFamily[] = [
 export const QUARTUS_DEVICES: DeviceFamily[] = [
   {
     family: "Cyclone V",
+    editions: ["standard", "lite"],
     parts: [
       "5CSXFC6D6F31C6", "5CSEBA6U23I7", "5CEBA4F23C7",
       "5CEFA7F31I7", "5CEFA5F23C8", "5CEBA2F17C8",
@@ -91,6 +93,7 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "Cyclone 10 LP",
+    editions: ["standard", "lite"],
     parts: [
       "10CL025YU256I7G", "10CL025YF256C8G", "10CL016YU256C8G",
       "10CL006YU256C8G", "10CL040YF484C8G",
@@ -98,12 +101,14 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "Cyclone 10 GX",
+    editions: ["standard", "pro"],
     parts: [
       "10CX220YF780I5G", "10CX150YF672I5G", "10CX085YU484I5G",
     ],
   },
   {
     family: "MAX 10",
+    editions: ["standard", "lite"],
     parts: [
       "10M50DAF484C7G", "10M50SAE144I7G", "10M25SAE144C8G",
       "10M16SAU169C8G", "10M08SAE144C8G", "10M04SAE144C8G",
@@ -111,7 +116,17 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
     ],
   },
   {
+    family: "MAX V",
+    editions: ["standard", "lite"],
+    parts: [
+      "5M40ZE64C5", "5M80ZE64C5", "5M160ZE64C5",
+      "5M240ZT100C5", "5M570ZT100C5",
+      "5M1270ZT144C5", "5M2210ZF256C5",
+    ],
+  },
+  {
     family: "Arria 10",
+    editions: ["standard", "pro"],
     parts: [
       "10AX115S2F45I1SG", "10AX115N2F45I1SG",
       "10AS066N3F40I2SG", "10AS048H3F34I2SG",
@@ -119,6 +134,7 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "Stratix 10",
+    editions: ["pro"],
     parts: [
       "1SG280LU3F50E2VG", "1SG280HU2F50E2VG",
       "1SX280LU3F50I2VG",
@@ -126,9 +142,24 @@ export const QUARTUS_DEVICES: DeviceFamily[] = [
   },
   {
     family: "Agilex 7",
+    editions: ["pro"],
     parts: [
       "AGFB014R24B2E2V", "AGFB014R24A2E2V",
       "AGFB022R25A2E2VR0",
+    ],
+  },
+  {
+    family: "Agilex 5",
+    editions: ["pro"],
+    parts: [
+      "A5ED065BB32AE5SR0", "A5ED065BB32AE4SR0",
+    ],
+  },
+  {
+    family: "Agilex 9",
+    editions: ["pro"],
+    parts: [
+      "A9PD120BF54I1VG",
     ],
   },
 ];

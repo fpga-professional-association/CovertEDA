@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
-import { RADIANT_DEVICES, DeviceInfo } from "../data/devices";
+import { DEVICE_MAP, DeviceFamily } from "../data/deviceParts";
 
 // ── Inject CSS hover for device picker rows ──
 if (typeof document !== "undefined" && !document.getElementById("ceda-dp-hover")) {
@@ -14,42 +14,60 @@ interface DevicePickerProps {
   value: string;
   onChange: (partNumber: string) => void;
   backendId: string;
+  edition?: string | null;  // e.g., "pro", "standard", "lite"
 }
 
-export default function DevicePicker({ value, onChange, backendId }: DevicePickerProps) {
+export default function DevicePicker({ value, onChange, backendId, edition }: DevicePickerProps) {
   const { C, MONO } = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [collapsedFamilies, setCollapsedFamilies] = useState<Set<string>>(new Set());
 
-  // For now, only Radiant has a device database
-  const devices = backendId === "radiant" ? RADIANT_DEVICES : [];
+  const allFamilies = DEVICE_MAP[backendId] ?? [];
+
+  // Filter by edition if provided
+  const { families, hiddenCount, hiddenEdition } = useMemo(() => {
+    if (!edition || allFamilies.length === 0) {
+      return { families: allFamilies, hiddenCount: 0, hiddenEdition: "" };
+    }
+    const visible: DeviceFamily[] = [];
+    let hidden = 0;
+    let hidEdition = "";
+    for (const f of allFamilies) {
+      if (!f.editions || f.editions.includes(edition)) {
+        visible.push(f);
+      } else {
+        hidden += f.parts.length;
+        // Figure out which edition they require
+        const required = f.editions.find((e) => e !== edition);
+        if (required) hidEdition = required;
+      }
+    }
+    return { families: visible, hiddenCount: hidden, hiddenEdition: hidEdition };
+  }, [allFamilies, edition]);
 
   const filtered = useMemo(() => {
-    if (!query) return devices;
+    if (!query) return families;
     const q = query.toLowerCase();
-    return devices.filter(
-      (d) =>
-        d.partNumber.toLowerCase().includes(q) ||
-        d.family.toLowerCase().includes(q),
-    );
-  }, [devices, query]);
+    return families
+      .map((f) => ({
+        ...f,
+        parts: f.parts.filter(
+          (p) => p.toLowerCase().includes(q) || f.family.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((f) => f.parts.length > 0);
+  }, [families, query]);
 
-  // Group by family
-  const grouped = useMemo(() => {
-    const groups: { family: string; items: DeviceInfo[] }[] = [];
-    const familyMap = new Map<string, DeviceInfo[]>();
-    for (const d of filtered) {
-      const arr = familyMap.get(d.family);
-      if (arr) arr.push(d);
-      else familyMap.set(d.family, [d]);
-    }
-    for (const [family, items] of familyMap) {
-      groups.push({ family, items });
-    }
-    return groups;
-  }, [filtered]);
+  const toggleFamily = (family: string) => {
+    setCollapsedFamilies((prev) => {
+      const next = new Set(prev);
+      if (next.has(family)) next.delete(family);
+      else next.add(family);
+      return next;
+    });
+  };
 
   // Click outside to close
   useEffect(() => {
@@ -63,7 +81,7 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
     return () => window.removeEventListener("mousedown", handler);
   }, [open]);
 
-  if (devices.length === 0) {
+  if (families.length === 0 && !edition) {
     // Fallback: plain text input for backends without a device database
     return (
       <input
@@ -89,7 +107,6 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
     <div ref={ref} style={{ position: "relative", width: "100%" }}>
       {/* Input field */}
       <input
-        ref={inputRef}
         value={open ? query : value}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -132,71 +149,83 @@ export default function DevicePicker({ value, onChange, backendId }: DevicePicke
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}
         >
-          {grouped.length === 0 && (
+          {filtered.length === 0 && (
             <div style={{ padding: "8px 12px", fontSize: 9, fontFamily: MONO, color: C.t3 }}>
               No matching devices
             </div>
           )}
-          {grouped.map((g) => (
-            <div key={g.family}>
-              {/* Family header */}
-              <div
-                style={{
-                  padding: "5px 10px",
-                  fontSize: 8,
-                  fontFamily: MONO,
-                  fontWeight: 700,
-                  color: C.t3,
-                  letterSpacing: 0.5,
-                  background: C.s2,
-                  borderBottom: `1px solid ${C.b1}`,
-                  position: "sticky",
-                  top: 0,
-                }}
-              >
-                {g.family.toUpperCase()}
+          {filtered.map((g) => {
+            const collapsed = collapsedFamilies.has(g.family);
+            return (
+              <div key={g.family}>
+                {/* Family header — clickable to collapse/expand */}
+                <div
+                  onClick={() => toggleFamily(g.family)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 8,
+                    fontFamily: MONO,
+                    fontWeight: 700,
+                    color: C.t3,
+                    letterSpacing: 0.5,
+                    background: C.s2,
+                    borderBottom: `1px solid ${C.b1}`,
+                    position: "sticky",
+                    top: 0,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 6 }}>{collapsed ? "\u25B6" : "\u25BC"}</span>
+                  {g.family.toUpperCase()}
+                  <span style={{ fontWeight: 400, color: C.t3 }}>
+                    ({g.parts.length} part{g.parts.length !== 1 ? "s" : ""})
+                  </span>
+                </div>
+                {/* Device rows */}
+                {!collapsed && g.parts.map((p) => {
+                  const selected = p === value;
+                  return (
+                    <div
+                      key={p}
+                      onClick={() => {
+                        onChange(p);
+                        setOpen(false);
+                        setQuery("");
+                      }}
+                      className="ceda-dp-row"
+                      style={{
+                        ["--ceda-hover-bg" as string]: `${C.s3}88`,
+                        padding: "5px 12px",
+                        fontSize: 10,
+                        fontFamily: MONO,
+                        cursor: "pointer",
+                        background: selected ? `${C.accent}10` : "transparent",
+                      }}
+                    >
+                      <span style={{ color: selected ? C.accent : C.t1, fontWeight: selected ? 600 : 400 }}>
+                        {p}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              {/* Device rows */}
-              {g.items.map((d) => {
-                const selected = d.partNumber === value;
-                return (
-                  <div
-                    key={d.partNumber}
-                    onClick={() => {
-                      onChange(d.partNumber);
-                      setOpen(false);
-                      setQuery("");
-                    }}
-                    className="ceda-dp-row"
-                    style={{
-                      ["--ceda-hover-bg" as string]: `${C.s3}88`,
-                      display: "grid",
-                      gridTemplateColumns: "1fr 60px 50px 80px",
-                      gap: 8,
-                      padding: "5px 12px",
-                      fontSize: 10,
-                      fontFamily: MONO,
-                      cursor: "pointer",
-                      background: selected ? `${C.accent}10` : "transparent",
-                    }}
-                  >
-                    <span style={{ color: selected ? C.accent : C.t1, fontWeight: selected ? 600 : 400, whiteSpace: "nowrap" }}>
-                      {d.partNumber}
-                    </span>
-                    <span style={{ color: C.t3, textAlign: "right" }}>
-                      {d.luts >= 1000 ? `${Math.round(d.luts / 1000)}K` : d.luts} LUT
-                    </span>
-                    <span style={{ color: C.t3, textAlign: "right" }}>
-                      {d.io} I/O
-                    </span>
-                    <span style={{ color: C.t3, textAlign: "right", whiteSpace: "nowrap" }}>
-                      {d.package}
-                    </span>
-                  </div>
-                );
-              })}
+            );
+          })}
+          {/* Edition filtering message */}
+          {hiddenCount > 0 && (
+            <div style={{
+              padding: "6px 12px",
+              fontSize: 8,
+              fontFamily: MONO,
+              color: C.t3,
+              borderTop: `1px solid ${C.b1}`,
+            }}>
+              {hiddenCount} part{hiddenCount !== 1 ? "s" : ""} hidden (requires Quartus {hiddenEdition.charAt(0).toUpperCase() + hiddenEdition.slice(1)})
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

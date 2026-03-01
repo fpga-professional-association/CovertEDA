@@ -36,8 +36,19 @@ impl ProjectConfig {
         device: &str,
         top_module: &str,
     ) -> Self {
+        Self::new_with_options(name, backend_id, device, top_module, None, None)
+    }
+
+    pub fn new_with_options(
+        name: &str,
+        backend_id: &str,
+        device: &str,
+        top_module: &str,
+        custom_source_patterns: Option<Vec<String>>,
+        custom_constraint_files: Option<Vec<String>>,
+    ) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
-        let (source_patterns, constraint_files, impl_dir) = match backend_id {
+        let (default_source_patterns, default_constraint_files, impl_dir) = match backend_id {
             "diamond" => (
                 vec!["src/**/*.v".into(), "src/**/*.sv".into()],
                 vec!["constraints/*.lpf".into()],
@@ -73,6 +84,9 @@ impl ProjectConfig {
                 "build".to_string(),
             ),
         };
+
+        let source_patterns = custom_source_patterns.unwrap_or(default_source_patterns);
+        let constraint_files = custom_constraint_files.unwrap_or(default_constraint_files);
 
         Self {
             name: name.to_string(),

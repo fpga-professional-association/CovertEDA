@@ -80,6 +80,10 @@ pub fn run() {
             commands::open_in_file_manager,
             commands::get_system_stats,
             commands::list_report_files,
+            commands::scan_source_directories,
+            commands::detect_top_module,
+            commands::import_vendor_project,
+            commands::detect_tool_edition,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

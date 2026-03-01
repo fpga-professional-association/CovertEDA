@@ -347,6 +347,28 @@ export interface DetectedTool {
   available: boolean;
 }
 
+// ── Source Directory Scanning ──
+export interface SourceDirSuggestion {
+  dir: string;
+  fileCount: number;
+  extensions: string[];
+}
+
+// ── Vendor Project Import ──
+export interface VendorImportResult {
+  found: boolean;
+  vendorFile: string;
+  vendorType: string;
+  backendId: string;
+  device: string;
+  topModule: string;
+  sourceFiles: string[];
+  constraintFiles: string[];
+  projectName: string;
+  warnings: string[];
+  summary: string[];
+}
+
 export interface LicenseFeature {
   feature: string;
   vendor: string;

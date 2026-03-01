@@ -184,6 +184,8 @@ const FileTreeRow = memo(function FileTreeRow({
   onToggleFolder,
   onContextMenu,
   onToggleSynth,
+  isTopModule: isTop,
+  onSetTopModule,
 }: {
   f: ProjectFile;
   active: boolean;
@@ -192,6 +194,8 @@ const FileTreeRow = memo(function FileTreeRow({
   onToggleFolder?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onToggleSynth?: () => void;
+  isTopModule?: boolean;
+  onSetTopModule?: () => void;
 }) {
   const { C, MONO } = useTheme();
 
@@ -254,6 +258,7 @@ const FileTreeRow = memo(function FileTreeRow({
   }
 
   const canToggleSynth = f.ty === "rtl" || f.ty === "tb" || f.ty === "constr";
+  const canBeTop = f.ty === "rtl";
 
   return (
     <div
@@ -263,7 +268,7 @@ const FileTreeRow = memo(function FileTreeRow({
       style={{
         ["--ceda-hover-bg" as string]: `${C.s3}88`,
         display: "grid",
-        gridTemplateColumns: "1fr 14px 14px",
+        gridTemplateColumns: "1fr 14px 14px 14px",
         gap: 2,
         alignItems: "center",
         padding: `3px 6px 3px ${8 + f.d * 12}px`,
@@ -358,6 +363,21 @@ const FileTreeRow = memo(function FileTreeRow({
       >
         S
       </span>
+      {/* Top module indicator — clickable for RTL files */}
+      <span
+        title={isTop ? "Top module" : canBeTop ? "Set as top module" : "Not applicable"}
+        onClick={canBeTop ? (e) => { e.stopPropagation(); onSetTopModule?.(); } : undefined}
+        style={{
+          fontSize: 8,
+          textAlign: "center",
+          color: isTop ? C.accent : C.t3,
+          opacity: isTop ? 1 : 0.15,
+          cursor: canBeTop ? "pointer" : "default",
+          fontWeight: isTop ? 700 : 400,
+        }}
+      >
+        T
+      </span>
       {/* Type badge */}
       <span
         style={{
@@ -395,9 +415,11 @@ interface FileTreeProps {
   projectDir?: string;
   device?: string;
   onDeviceClick?: () => void;
+  topModule?: string;
+  onSetTopModule?: (file: ProjectFile) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, onDeviceClick }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, onDeviceClick, topModule, onSetTopModule }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -678,7 +700,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 14px 14px",
+          gridTemplateColumns: "1fr 14px 14px 14px",
           gap: 2,
           padding: "4px 6px 4px 20px",
           fontSize: 7,
@@ -691,6 +713,9 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
         <span>NAME</span>
         <span title="In Synthesis — click to toggle" style={{ textAlign: "center", color: C.ok }}>
           S
+        </span>
+        <span title="Top module — click to set" style={{ textAlign: "center", color: C.accent }}>
+          T
         </span>
         <span style={{ textAlign: "center" }}>{"\u2302"}</span>
       </div>
@@ -707,6 +732,8 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
             onToggleFolder={f.ty === "folder" ? () => toggleFolder(folderKey(f)) : undefined}
             onContextMenu={onFileContextMenu ? (e) => onFileContextMenu(f, e.clientX, e.clientY) : undefined}
             onToggleSynth={onToggleSynth ? () => onToggleSynth(f) : undefined}
+            isTopModule={topModule ? f.ty === "rtl" && f.n.replace(/\.[^.]+$/, "") === topModule : false}
+            onSetTopModule={onSetTopModule ? () => onSetTopModule(f) : undefined}
           />
         ))}
       </div>
@@ -724,6 +751,11 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
           gap: 6,
         }}
       >
+        {topModule && (
+          <span title="Top module">
+            <span style={{ color: C.accent }}>T</span> {topModule}
+          </span>
+        )}
         <span>
           <span style={{ color: C.ok }}>{synthFiles.length}</span> in synth
         </span>

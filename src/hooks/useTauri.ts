@@ -264,6 +264,7 @@ import type {
   FileContent, ProjectFile, TimingReportData, UtilizationReportData,
   PowerReportData, DrcReportData, IoBankData,
   RuntimeBackend, PipelineStage,
+  SourceDirSuggestion, VendorImportResult,
 } from "../types";
 import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META } from "../data/mockData";
 
@@ -342,9 +343,15 @@ export async function createProject(
   backendId: string,
   device: string,
   topModule: string,
+  sourcePatterns?: string[],
+  constraintFiles?: string[],
 ): Promise<ProjectConfig> {
   if (!isTauri) return { ...MOCK_PROJECT_CONFIG, name, backendId, device, topModule };
-  return invoke<ProjectConfig>("create_project", { dir, name, backendId, device, topModule });
+  return invoke<ProjectConfig>("create_project", {
+    dir, name, backendId, device, topModule,
+    sourcePatterns: sourcePatterns ?? null,
+    constraintFiles: constraintFiles ?? null,
+  });
 }
 
 export async function openProject(dir: string): Promise<ProjectConfig> {
@@ -831,6 +838,38 @@ export async function exportMakefile(
   return invoke<string>("export_makefile", {
     projectDir, device, topModule, sources, constraints, buildDir, buildOptions,
   });
+}
+
+// ── Source Directory Scanning ──
+
+export async function scanSourceDirectories(projectDir: string): Promise<SourceDirSuggestion[]> {
+  if (!isTauri) return [];
+  return invoke<SourceDirSuggestion[]>("scan_source_directories", { projectDir });
+}
+
+export async function detectTopModule(projectDir: string, sourcePatterns: string[]): Promise<string | null> {
+  if (!isTauri) return null;
+  return invoke<string | null>("detect_top_module", { projectDir, sourcePatterns });
+}
+
+// ── Vendor Project Import ──
+
+export async function importVendorProject(dir: string): Promise<VendorImportResult> {
+  if (!isTauri) {
+    return {
+      found: false, vendorFile: "", vendorType: "", backendId: "",
+      device: "", topModule: "", sourceFiles: [], constraintFiles: [],
+      projectName: "", warnings: [], summary: [],
+    };
+  }
+  return invoke<VendorImportResult>("import_vendor_project", { dir });
+}
+
+// ── Tool Edition Detection ──
+
+export async function detectToolEdition(backendId: string): Promise<string | null> {
+  if (!isTauri) return null;
+  return invoke<string | null>("detect_tool_edition", { backendId });
 }
 
 // ── Git Init ──
