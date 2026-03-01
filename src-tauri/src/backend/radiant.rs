@@ -120,18 +120,14 @@ impl RadiantBackend {
             }
         }
 
-        // 3. Fallback: which radiantc
-        if let Ok(output) = std::process::Command::new("which").arg("radiantc").output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let bin_path = PathBuf::from(&path_str);
-                // radiantc is at <install>/bin/lin64/radiantc — go up 3 levels
-                if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                    let ver = install.file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
-                    return (ver, Some(install.to_path_buf()));
-                }
+        // 3. Fallback: find radiantc on PATH (cross-platform)
+        if let Ok(bin_path) = which::which("radiantc") {
+            // radiantc is at <install>/bin/{lin64,nt64}/radiantc — go up 3 levels
+            if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                let ver = install.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return (ver, Some(install.to_path_buf()));
             }
         }
 

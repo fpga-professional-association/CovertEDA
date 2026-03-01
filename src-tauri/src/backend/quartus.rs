@@ -131,18 +131,14 @@ impl QuartusBackend {
             }
         }
 
-        // 3. Fallback: which quartus_sh
-        if let Ok(output) = std::process::Command::new("which").arg("quartus_sh").output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let bin_path = PathBuf::from(&path_str);
-                // quartus_sh is at <install>/quartus/bin64/quartus_sh — go up 3 levels
-                if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                    let ver = install.file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
-                    return (ver, Some(install.to_path_buf()));
-                }
+        // 3. Fallback: find quartus_sh on PATH (cross-platform)
+        if let Ok(bin_path) = which::which("quartus_sh") {
+            // quartus_sh is at <install>/quartus/bin64/quartus_sh — go up 3 levels
+            if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                let ver = install.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return (ver, Some(install.to_path_buf()));
             }
         }
 

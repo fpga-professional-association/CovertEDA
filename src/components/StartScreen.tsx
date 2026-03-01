@@ -461,9 +461,9 @@ export default function StartScreen({
                                   })}
                                 </div>
                               )}
-                              {/* which result */}
+                              {/* PATH lookup result */}
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ color: C.t3 }}>which:</span>
+                                <span style={{ color: C.t3 }}>path:</span>
                                 <span style={{ color: wi.whichPath ? C.ok : C.t3, wordBreak: "break-all" }}>
                                   {wi.whichPath ?? "not on PATH"}
                                 </span>
@@ -513,7 +513,7 @@ export default function StartScreen({
                                     {wi.status === "adding" ? "ADDING..." : "ADD TO PATH"}
                                   </span>
                                   <span style={{ color: C.t3, fontSize: 8 }}>
-                                    writes to ~/.bashrc or ~/.zshrc
+                                    {navigator.platform?.startsWith("Win") ? "updates system PATH" : "writes to shell config"}
                                   </span>
                                 </div>
                               )}

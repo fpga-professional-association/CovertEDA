@@ -1631,17 +1631,12 @@ pub fn which_tool(backend_id: String) -> Result<WhichResult, String> {
         _ => return Ok(WhichResult { which_path: None, detected_bin_dir: None }),
     };
 
-    // which
+    // Cross-platform PATH lookup using the `which` crate
     let mut which_path = None;
     for name in &cli_names {
-        if let Ok(output) = std::process::Command::new("which").arg(name).output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() {
-                    which_path = Some(path);
-                    break;
-                }
-            }
+        if let Ok(path) = which::which(name) {
+            which_path = Some(path.display().to_string());
+            break;
         }
     }
 
@@ -1703,20 +1698,32 @@ pub fn add_tool_to_path(backend_id: String) -> Result<String, String> {
     };
 
     if cfg!(target_os = "windows") {
-        // Windows: use setx to add to user PATH
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        if current_path.contains(&bin_str) {
+        // Windows: read user-level PATH from registry, append, write back.
+        // Using PowerShell to read/write ONLY the user PATH (not the system PATH).
+        let get_cmd = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command",
+                "[Environment]::GetEnvironmentVariable('Path', 'User')"])
+            .output()
+            .map_err(|e| format!("Failed to read user PATH: {}", e))?;
+        let user_path = String::from_utf8_lossy(&get_cmd.stdout).trim().to_string();
+        // Check both user PATH and current process PATH
+        if user_path.contains(&bin_str) || std::env::var("PATH").unwrap_or_default().contains(&bin_str) {
             return Ok(format!("{} (already in PATH)", bin_str));
         }
-        let new_path = format!("{};{}", bin_str, current_path);
-        let output = std::process::Command::new("setx")
-            .args(["PATH", &new_path])
+        let new_user_path = if user_path.is_empty() {
+            bin_str.clone()
+        } else {
+            format!("{};{}", bin_str, user_path)
+        };
+        let set_cmd = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command",
+                &format!("[Environment]::SetEnvironmentVariable('Path', '{}', 'User')", new_user_path)])
             .output()
-            .map_err(|e| format!("Failed to run setx: {}", e))?;
-        if !output.status.success() {
-            return Err(format!("setx failed: {}", String::from_utf8_lossy(&output.stderr)));
+            .map_err(|e| format!("Failed to update user PATH: {}", e))?;
+        if !set_cmd.status.success() {
+            return Err(format!("Failed to update PATH: {}", String::from_utf8_lossy(&set_cmd.stderr)));
         }
-        return Ok(format!("{} → added via setx (restart terminal to take effect)", bin_str));
+        return Ok(format!("{} → added to user PATH (restart app to take effect)", bin_str));
     }
 
     // Unix: detect shell from $SHELL env var, write to appropriate rc file

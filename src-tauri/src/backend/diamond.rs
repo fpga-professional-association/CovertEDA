@@ -128,18 +128,14 @@ impl DiamondBackend {
             }
         }
 
-        // Fallback: check if pnmainc is on PATH
-        if let Ok(output) = std::process::Command::new("which").arg("pnmainc").output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let pnmainc_path = PathBuf::from(&path_str);
-                // pnmainc is at <install>/bin/lin64/pnmainc — go up 3 levels
-                if let Some(install) = pnmainc_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                    let ver = install.file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
-                    return (ver, Some(install.to_path_buf()));
-                }
+        // Fallback: check if pnmainc is on PATH (cross-platform)
+        if let Ok(pnmainc_path) = which::which("pnmainc") {
+            // pnmainc is at <install>/bin/lin64/pnmainc — go up 3 levels
+            if let Some(install) = pnmainc_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                let ver = install.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return (ver, Some(install.to_path_buf()));
             }
         }
 

@@ -176,16 +176,12 @@ impl VivadoBackend {
             }
         }
 
-        // 3. Fallback: which vivado
-        if let Ok(output) = std::process::Command::new("which").arg("vivado").output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let bin_path = PathBuf::from(&path_str);
-                // vivado is at <install>/bin/vivado — go up 2 levels
-                if let Some(install) = bin_path.parent().and_then(|p| p.parent()) {
-                    let ver = Self::extract_version(install);
-                    return (ver, Some(install.to_path_buf()));
-                }
+        // 3. Fallback: find vivado on PATH (cross-platform)
+        if let Ok(bin_path) = which::which("vivado") {
+            // vivado is at <install>/bin/vivado — go up 2 levels
+            if let Some(install) = bin_path.parent().and_then(|p| p.parent()) {
+                let ver = Self::extract_version(install);
+                return (ver, Some(install.to_path_buf()));
             }
         }
 
