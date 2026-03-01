@@ -427,6 +427,88 @@ export const BACKENDS: Record<string, Backend> = {
     ],
   },
 
+  quartus_pro: {
+    id: "quartus_pro",
+    name: "Intel Quartus Prime Pro",
+    short: "Quartus Pro",
+    color: "#0071cc",
+    icon: "\u25C7", // ◇
+    version: "25.3",
+    cli: "quartus_sh",
+    defaultDev: "1SG280LU3F50E2VG",
+    constrExt: ".sdc",
+    pipeline: [
+      {
+        id: "synth",
+        label: "Synthesis (quartus_syn)",
+        cmd: "quartus_syn --read_settings_files=on",
+        detail: "Map to ALMs",
+      },
+      {
+        id: "fit",
+        label: "Fitter (quartus_fit)",
+        cmd: "quartus_fit --read_settings_files=on",
+        detail: "Place & route",
+      },
+      {
+        id: "sta",
+        label: "Timing Analysis (quartus_sta)",
+        cmd: "quartus_sta --sdc_file=timing.sdc",
+        detail: "STA",
+      },
+      {
+        id: "asm",
+        label: "Assembler (quartus_asm)",
+        cmd: "quartus_asm",
+        detail: "Generate .sof",
+      },
+    ],
+    resources: [
+      { label: "ALMs", used: 12840, total: 427200 },
+      { label: "Registers", used: 21550, total: 1708800 },
+      { label: "M20K Blocks", used: 64, total: 2713 },
+      { label: "DSP Blocks", used: 8, total: 1518 },
+      { label: "I/O Pins", used: 142, total: 768 },
+      { label: "PLLs", used: 2, total: 24 },
+    ],
+    timing: { fmax: "312.5", target: "250.0", setup: "+0.891", hold: "+0.123" },
+    constraints: [
+      { pin: "PIN_AM10", net: "clk_250mhz", dir: "IN", std: "1.8V LVDS", bank: "2A", lock: true },
+      { pin: "PIN_AR22", net: "rst_n", dir: "IN", std: "1.8V", bank: "2B", lock: true },
+      { pin: "PIN_AY9", net: "pcie_rx[0]", dir: "IN", std: "HCSL", bank: "1A", lock: true },
+    ],
+    paths: [
+      { from: "noc_router|arb_state[2]", to: "noc_router|grant_out[0]", slack: "+0.891 ns", lvl: 7 },
+    ],
+    history: [
+      { time: "14:20", ok: true, fmax: "312.5", util: "3.0%", w: 1 },
+    ],
+    log: [
+      { t: "cmd", m: "quartus_sh --flow compile noc_fabric" },
+      { t: "info", m: "CovertEDA \u2192 Quartus Prime Pro 25.3" },
+      { t: "ok", m: "Synthesis complete" },
+      { t: "ok", m: "Fitter complete" },
+      { t: "ok", m: "Fmax=312.5 MHz \u2713" },
+      { t: "info", m: "\u2550\u2550\u2550 DONE \u2550\u2550\u2550 8m 12s" },
+    ],
+    ipCatalog: [
+      {
+        cat: "Memory",
+        items: [
+          { name: "EMIF", desc: "External Memory Interface (DDR4/HBM2)", params: ["DDR4/HBM2", "Width: 32-512", "ECC"] },
+          { name: "eSRAM", desc: "Embedded SRAM Block", params: ["Width: 1-256", "Depth: 1-65536"] },
+        ],
+      },
+      {
+        cat: "Interface",
+        items: [
+          { name: "PCIe Gen4", desc: "PCI Express Gen4 Hard IP", params: ["x4/x8/x16", "Gen3/Gen4"] },
+          { name: "Ethernet", desc: "Ethernet Hard IP (10G/25G/100G)", params: ["10G/25G/100G", "FEC"] },
+        ],
+      },
+    ],
+  },
+
   vivado: {
     id: "vivado",
     name: "AMD Vivado",
@@ -1601,6 +1683,7 @@ export const BACKEND_META: BackendMeta[] = [
   { id: "diamond", name: "Lattice Diamond", short: "Diamond", color: "#e74c3c", icon: "\u25C6", defaultDevice: "LCMXO3LF-6900C-5BG256C" },
   { id: "radiant", name: "Lattice Radiant", short: "Radiant", color: "#a855f7", icon: "\u2756", defaultDevice: "LIFCL-40-7BG400I" },
   { id: "quartus", name: "Intel Quartus Prime", short: "Quartus", color: "#0091ff", icon: "\u25C7", defaultDevice: "5CSEMA5F31C6" },
+  { id: "quartus_pro", name: "Intel Quartus Prime Pro", short: "Quartus Pro", color: "#0071cc", icon: "\u25C7", defaultDevice: "1SG280LU3F50E2VG" },
   { id: "vivado", name: "AMD Vivado", short: "Vivado", color: "#8cc63f", icon: "\u25B2", defaultDevice: "xc7a100tcsg324-1" },
   { id: "opensource", name: "OSS CAD Suite", short: "OSS CAD", color: "#fb923c", icon: "\u2726", defaultDevice: "LFE5U-85F-6BG381C" },
   { id: "libero", name: "Microchip Libero SoC", short: "Libero", color: "#d61f33", icon: "\u25A0", defaultDevice: "MPF300TS-1FCG484I" },

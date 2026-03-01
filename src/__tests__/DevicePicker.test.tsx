@@ -2,63 +2,47 @@ import { screen, fireEvent } from "@testing-library/react";
 import { renderWithTheme } from "../test/helpers";
 import DevicePicker from "../components/DevicePicker";
 
-// Mock the devices module with a small subset
-vi.mock("../data/devices", () => ({
-  RADIANT_DEVICES: [
-    {
-      partNumber: "LFCPNX-100-9ASG256C",
-      family: "CertusNX",
-      luts: 96600,
-      ffs: 96600,
-      ebr: 208,
-      dsp: 80,
-      io: 128,
-      package: "csfBGA256",
-      speedGrade: "9",
-    },
-    {
-      partNumber: "LIFCL-40-7BG400I",
-      family: "CertusPro-NX",
-      luts: 39600,
-      ffs: 39744,
-      ebr: 104,
-      dsp: 28,
-      io: 220,
-      package: "caBGA400",
-      speedGrade: "7",
-    },
-    {
-      partNumber: "LIFCL-17-7MG121I",
-      family: "CertusPro-NX",
-      luts: 17000,
-      ffs: 17000,
-      ebr: 32,
-      dsp: 10,
-      io: 56,
-      package: "csfBGA121",
-      speedGrade: "7",
-    },
-  ],
+// Mock deviceParts with a small subset for each backend
+vi.mock("../data/deviceParts", () => ({
+  DEVICE_MAP: {
+    radiant: [
+      {
+        family: "CertusNX",
+        parts: ["LFCPNX-100-9ASG256C"],
+      },
+      {
+        family: "CertusPro-NX",
+        parts: ["LIFCL-40-7BG400I", "LIFCL-17-7MG121I"],
+      },
+    ],
+    quartus_std: [
+      {
+        family: "Cyclone V",
+        parts: ["5CEBA4F23C7", "5CEBA5F23C7"],
+      },
+    ],
+    // oss has no entries → triggers plain input fallback
+  } as Record<string, { family: string; parts: string[]; editions?: string[] }[]>,
+  validatePart: (backendId: string, part: string) => ({ valid: part.length > 0, reason: "" }),
 }));
 
 describe("DevicePicker", () => {
-  it("renders a text input for non-radiant backends", () => {
+  it("renders a text input fallback for backends without device database", () => {
     renderWithTheme(
-      <DevicePicker backendId="quartus" value="10CL025YU256I7G" onChange={vi.fn()} />
+      <DevicePicker backendId="oss" value="ice40-hx1k-tq144" onChange={vi.fn()} />
     );
     const input = screen.getByPlaceholderText("Device part number");
     expect(input).toBeInTheDocument();
-    expect(input).toHaveValue("10CL025YU256I7G");
+    expect(input).toHaveValue("ice40-hx1k-tq144");
   });
 
-  it("renders a search input for radiant backend", () => {
+  it("renders a search input for backends with device database", () => {
     renderWithTheme(
       <DevicePicker backendId="radiant" value="LIFCL-40-7BG400I" onChange={vi.fn()} />
     );
-    // The radiant picker uses a search input
     const input = screen.getByPlaceholderText("Search devices...");
     expect(input).toBeInTheDocument();
-    // When not focused/open, it shows the current value
+    // When not focused/open, shows the current value
     expect(input).toHaveValue("LIFCL-40-7BG400I");
   });
 

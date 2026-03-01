@@ -23,6 +23,19 @@ import { Clock, Warn, Arrow, Gauge, Bolt, Pin, Download, Doc } from "./Icons";
 import { getRawReport, writeTextFile, listReportFiles, readFile } from "../hooks/useTauri";
 import TimingAnalyzer from "./TimingAnalyzer";
 
+/*
+ * Layout informed by UX research:
+ * - Inverted Pyramid (Nielsen Norman Group) — most critical info first, details on scroll
+ * - Dashboard KPI Cards (Toptal) — primary metrics in large bold standalone cards at top
+ * - Progressive Disclosure (UXPin) — summary → details → deep-dive → raw data
+ * - F-Pattern Reading (NNGroup) — key status top-left, metrics L→R
+ *
+ * Sources:
+ * - https://www.nngroup.com/articles/inverted-pyramid/
+ * - https://www.toptal.com/designers/data-visualization/dashboard-design-best-practices
+ * - https://www.uxpin.com/studio/blog/dashboard-design-principles/
+ */
+
 // ── Inline SVG Visualizations (no external chart libs) ──
 
 /** Arc gauge showing Fmax as % of target — green ≥100%, amber 80-100%, red <80% */
@@ -132,13 +145,16 @@ function NoData({ label }: { label: string }) {
 }
 
 /** Collapsible section wrapper */
-function Collapsible({ title, icon, defaultOpen = false, children }: {
-  title: ReactNode; icon?: ReactNode; defaultOpen?: boolean; children: ReactNode;
+function Collapsible({ title, icon, defaultOpen = false, children, accentBorder }: {
+  title: ReactNode; icon?: ReactNode; defaultOpen?: boolean; children: ReactNode; accentBorder?: string;
 }) {
   const { C } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden" }}>
+    <div style={{
+      background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden",
+      borderLeft: accentBorder ? `3px solid ${accentBorder}` : undefined,
+    }}>
       <div
         onClick={() => setOpen((p) => !p)}
         style={{
@@ -218,7 +234,7 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
       background: C.s1, borderRadius: 6, border: `1px solid ${C.b1}`, overflow: "hidden",
     }}>
       {fullscreen && content && (
-        <FullscreenLogOverlay content={content} onClose={() => setFullscreen(false)} title={`Raw Log — ${reportType}`} />
+        <FullscreenLogOverlay content={content} onClose={() => setFullscreen(false)} title={`Raw Vendor Report \u2014 ${reportType}`} />
       )}
       <div
         onClick={handleOpen}
@@ -228,8 +244,9 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
         }}
       >
         <span style={{ fontSize: 8, color: C.t3 }}>{open ? "\u25BC" : "\u25B6"}</span>
+        <Doc />
         <span style={{ fontSize: 9, fontFamily: MONO, fontWeight: 600, color: C.t3 }}>
-          Raw Log
+          Raw Vendor Report
         </span>
         {open && content && (
           <button
@@ -726,6 +743,32 @@ function ReportFilesPanel({ projectDir, building }: { projectDir: string; buildi
   );
 }
 
+// ── KPI Card — standalone metric card used in the summary row ──
+function KpiCard({ label, value, color, sub, C, MONO, wide }: {
+  label: string; value: string; color: string; sub?: string;
+  C: ReturnType<typeof useTheme>["C"]; MONO: string; wide?: boolean;
+}) {
+  return (
+    <div style={{
+      padding: "10px 14px", background: C.bg, borderRadius: 6,
+      border: `1px solid ${C.b1}`, borderTop: `3px solid ${color}`,
+      flex: wide ? 2 : 1, minWidth: 0,
+    }}>
+      <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, letterSpacing: 0.8, marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 18, fontFamily: MONO, fontWeight: 700, color, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════════════
+
 export default function ReportViewer({
   rptTab,
   setRptTab,
@@ -759,7 +802,7 @@ export default function ReportViewer({
           ["Total Paths", String(t.summary.totalPaths)],
           ["Clocks", String(t.summary.clocks)],
           ...t.clocks.map((c) => [`Clock: ${c.name}`, `${c.freq} (${c.wns})`]),
-          ...t.criticalPaths.map((p) => [`Path: ${p.from} → ${p.to}`, `${p.slack} (${p.levels} levels)`]),
+          ...t.criticalPaths.map((p) => [`Path: ${p.from} \u2192 ${p.to}`, `${p.slack} (${p.levels} levels)`]),
         ];
         content = rows.map((r) => r.join(",")).join("\n");
         filename = "timing_report.csv";
@@ -827,40 +870,25 @@ export default function ReportViewer({
       });
   }, [rptTab, REPORTS, projectDir]);
 
-  const panel: React.CSSProperties = {
-    background: C.s1,
-    borderRadius: 7,
-    border: `1px solid ${C.b1}`,
-    overflow: "hidden",
-  };
-  const panelP: React.CSSProperties = { ...panel, padding: 14 };
-
-  function hdr(t: ReactNode, icon: ReactNode) {
-    return (
-      <div
-        style={{
-          fontSize: 11, fontWeight: 700, color: C.t1, marginBottom: 10,
-          display: "flex", alignItems: "center", gap: 5,
-        }}
-      >
-        {icon}
-        {t}
-      </div>
-    );
-  }
-
-  // Check for constraint issues
+  // ── Check for issues across reports ──
   const hasUnconstrainedClocks = REPORTS.timing && REPORTS.timing.clocks.length === 0 && REPORTS.timing.summary.totalPaths > 0;
   const hasTimingFailures = REPORTS.timing && REPORTS.timing.summary.failingPaths > 0;
+  const drcErrors = REPORTS.drc?.summary.errors ?? 0;
+  const drcCritWarns = REPORTS.drc?.summary.critWarns ?? 0;
+  const totalIssues = (hasTimingFailures ? REPORTS.timing!.summary.failingPaths : 0) + drcErrors + drcCritWarns;
 
-  // ── Tab definitions: analysis + stage logs ──
-  const analysisTabs: { id: ReportTab; l: string }[] = [
-    { id: "timing", l: "Timing" },
-    { id: "util", l: "Utilization" },
-    { id: "power", l: "Power" },
-    { id: "drc", l: "DRC" },
-    { id: "io", l: "I/O" },
-    { id: "timing-analysis", l: "Timing Analysis" },
+  // ── Tab definitions: two rows ──
+  const analysisTabs: { id: ReportTab; l: string; icon: ReactNode; badge?: string; badgeColor?: string }[] = [
+    { id: "timing", l: "Timing", icon: <Clock /> },
+    { id: "util", l: "Utilization", icon: <Gauge /> },
+    { id: "power", l: "Power", icon: <Bolt /> },
+    {
+      id: "drc", l: "DRC", icon: <Warn />,
+      badge: drcErrors > 0 ? String(drcErrors) : undefined,
+      badgeColor: drcErrors > 0 ? C.err : undefined,
+    },
+    { id: "io", l: "I/O", icon: <Pin /> },
+    { id: "timing-analysis", l: "Timing Analysis", icon: <Arrow /> },
   ];
 
   const stageTabs: { id: ReportTab; l: string }[] = [
@@ -877,77 +905,92 @@ export default function ReportViewer({
     (rptTab === "power" && !!REPORTS.power) ||
     (rptTab === "drc" && !!REPORTS.drc);
 
+  const tabBtn = (id: ReportTab, label: string, active: boolean, icon?: ReactNode, badge?: string, badgeColor?: string) => (
+    <button
+      key={id}
+      onClick={() => setRptTab(id)}
+      style={{
+        flex: 1, padding: "6px 8px", minWidth: 0,
+        background: active ? C.accentDim : "transparent",
+        border: "none", borderRadius: 4,
+        color: active ? C.t1 : C.t3,
+        fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 600,
+        cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+      }}
+    >
+      {icon}
+      {label}
+      {badge && (
+        <span style={{
+          fontSize: 7, padding: "0 4px", borderRadius: 3,
+          background: `${badgeColor ?? C.accent}20`, color: badgeColor ?? C.accent,
+          fontWeight: 700, fontFamily: MONO,
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+
   return (
     <div
       style={{
-        display: "flex", flexDirection: "column", gap: 12,
+        display: "flex", flexDirection: "column", gap: 10,
         height: "100%", overflow: "hidden",
       }}
     >
-      {/* ── Tab bar ── */}
-      <div
-        style={{
-          display: "flex", gap: 1, background: C.s1, borderRadius: 7,
-          border: `1px solid ${C.b1}`, padding: 3, flexWrap: "wrap", flexShrink: 0,
-        }}
-      >
-        {analysisTabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setRptTab(t.id)}
-            style={{
-              flex: 1, padding: "7px 0",
-              background: rptTab === t.id ? C.accentDim : "transparent",
-              border: "none", borderRadius: 4,
-              color: rptTab === t.id ? C.t1 : C.t3,
-              fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 600,
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-            }}
-          >
-            {t.l}
-          </button>
-        ))}
-        <span style={{ width: 1, background: C.b1, margin: "4px 2px", flexShrink: 0 }} />
-        {stageTabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setRptTab(t.id)}
-            style={{
-              padding: "7px 10px",
-              background: rptTab === t.id ? C.accentDim : "transparent",
-              border: "none", borderRadius: 4,
-              color: rptTab === t.id ? C.t1 : C.t3,
-              fontSize: 9, fontFamily: MONO, fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t.l}
-          </button>
-        ))}
-        {/* Export buttons — always visible */}
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          {exportMsg && (
-            <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
-          )}
-          <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
-          <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>
+      {/* ═══════════ TWO-ROW TAB BAR ═══════════ */}
+      <div style={{
+        background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`,
+        padding: 3, flexShrink: 0,
+        display: "flex", flexDirection: "column", gap: 2,
+      }}>
+        {/* Row 1: Analysis tabs */}
+        <div style={{ display: "flex", gap: 1 }}>
+          {analysisTabs.map((t) => tabBtn(t.id, t.l, rptTab === t.id, t.icon, t.badge, t.badgeColor))}
+        </div>
+        {/* Row 2: Stage tabs + export */}
+        <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
+          {stageTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setRptTab(t.id)}
+              style={{
+                padding: "5px 10px",
+                background: rptTab === t.id ? C.accentDim : "transparent",
+                border: "none", borderRadius: 4,
+                color: rptTab === t.id ? C.t1 : C.t3,
+                fontSize: 9, fontFamily: MONO, fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {t.l}
+            </button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            {exportMsg && (
+              <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
+            )}
+            <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
+            <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>
+          </div>
         </div>
       </div>
 
-      {/* ── Constraint warnings banner ── */}
-      {(rptTab === "timing" || rptTab === "par") && (hasUnconstrainedClocks || hasTimingFailures) && (
+      {/* ═══════════ ISSUES BANNER (cross-report) ═══════════ */}
+      {totalIssues > 0 && (rptTab === "timing" || rptTab === "drc" || rptTab === "par") && (
         <div style={{
-          background: hasTimingFailures ? C.errDim : C.warnDim,
+          background: drcErrors > 0 || hasTimingFailures ? C.errDim : C.warnDim,
           borderRadius: 6,
-          border: `1px solid ${hasTimingFailures ? `${C.err}40` : `${C.warn}40`}`,
+          border: `1px solid ${drcErrors > 0 || hasTimingFailures ? `${C.err}40` : `${C.warn}40`}`,
           padding: "8px 14px",
-          display: "flex", alignItems: "center", gap: 8,
+          display: "flex", alignItems: "flex-start", gap: 8,
           flexShrink: 0,
         }}>
           <Warn />
-          <div style={{ fontSize: 10, fontFamily: MONO, flex: 1 }}>
+          <div style={{ fontSize: 10, fontFamily: MONO, flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
             {hasUnconstrainedClocks && (
               <div style={{ color: C.warn, fontWeight: 700 }}>
                 {"\u26A0"} No clock constraints detected. All clocks may be unconstrained. Add an SDC/PDC file with create_clock commands.
@@ -958,11 +1001,16 @@ export default function ReportViewer({
                 {"\u2717"} Timing FAILED: {REPORTS.timing!.summary.failingPaths} path(s) with negative slack (WNS: {REPORTS.timing!.summary.wns})
               </div>
             )}
+            {drcErrors > 0 && rptTab !== "timing" && (
+              <div style={{ color: C.err, fontWeight: 700 }}>
+                {"\u2717"} DRC: {drcErrors} error(s), {drcCritWarns} critical warning(s)
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Scrollable content area ── */}
+      {/* ═══════════ SCROLLABLE CONTENT AREA ═══════════ */}
       <div style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
         display: "flex", flexDirection: "column", gap: 12,
@@ -973,61 +1021,55 @@ export default function ReportViewer({
         {rptTab === "timing" && !REPORTS.timing && <NoData label="timing" />}
         {rptTab === "timing" && REPORTS.timing && (() => {
           const t = REPORTS.timing!;
+          const fmaxPct = Math.round((parseFloat(t.summary.fmax) || 0) / (parseFloat(t.summary.target) || 1) * 100);
           return (
             <>
-              {/* Hero card */}
+              {/* ── Level 1: KPI Summary (inverted pyramid top) ── */}
               <div style={{
-                background: `linear-gradient(135deg, ${C.s1}, ${t.summary.failingPaths === 0 ? C.okDim : C.errDim})`,
-                borderRadius: 8, border: `1px solid ${t.summary.failingPaths === 0 ? `${C.ok}30` : `${C.err}30`}`,
-                padding: 18,
+                display: "flex", gap: 10, flexWrap: "wrap",
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                  <Clock />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Timing Analysis</span>
-                  <Badge color={t.summary.failingPaths === 0 ? C.ok : C.err} style={{ fontSize: 10, padding: "3px 10px" }}>
-                    {t.summary.status}
-                  </Badge>
-                  <div style={{ flex: 1 }} />
-                  <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-                    {t.generated} {"\u2014"} {t.tool}
-                  </span>
-                </div>
-
-                {/* Fmax gauge + 4 metric cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "110px repeat(4, 1fr)", gap: 10, alignItems: "center" }}>
-                  <div style={{ padding: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, textAlign: "center" }}>
-                    <FmaxGauge fmax={t.summary.fmax} target={t.summary.target} C={C} />
+                {/* Fmax gauge card */}
+                <div style={{
+                  padding: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`,
+                  borderTop: `3px solid ${t.summary.failingPaths === 0 ? C.ok : C.err}`,
+                  display: "flex", alignItems: "center", gap: 14, flex: 2, minWidth: 200,
+                }}>
+                  <FmaxGauge fmax={t.summary.fmax} target={t.summary.target} C={C} />
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, letterSpacing: 0.8 }}>TIMING STATUS</div>
+                    <div style={{ fontSize: 20, fontFamily: MONO, fontWeight: 700, color: t.summary.failingPaths === 0 ? C.ok : C.err, marginTop: 2 }}>
+                      {t.summary.status}
+                    </div>
+                    <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginTop: 4 }}>
+                      {t.generated} {"\u2014"} {t.tool}
+                    </div>
                   </div>
-                  {[
-                    { l: "Fmax Achieved", v: t.summary.fmax, c: C.ok },
-                    { l: "Target", v: t.summary.target, c: C.t2 },
-                    { l: "Margin", v: t.summary.margin, c: C.ok },
-                    { l: "Failing Paths", v: `${t.summary.failingPaths} / ${t.summary.totalPaths}`, c: t.summary.failingPaths > 0 ? C.err : C.ok },
-                  ].map((m, i) => (
-                    <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
-                      <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, marginBottom: 4, letterSpacing: 0.8 }}>{m.l}</div>
-                      <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
-                    </div>
-                  ))}
                 </div>
-
-                {/* 4 slack cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 10 }}>
-                  {[
-                    { l: "WNS (Setup)", v: t.summary.wns },
-                    { l: "TNS", v: t.summary.tns },
-                    { l: "WHS (Hold)", v: t.summary.whs },
-                    { l: "THS", v: t.summary.ths },
-                  ].map((m, i) => (
-                    <div key={i} style={{ padding: 8, background: C.bg, borderRadius: 5, border: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                      <span style={{ color: C.t3 }}>{m.l}: </span>
-                      <span style={{ color: parseFloat(m.v) >= 0 ? C.ok : C.err, fontWeight: 700 }}>{m.v}</span>
-                    </div>
-                  ))}
-                </div>
+                <KpiCard label="FMAX ACHIEVED" value={t.summary.fmax} color={fmaxPct >= 100 ? C.ok : fmaxPct >= 80 ? C.warn : C.err} sub={`Target: ${t.summary.target}`} C={C} MONO={MONO} />
+                <KpiCard label="MARGIN" value={t.summary.margin} color={parseFloat(t.summary.margin) >= 0 ? C.ok : C.err} C={C} MONO={MONO} />
+                <KpiCard label="FAILING PATHS" value={`${t.summary.failingPaths}`} color={t.summary.failingPaths > 0 ? C.err : C.ok} sub={`of ${t.summary.totalPaths} total`} C={C} MONO={MONO} />
               </div>
 
-              {/* Clock Domains */}
+              {/* ── Level 2: Slack metrics ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                {[
+                  { l: "WNS (Setup)", v: t.summary.wns },
+                  { l: "TNS", v: t.summary.tns },
+                  { l: "WHS (Hold)", v: t.summary.whs },
+                  { l: "THS", v: t.summary.ths },
+                ].map((m, i) => (
+                  <div key={i} style={{
+                    padding: "8px 12px", background: C.s1, borderRadius: 5,
+                    border: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO,
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                  }}>
+                    <span style={{ color: C.t3 }}>{m.l}</span>
+                    <span style={{ color: parseFloat(m.v) >= 0 ? C.ok : C.err, fontWeight: 700, fontSize: 12 }}>{m.v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Level 3: Clock Domains (detail) ── */}
               <Collapsible title={<>Clock Domains <Badge color={t.clocks.length === 0 ? C.warn : C.t3}>{t.clocks.length === 0 ? "unconstrained" : `${t.clocks.length} clock(s)`}</Badge></>} icon={<Clock />} defaultOpen={t.clocks.length === 0}>
                 {t.clocks.length === 0 ? (
                   <div style={{ fontSize: 10, fontFamily: MONO }}>
@@ -1063,7 +1105,7 @@ export default function ReportViewer({
                 )}
               </Collapsible>
 
-              {/* Critical Paths */}
+              {/* ── Level 3: Critical Paths ── */}
               <Collapsible title={<>Critical Paths {"\u2014"} Setup <Badge color={C.t3}>{t.criticalPaths.length} shown</Badge></>} icon={<Warn />} defaultOpen={false}>
                 {t.criticalPaths.map((p, i) => (
                   <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${parseFloat(p.slack) < 1 ? C.warn : C.ok}` }}>
@@ -1087,7 +1129,7 @@ export default function ReportViewer({
                 ))}
               </Collapsible>
 
-              {/* Hold Analysis */}
+              {/* ── Level 3: Hold Analysis ── */}
               {t.holdPaths.length > 0 && (
                 <Collapsible title="Hold Analysis (worst paths)" defaultOpen={false}>
                   {t.holdPaths.map((p, i) => (
@@ -1100,16 +1142,16 @@ export default function ReportViewer({
                 </Collapsible>
               )}
 
-              {/* Unconstrained Paths */}
+              {/* ── Level 3: Unconstrained Paths ── */}
               {t.unconstrained.length > 0 && (
-                <div style={{ ...panelP, borderLeft: `3px solid ${C.warn}` }}>
-                  {hdr("Unconstrained Paths", <Warn />)}
+                <Collapsible title={<>Unconstrained Paths <Badge color={C.warn}>{t.unconstrained.length}</Badge></>} icon={<Warn />} defaultOpen={false} accentBorder={C.warn}>
                   {t.unconstrained.map((u, i) => (
                     <div key={i} style={{ fontSize: 10, fontFamily: MONO, color: C.warn, padding: "4px 0" }}>{u}</div>
                   ))}
-                </div>
+                </Collapsible>
               )}
 
+              {/* ── Level 4: Raw vendor report ── */}
               <RawLogDrawer projectDir={projectDir} reportType="timing" />
             </>
           );
@@ -1119,16 +1161,35 @@ export default function ReportViewer({
         {rptTab === "util" && !REPORTS.utilization && <NoData label="utilization" />}
         {rptTab === "util" && REPORTS.utilization && (() => {
           const u = REPORTS.utilization!;
+          // Compute top-level KPI: highest utilization %
+          const allItems = u.summary.flatMap((c) => c.items);
+          const topItem = allItems.reduce((max, it) => {
+            const pct = it.total > 0 ? (it.used / it.total) * 100 : 0;
+            const maxPct = max.total > 0 ? (max.used / max.total) * 100 : 0;
+            return pct > maxPct ? it : max;
+          }, allItems[0] ?? { r: "-", used: 0, total: 1, detail: "" });
+          const topPct = topItem.total > 0 ? Math.round((topItem.used / topItem.total) * 100) : 0;
+
           return (
             <>
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "sticky", top: -14, background: "inherit", zIndex: 1, paddingTop: 2, paddingBottom: 4 }}>
-                  <Gauge />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Resource Utilization</span>
-                  <Badge color={C.accent}>{u.device}</Badge>
-                </div>
+              {/* ── Level 1: KPI Summary ── */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <KpiCard label="DEVICE" value={u.device} color={C.accent} C={C} MONO={MONO} />
+                <KpiCard label={`PEAK UTILIZATION (${topItem.r})`} value={`${topPct}%`} color={topPct > 85 ? C.err : topPct > 65 ? C.warn : C.ok} sub={`${topItem.used.toLocaleString()} / ${topItem.total.toLocaleString()}`} C={C} MONO={MONO} />
+                {allItems.filter((it) => it.r.toLowerCase().includes("lut") || it.r.toLowerCase().includes("logic")).slice(0, 1).map((it, i) => {
+                  const pct = it.total > 0 ? Math.round((it.used / it.total) * 100) : 0;
+                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} />;
+                })}
+                {allItems.filter((it) => it.r.toLowerCase().includes("ff") || it.r.toLowerCase().includes("register")).slice(0, 1).map((it, i) => {
+                  const pct = it.total > 0 ? Math.round((it.used / it.total) * 100) : 0;
+                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} />;
+                })}
+              </div>
+
+              {/* ── Level 2: Resource bars ── */}
+              <div style={{ background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, padding: 14 }}>
                 {u.summary.map((cat, ci) => (
-                  <div key={ci} style={{ marginBottom: 16 }}>
+                  <div key={ci} style={{ marginBottom: ci < u.summary.length - 1 ? 16 : 0 }}>
                     <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1, marginBottom: 6 }}>
                       {cat.cat.toUpperCase()}
                     </div>
@@ -1152,30 +1213,30 @@ export default function ReportViewer({
                 ))}
               </div>
 
-              {/* Both panels side by side at bottom */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Collapsible title="Utilization by Module" defaultOpen={false}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
-                    <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
-                  </div>
-                  {u.byModule.map((m, i) => {
-                    const pct = parseFloat(m.pct);
-                    return (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
-                        <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.module}</span>
-                        <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
-                        </div>
-                        <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
-                        <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
-                        <span style={{ color: C.t3 }}>{m.ebr}</span>
-                        <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
+              {/* ── Level 3: By Module ── */}
+              <Collapsible title="Utilization by Module" defaultOpen={false}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
+                  <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
+                </div>
+                {u.byModule.map((m, i) => {
+                  const pct = parseFloat(m.pct);
+                  return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}`, alignItems: "center" }}>
+                      <span style={{ color: C.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.module}</span>
+                      <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: 2 }} />
                       </div>
-                    );
-                  })}
-                </Collapsible>
-                <RawLogDrawer projectDir={projectDir} reportType="map" />
-              </div>
+                      <span style={{ color: C.t2 }}>{m.lut.toLocaleString()}</span>
+                      <span style={{ color: C.t3 }}>{m.ff.toLocaleString()}</span>
+                      <span style={{ color: C.t3 }}>{m.ebr}</span>
+                      <span style={{ color: C.t1, fontWeight: 600 }}>{m.pct}</span>
+                    </div>
+                  );
+                })}
+              </Collapsible>
+
+              {/* ── Level 4: Raw vendor report ── */}
+              <RawLogDrawer projectDir={projectDir} reportType="map" />
             </>
           );
         })()}
@@ -1186,25 +1247,16 @@ export default function ReportViewer({
           const pw = REPORTS.power!;
           return (
             <>
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.warnDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <Bolt />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Power Estimation</span>
-                  <Badge color={C.warn}>{pw.confidence}</Badge>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
-                  {[
-                    { l: "Total Power", v: pw.total, c: C.warn },
-                    { l: "Junction Temp", v: pw.junction, c: C.t1 },
-                    { l: "Ambient", v: pw.ambient, c: C.t2 },
-                    { l: "\u0398_JA", v: pw.theta_ja, c: C.t3 },
-                  ].map((m, i) => (
-                    <div key={i} style={{ padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}` }}>
-                      <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 3 }}>{m.l}</div>
-                      <div style={{ fontSize: 16, fontFamily: MONO, fontWeight: 700, color: m.c }}>{m.v}</div>
-                    </div>
-                  ))}
-                </div>
+              {/* ── Level 1: KPI Summary ── */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <KpiCard label="TOTAL POWER" value={pw.total} color={C.warn} C={C} MONO={MONO} wide />
+                <KpiCard label="JUNCTION TEMP" value={pw.junction} color={C.t1} C={C} MONO={MONO} />
+                <KpiCard label="AMBIENT" value={pw.ambient} color={C.t2} C={C} MONO={MONO} />
+                <KpiCard label="CONFIDENCE" value={pw.confidence} color={C.accent} C={C} MONO={MONO} />
+              </div>
+
+              {/* ── Level 2: Power breakdown visualization ── */}
+              <div style={{ background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, padding: 14 }}>
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   {/* Donut chart */}
                   <div style={{ flexShrink: 0 }}>
@@ -1230,18 +1282,19 @@ export default function ReportViewer({
                   </div>
                 </div>
               </div>
-              {/* Both panels side by side at bottom */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Collapsible title="Power by Rail" defaultOpen={false}>
-                  {pw.byRail.map((r, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
-                      <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
-                      <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
-                    </div>
-                  ))}
-                </Collapsible>
-                <RawLogDrawer projectDir={projectDir} reportType="power" />
-              </div>
+
+              {/* ── Level 3: Power by Rail ── */}
+              <Collapsible title="Power by Rail" defaultOpen={false}>
+                {pw.byRail.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO }}>
+                    <span style={{ color: C.t1, flex: 1 }}>{r.rail}</span>
+                    <span style={{ color: C.warn, fontWeight: 600 }}>{r.mw} mW</span>
+                  </div>
+                ))}
+              </Collapsible>
+
+              {/* ── Level 4: Raw vendor report ── */}
+              <RawLogDrawer projectDir={projectDir} reportType="power" />
             </>
           );
         })()}
@@ -1250,38 +1303,81 @@ export default function ReportViewer({
         {rptTab === "drc" && !REPORTS.drc && <NoData label="DRC" />}
         {rptTab === "drc" && REPORTS.drc && (() => {
           const d = REPORTS.drc!;
+          const sevColors: Record<string, string> = { error: C.err, crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
+          const sevLabels: Record<string, string> = { error: "ERROR", crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
+
           return (
             <>
-              {/* Summary cards panel */}
-              <div style={{ ...panelP, background: `linear-gradient(135deg, ${C.s1}, ${C.accentDim})`, maxHeight: 500, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              {/* ── Level 1: KPI Summary ── */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{
+                  padding: "10px 14px", background: C.bg, borderRadius: 6,
+                  border: `1px solid ${C.b1}`, borderTop: `3px solid ${d.summary.errors > 0 ? C.err : d.summary.critWarns > 0 ? C.warn : C.ok}`,
+                  display: "flex", alignItems: "center", gap: 12, flex: 2, minWidth: 140,
+                }}>
                   <Warn />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Design Rule Checks</span>
-                  <Badge color={d.summary.errors > 0 ? C.err : d.summary.critWarns > 0 ? C.warn : C.ok}>
-                    {d.summary.errors > 0 ? "FAIL" : d.summary.critWarns > 0 ? "WARNINGS" : "PASS"}
-                  </Badge>
+                  <div>
+                    <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, letterSpacing: 0.8 }}>DRC STATUS</div>
+                    <div style={{ fontSize: 20, fontFamily: MONO, fontWeight: 700, color: d.summary.errors > 0 ? C.err : d.summary.critWarns > 0 ? C.warn : C.ok, marginTop: 2 }}>
+                      {d.summary.errors > 0 ? "FAIL" : d.summary.critWarns > 0 ? "WARNINGS" : "PASS"}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  {[
-                    { l: "Errors", v: d.summary.errors, c: C.err },
-                    { l: "Critical Warnings", v: d.summary.critWarns, c: C.warn },
-                    { l: "Warnings", v: d.summary.warnings, c: C.orange },
-                    { l: "Info", v: d.summary.info, c: C.accent },
-                    { l: "Waived", v: d.summary.waived, c: C.t3 },
-                  ].map((m, i) => (
-                    <div key={i} style={{ flex: 1, padding: 10, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${m.c}`, textAlign: "center" }}>
-                      <div style={{ fontSize: 22, fontFamily: MONO, fontWeight: 700, color: m.v > 0 ? m.c : C.t3 }}>{m.v}</div>
-                      <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2 }}>{m.l}</div>
+                {[
+                  { l: "ERRORS", v: d.summary.errors, c: C.err },
+                  { l: "CRIT WARNINGS", v: d.summary.critWarns, c: C.warn },
+                  { l: "WARNINGS", v: d.summary.warnings, c: C.orange },
+                  { l: "INFO", v: d.summary.info, c: C.accent },
+                  { l: "WAIVED", v: d.summary.waived, c: C.t3 },
+                ].map((m, i) => (
+                  <KpiCard key={i} label={m.l} value={String(m.v)} color={m.v > 0 ? m.c : C.t3} C={C} MONO={MONO} />
+                ))}
+              </div>
+
+              {/* ── Level 2: Errors (most critical first) ── */}
+              {d.items.filter((it) => it.sev === "error").length > 0 && (
+                <Collapsible title={<>Errors <Badge color={C.err}>{d.items.filter((it) => it.sev === "error").length}</Badge></>} icon={<Warn />} defaultOpen={true} accentBorder={C.err}>
+                  {d.items.filter((it) => it.sev === "error").map((item, i) => (
+                    <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${C.err}`, display: "flex", gap: 10 }}>
+                      <Badge color={C.err} style={{ flexShrink: 0, alignSelf: "flex-start" }}>ERROR</Badge>
+                      <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
+                        <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
+                          <span style={{ color: C.err }}>[{item.code}]</span> {item.msg}
+                        </div>
+                        <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
+                          {item.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {item.loc}</span>}
+                          <span>{"\u2192"} {item.action}</span>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                </div>
-              </div>
-              {/* DRC items list */}
-              <Collapsible title={<>DRC Items <Badge color={C.t3}>{d.items.length} item(s)</Badge></>} icon={<Warn />} defaultOpen={d.items.length > 0}>
-                {d.items.map((item, i) => {
-                  const sevColors: Record<string, string> = { crit_warn: C.warn, warning: C.orange, info: C.accent, waived: C.t3 };
-                  const sevLabels: Record<string, string> = { crit_warn: "CRIT", warning: "WARN", info: "INFO", waived: "WAIVED" };
-                  return (
+                </Collapsible>
+              )}
+
+              {/* ── Level 2: Critical Warnings ── */}
+              {d.items.filter((it) => it.sev === "crit_warn").length > 0 && (
+                <Collapsible title={<>Critical Warnings <Badge color={C.warn}>{d.items.filter((it) => it.sev === "crit_warn").length}</Badge></>} icon={<Warn />} defaultOpen={d.items.filter((it) => it.sev === "error").length === 0} accentBorder={C.warn}>
+                  {d.items.filter((it) => it.sev === "crit_warn").map((item, i) => (
+                    <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${C.warn}`, display: "flex", gap: 10 }}>
+                      <Badge color={C.warn} style={{ flexShrink: 0, alignSelf: "flex-start" }}>CRIT</Badge>
+                      <div style={{ flex: 1, fontSize: 10, fontFamily: MONO }}>
+                        <div style={{ color: C.t1, fontWeight: 600, marginBottom: 3 }}>
+                          <span style={{ color: C.warn }}>[{item.code}]</span> {item.msg}
+                        </div>
+                        <div style={{ display: "flex", gap: 12, color: C.t3, fontSize: 9 }}>
+                          {item.loc !== "\u2014" && <span>{"\uD83D\uDCCD"} {item.loc}</span>}
+                          <span>{"\u2192"} {item.action}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </Collapsible>
+              )}
+
+              {/* ── Level 3: Warnings + Info (less critical) ── */}
+              {d.items.filter((it) => it.sev === "warning" || it.sev === "info" || it.sev === "waived").length > 0 && (
+                <Collapsible title={<>Warnings & Info <Badge color={C.t3}>{d.items.filter((it) => it.sev === "warning" || it.sev === "info" || it.sev === "waived").length}</Badge></>} defaultOpen={false}>
+                  {d.items.filter((it) => it.sev === "warning" || it.sev === "info" || it.sev === "waived").map((item, i) => (
                     <div key={i} style={{ padding: "10px 12px", marginBottom: 6, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderLeft: `3px solid ${sevColors[item.sev] || C.t3}`, display: "flex", gap: 10 }}>
                       <Badge color={sevColors[item.sev] || C.t3} style={{ flexShrink: 0, alignSelf: "flex-start" }}>
                         {sevLabels[item.sev] || item.sev}
@@ -1296,9 +1392,9 @@ export default function ReportViewer({
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-              </Collapsible>
+                  ))}
+                </Collapsible>
+              )}
             </>
           );
         })()}
@@ -1307,42 +1403,56 @@ export default function ReportViewer({
         {rptTab === "io" && !REPORTS.io && <NoData label="I/O banking" />}
         {rptTab === "io" && REPORTS.io && REPORTS.utilization && (() => {
           const io = REPORTS.io!;
+          const totalUsed = io.banks.reduce((s, b) => s + b.used, 0);
+          const totalPins = io.banks.reduce((s, b) => s + b.total, 0);
+          const totalPct = totalPins > 0 ? Math.round((totalUsed / totalPins) * 100) : 0;
           return (
-            <div style={{ ...panelP, maxHeight: 600, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${C.b2} transparent` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, position: "sticky", top: -14, background: C.s1, zIndex: 1, paddingTop: 2, paddingBottom: 4 }}>
-                <Pin />
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
-                <Badge color={C.accent}>{REPORTS.utilization!.device}</Badge>
+            <>
+              {/* ── Level 1: KPI Summary ── */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <KpiCard label="DEVICE" value={REPORTS.utilization!.device} color={C.accent} C={C} MONO={MONO} />
+                <KpiCard label="I/O BANKS" value={String(io.banks.length)} color={C.t1} C={C} MONO={MONO} />
+                <KpiCard label="TOTAL PINS USED" value={`${totalUsed} / ${totalPins}`} color={totalPct > 80 ? C.warn : C.ok} sub={`${totalPct}%`} C={C} MONO={MONO} wide />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
-                {io.banks.map((bk, i) => {
-                  const pct = bk.total > 0 ? Math.round((bk.used / bk.total) * 100) : 0;
-                  return (
-                    <div key={i} style={{ padding: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${pct > 80 ? C.warn : C.accent}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: C.t1 }}>Bank {bk.id}</span>
-                        <Badge color={C.cyan}>{bk.vccio}</Badge>
+
+              {/* ── Level 2: Bank details ── */}
+              <div style={{
+                background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, padding: 14,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Pin />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+                  {io.banks.map((bk, i) => {
+                    const pct = bk.total > 0 ? Math.round((bk.used / bk.total) * 100) : 0;
+                    return (
+                      <div key={i} style={{ padding: 12, background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, borderTop: `3px solid ${pct > 80 ? C.warn : C.accent}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontSize: 12, fontFamily: MONO, fontWeight: 700, color: C.t1 }}>Bank {bk.id}</span>
+                          <Badge color={C.cyan}>{bk.vccio}</Badge>
+                        </div>
+                        <div style={{ fontSize: 10, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>{bk.used}/{bk.total} pins ({pct}%)</div>
+                        <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden", marginBottom: 8 }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: pct > 80 ? C.warn : C.accent, borderRadius: 2 }} />
+                        </div>
+                        {bk.pins.map((p, pi) => {
+                          const [pin, net, dir] = p.split(" ");
+                          const dirColors: Record<string, string> = { IN: C.accent, OUT: C.ok, BIDIR: C.purple };
+                          return (
+                            <div key={pi} style={{ fontSize: 9, fontFamily: MONO, padding: "2px 0", display: "flex", gap: 4 }}>
+                              <span style={{ color: C.cyan, width: 28, flexShrink: 0 }}>{pin}</span>
+                              <span style={{ color: C.t1, flex: 1 }}>{net}</span>
+                              <span style={{ color: dirColors[dir] || C.t3, fontSize: 8 }}>{dir}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div style={{ fontSize: 10, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>{bk.used}/{bk.total} pins ({pct}%)</div>
-                      <div style={{ height: 4, borderRadius: 2, background: C.b1, overflow: "hidden", marginBottom: 8 }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: pct > 80 ? C.warn : C.accent, borderRadius: 2 }} />
-                      </div>
-                      {bk.pins.map((p, pi) => {
-                        const [pin, net, dir] = p.split(" ");
-                        const dirColors: Record<string, string> = { IN: C.accent, OUT: C.ok, BIDIR: C.purple };
-                        return (
-                          <div key={pi} style={{ fontSize: 9, fontFamily: MONO, padding: "2px 0", display: "flex", gap: 4 }}>
-                            <span style={{ color: C.cyan, width: 28, flexShrink: 0 }}>{pin}</span>
-                            <span style={{ color: C.t1, flex: 1 }}>{net}</span>
-                            <span style={{ color: dirColors[dir] || C.t3, fontSize: 8 }}>{dir}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           );
         })()}
 

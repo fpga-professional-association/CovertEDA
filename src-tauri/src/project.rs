@@ -54,7 +54,7 @@ impl ProjectConfig {
                 vec!["constraints/*.lpf".into()],
                 "impl1".to_string(),
             ),
-            "quartus" => (
+            "quartus" | "quartus_pro" => (
                 vec!["src/**/*.v".into(), "src/**/*.sv".into()],
                 vec!["constraints/*.sdc".into()],
                 "output_files".to_string(),

@@ -43,6 +43,8 @@ pub struct ToolPaths {
     pub diamond: Option<PathBuf>,
     pub radiant: Option<PathBuf>,
     pub quartus: Option<PathBuf>,
+    #[serde(default)]
+    pub quartus_pro: Option<PathBuf>,
     pub vivado: Option<PathBuf>,
     pub yosys: Option<PathBuf>,
     pub nextpnr: Option<PathBuf>,
@@ -63,6 +65,7 @@ impl Default for AppConfig {
                 diamond: None,
                 radiant: None,
                 quartus: None,
+                quartus_pro: None,
                 vivado: None,
                 yosys: None,
                 nextpnr: None,

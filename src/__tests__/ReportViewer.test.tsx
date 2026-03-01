@@ -75,9 +75,9 @@ describe("ReportViewer", () => {
     renderWithTheme(<ReportViewer {...props} />);
     expect(screen.getByText("LOGIC")).toBeInTheDocument();
     expect(screen.getAllByText("I/O").length).toBeGreaterThan(0);
-    expect(screen.getByText("LUT4")).toBeInTheDocument();
-    expect(screen.getByText("Registers")).toBeInTheDocument();
-    expect(screen.getByText("PIO")).toBeInTheDocument();
+    expect(screen.getAllByText("LUT4").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Registers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("PIO").length).toBeGreaterThan(0);
   });
 
   it("shows critical paths table with rank, from, to, slack", () => {
