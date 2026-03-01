@@ -549,7 +549,7 @@ export default function App() {
 
   // Load all reports from disk using auto-detection (no backend ID needed)
   const loadReportsFromDisk = useCallback((dir: string, backendName: string) => {
-    if (!isTauri || !dir) return;
+    if (!dir) return;
     autoLoadReports(dir, backendName).then((reports) => {
       if (reports.timing) setRealTimingReport(reports.timing);
       if (reports.utilization) setRealUtilReport(reports.utilization);
@@ -848,7 +848,7 @@ export default function App() {
 
   // Auto-load reports when Reports tab is first visited
   useEffect(() => {
-    if (sec === "reports" && isTauri && projectDir) {
+    if (sec === "reports" && projectDir) {
       if (!realTimingReport || !realUtilReport || !realPowerReport || !realDrcReport) {
         loadReportsFromDisk(projectDir, B.name);
       }

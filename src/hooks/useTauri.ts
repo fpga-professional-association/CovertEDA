@@ -205,6 +205,38 @@ export async function getDrcReport(backendId: string, implDir: string) {
 }
 
 export async function getIoReport(backendId: string, projectDir: string) {
+  if (!isTauri) {
+    return {
+      banks: [
+        { id: "0", vccio: "3.3V", used: 8, total: 52, pins: [
+          { pin: "A4", net: "led_out[0]", direction: "OUT" },
+          { pin: "B4", net: "led_out[1]", direction: "OUT" },
+          { pin: "C5", net: "led_out[2]", direction: "OUT" },
+          { pin: "D5", net: "led_out[3]", direction: "OUT" },
+          { pin: "E6", net: "led_out[4]", direction: "OUT" },
+          { pin: "F6", net: "led_out[5]", direction: "OUT" },
+          { pin: "G7", net: "led_out[6]", direction: "OUT" },
+          { pin: "H7", net: "led_out[7]", direction: "OUT" },
+        ]},
+        { id: "1", vccio: "3.3V", used: 6, total: 48, pins: [
+          { pin: "J2", net: "data_in[0]", direction: "IN" },
+          { pin: "K3", net: "data_in[1]", direction: "IN" },
+          { pin: "L3", net: "data_in[2]", direction: "IN" },
+          { pin: "M4", net: "data_in[3]", direction: "IN" },
+          { pin: "N4", net: "enable", direction: "IN" },
+          { pin: "P5", net: "reset_n", direction: "IN" },
+        ]},
+        { id: "2", vccio: "2.5V", used: 2, total: 52, pins: [
+          { pin: "R1", net: "debug_tx", direction: "OUT" },
+          { pin: "T1", net: "debug_rx", direction: "IN" },
+        ]},
+        { id: "3", vccio: "1.8V", used: 2, total: 54, pins: [
+          { pin: "A1", net: "sys_clk", direction: "IN" },
+          { pin: "B1", net: "pll_ref", direction: "IN" },
+        ]},
+      ],
+    } satisfies RustIoReport;
+  }
   return invoke<RustIoReport | null>("get_io_report", { backendId, projectDir });
 }
 
@@ -795,7 +827,91 @@ export interface MappedAutoReports {
 
 export async function autoLoadReports(projectDir: string, backendName: string): Promise<MappedAutoReports> {
   if (!isTauri) {
-    return { timing: null, utilization: null, power: null, drc: null };
+    // Return realistic mock report data for browser preview
+    return {
+      timing: {
+        title: "Timing Report", generated: "2025-01-15 10:30", tool: backendName,
+        summary: {
+          status: "MET", fmax: "125.50 MHz", target: "100.00 MHz", margin: "25.50 MHz",
+          wns: "2.500 ns", tns: "0.000 ns", whs: "0.180 ns", ths: "0.000 ns",
+          failingPaths: 0, totalPaths: 284, clocks: 1,
+        },
+        clocks: [
+          { name: "sys_clk", period: "10.000 ns", freq: "100.00 MHz", source: "clk_pin", type: "Primary", wns: "2.500 ns", paths: 284 },
+        ],
+        criticalPaths: [
+          { rank: 1, from: "counter_reg[0]", to: "counter_reg[7]", slack: "2.500 ns", req: "10.000 ns", delay: "7.500 ns", levels: 4, clk: "sys_clk", type: "setup" },
+          { rank: 2, from: "state_reg[0]", to: "led_out[3]", slack: "3.120 ns", req: "10.000 ns", delay: "6.880 ns", levels: 3, clk: "sys_clk", type: "setup" },
+          { rank: 3, from: "counter_reg[4]", to: "overflow_flag", slack: "4.200 ns", req: "10.000 ns", delay: "5.800 ns", levels: 2, clk: "sys_clk", type: "setup" },
+        ],
+        holdPaths: [
+          { rank: 1, from: "counter_reg[0]", to: "counter_reg[1]", slack: "0.180 ns", levels: 1, type: "hold" },
+        ],
+        unconstrained: [],
+      },
+      utilization: {
+        title: "Utilization Report", generated: "2025-01-15 10:30", device: "LCMXO3LF-6900C-5BG256C",
+        summary: [
+          { cat: "Logic", items: [
+            { r: "LUT4", used: 120, total: 6864, detail: "Combinational logic" },
+            { r: "Registers", used: 48, total: 6864, detail: "Sequential elements" },
+            { r: "Carry Chain", used: 8, total: 3432, detail: "" },
+          ]},
+          { cat: "Memory", items: [
+            { r: "EBR (9K)", used: 0, total: 26, detail: "Embedded Block RAM" },
+            { r: "Distributed RAM", used: 0, total: 1716, detail: "Slice-based" },
+          ]},
+          { cat: "I/O", items: [
+            { r: "PIO", used: 18, total: 206, detail: "8 IN, 8 OUT, 2 BIDIR" },
+          ]},
+          { cat: "DSP", items: [
+            { r: "DSP Blocks", used: 0, total: 12, detail: "" },
+          ]},
+          { cat: "Clock", items: [
+            { r: "PLL", used: 0, total: 2, detail: "" },
+            { r: "Global Buffers", used: 1, total: 16, detail: "sys_clk" },
+          ]},
+        ],
+        byModule: [
+          { module: "counter_8bit", lut: 80, ff: 32, ebr: 0, pct: "66.7%" },
+          { module: "led_driver", lut: 24, ff: 8, ebr: 0, pct: "20.0%" },
+          { module: "top_level", lut: 16, ff: 8, ebr: 0, pct: "13.3%" },
+        ],
+      },
+      power: {
+        title: "Power Report", generated: "2025-01-15 10:30",
+        junction: "27.3 \u00B0C", ambient: "25.0 \u00B0C", theta_ja: "29.2 \u00B0C/W",
+        total: "18.4 mW", confidence: "Low (no activity)",
+        breakdown: [
+          { cat: "Static (Leakage)", mw: 8.2, pct: 45, color: "#5b8cf0" },
+          { cat: "Dynamic (Core)", mw: 6.1, pct: 33, color: "#f5a623" },
+          { cat: "Dynamic (I/O)", mw: 3.4, pct: 18, color: "#4ecdc4" },
+          { cat: "PLL", mw: 0.7, pct: 4, color: "#c084fc" },
+        ],
+        byRail: [
+          { rail: "VCC (1.2V)", mw: 14.3 },
+          { rail: "VCCIO (3.3V)", mw: 3.4 },
+          { rail: "VCC_PLL", mw: 0.7 },
+        ],
+      },
+      drc: {
+        title: "DRC Report", generated: "2025-01-15 10:30",
+        summary: { errors: 0, critWarns: 2, warnings: 5, info: 3, waived: 1 },
+        items: [
+          { sev: "crit_warn", code: "DRC-101", msg: "Unplaced I/O port 'debug_pin' has no location constraint", loc: "top.v:42", action: "Add LOC constraint or remove port" },
+          { sev: "crit_warn", code: "DRC-102", msg: "Clock net 'sys_clk' not on dedicated clock routing", loc: "top.v:8", action: "Assign to PLL or global clock buffer" },
+          { sev: "warning", code: "DRC-201", msg: "Unused EBR block at location R2C5", loc: "\u2014", action: "Informational only" },
+          { sev: "warning", code: "DRC-202", msg: "I/O standard LVCMOS33 may have excessive ground bounce with 8 simultaneous switching outputs", loc: "Bank 0", action: "Consider staggered output enable or series termination" },
+          { sev: "warning", code: "DRC-203", msg: "No input delay constraint on port 'data_in[0]'", loc: "top.v:15", action: "Add set_input_delay if timing critical" },
+          { sev: "warning", code: "DRC-204", msg: "No output delay constraint on port 'led_out[0]'", loc: "top.v:18", action: "Add set_output_delay if timing critical" },
+          { sev: "warning", code: "DRC-205", msg: "Register counter_reg[7] has no reset", loc: "counter.v:22", action: "Add synchronous reset for reliable startup" },
+          { sev: "info", code: "DRC-301", msg: "Design uses 1.7% of available LUT4 resources", loc: "\u2014", action: "No action required" },
+          { sev: "info", code: "DRC-302", msg: "All constrained clocks meet timing requirements", loc: "\u2014", action: "No action required" },
+          { sev: "info", code: "DRC-303", msg: "Power estimation based on default activity rates", loc: "\u2014", action: "Provide VCD for accurate estimation" },
+          { sev: "waived", code: "DRC-401", msg: "Unused PLL instance (design choice)", loc: "\u2014", action: "Waived by user" },
+        ],
+      },
+    };
   }
   const raw = await invoke<RustAutoReports>("auto_load_reports", { projectDir });
   return {
