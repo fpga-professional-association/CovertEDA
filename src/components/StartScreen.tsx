@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { RecentProject, ProjectConfig, BackendMeta, DetectedTool, LicenseCheckResult } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge } from "./shared";
-import { Chip, Zap, Key, Settings } from "./Icons";
+import { Chip, Zap, Key, Settings, GitHub, LinkedIn } from "./Icons";
 
 // ── Inject CSS hover for start screen elements ──
 if (typeof document !== "undefined" && !document.getElementById("ceda-ss-hover")) {
@@ -213,6 +213,48 @@ export default function StartScreen({
         </span>
         <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.1.0</span>
         <div style={{ flex: 1 }} />
+        <span
+          onClick={() => window.open("https://github.com/fpga-professional-association/CovertEDA", "_blank")}
+          className="ceda-ss-icon"
+          title="GitHub Repository"
+          style={{
+            ["--ceda-hover-color" as string]: C.t1,
+            cursor: "pointer",
+            color: C.t3,
+            padding: "4px 8px",
+            borderRadius: 4,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 9,
+            fontFamily: MONO,
+            fontWeight: 600,
+          }}
+        >
+          <GitHub />
+          GitHub
+        </span>
+        <span
+          onClick={() => window.open("https://www.linkedin.com/company/fpga-professional-association/", "_blank")}
+          className="ceda-ss-icon"
+          title="FPGA Professional Association on LinkedIn"
+          style={{
+            ["--ceda-hover-color" as string]: C.t1,
+            cursor: "pointer",
+            color: C.t3,
+            padding: "4px 8px",
+            borderRadius: 4,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 9,
+            fontFamily: MONO,
+            fontWeight: 600,
+          }}
+        >
+          <LinkedIn />
+          FPGA Assoc
+        </span>
         {onOpenSettings && (
           <span
             onClick={onOpenSettings}

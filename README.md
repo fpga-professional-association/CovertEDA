@@ -15,6 +15,7 @@
   <a href="#features">Features</a> &middot;
   <a href="#supported-backends">Backends</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
+  <a href="docs/INSTALL.md">Install Guide</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
   <a href="#contributing">Contributing</a>
 </p>
@@ -137,7 +138,8 @@ Comprehensive built-in user guide covering every feature, with collapsible secti
 | **Intel Quartus** | Implemented | `quartus_sh`, `quartus_syn`, `quartus_fit`, `quartus_sta` | `.qsf` / `.sdc` | `.sof` | FlexLM |
 | **AMD Vivado** | Implemented | `vivado` (batch/TCL mode) | `.xdc` | `.bit` | FlexLM |
 | **OSS CAD Suite** | Implemented | `yosys`, `nextpnr-ecp5`, `ecppack` | `.pcf` / `.lpf` | `.bin` | None |
-| **Microchip Libero SoC** | Planned | `libero` | `.pdc` / `.sdc` | `.stp` | FlexLM |
+| **Achronix ACE** | Implemented | `ace` | `.pdc` | `.acxbit` | FlexLM |
+| **Microchip Libero SoC** | Implemented | `libero` | `.pdc` / `.sdc` | `.stp` | FlexLM |
 
 CovertEDA **orchestrates** these tools via their CLI/TCL interfaces. It generates TCL scripts and spawns vendor processes as subprocesses -- it never evaluates TCL directly, modifies vendor databases, or bundles any vendor IP or binaries.
 
@@ -226,6 +228,11 @@ npx vitest
 
 # Production build
 npx tauri build
+
+# Container build (Podman/Docker — no host dependencies needed)
+podman build -t coverteda-builder -f Containerfile .
+podman run --rm -v $(pwd):/src:Z coverteda-builder bash -c "npm ci && npx tauri build"
+# See docs/CONTAINER.md for details
 ```
 
 ### Project Structure
@@ -247,6 +254,8 @@ src-tauri/              # Rust backend
       radiant.rs        # Lattice Radiant backend
       quartus.rs        # Intel Quartus backend
       vivado.rs         # AMD Vivado backend
+      ace.rs            # Achronix ACE backend
+      libero.rs         # Microchip Libero SoC backend
       oss.rs            # OSS CAD Suite backend
     parser/             # Vendor report parsers
     commands.rs         # Tauri IPC command handlers
@@ -266,7 +275,7 @@ src-tauri/              # Rust backend
 - [x] AI assistant (Claude)
 - [x] Command palette and keyboard shortcuts
 - [x] Theme support (Dark, Light, Colorblind)
-- [x] Lattice Radiant, Diamond, Intel Quartus, AMD Vivado, OSS CAD Suite backends
+- [x] Lattice Radiant, Diamond, Intel Quartus, AMD Vivado, Achronix ACE, Microchip Libero, OSS CAD Suite backends
 - [x] FlexLM license detection and feature display
 - [x] In-app documentation
 
@@ -275,7 +284,7 @@ src-tauri/              # Rust backend
 - [ ] Schematic viewer for post-synthesis netlist
 - [ ] Multi-clock domain analysis visualization
 - [ ] Constraint editor: graphical pin assignment on package view
-- [ ] Microchip Libero SoC backend
+- [ ] Gowin, Efinix, QuickLogic, FlexLogix backends
 - [ ] Plugin system for community extensions
 - [ ] Cross-platform installers (Windows, macOS, Linux)
 

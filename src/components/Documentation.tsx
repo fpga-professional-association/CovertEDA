@@ -945,8 +945,11 @@ function AboutSection() {
           border: `1px solid ${C.b1}`, borderTop: `2px solid ${C.accent}`,
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.accent, marginBottom: 4 }}>GitHub</div>
-          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all" }}>
-            github.com/fpga-professional-association
+          <div
+            onClick={() => window.open("https://github.com/fpga-professional-association/CovertEDA", "_blank")}
+            style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all", cursor: "pointer", textDecoration: "underline" }}
+          >
+            github.com/fpga-professional-association/CovertEDA
           </div>
         </div>
         <div style={{
@@ -954,7 +957,10 @@ function AboutSection() {
           border: `1px solid ${C.b1}`, borderTop: `2px solid ${C.cyan}`,
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.cyan, marginBottom: 4 }}>LinkedIn</div>
-          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all" }}>
+          <div
+            onClick={() => window.open("https://www.linkedin.com/company/fpga-professional-association/", "_blank")}
+            style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all", cursor: "pointer", textDecoration: "underline" }}
+          >
             linkedin.com/company/fpga-professional-association
           </div>
         </div>
@@ -970,8 +976,8 @@ function AboutSection() {
       <SubHeading>Status</SubHeading>
       <Para>
         CovertEDA is currently in <Badge color={C.accent}>Beta</Badge> with core features implemented.
-        Supported backends include Lattice Radiant, Lattice Diamond, Intel Quartus, AMD Vivado, and the
-        OSS CAD Suite (Yosys/nextpnr). Microchip Libero SoC support is planned for a future release.
+        Supported backends include Lattice Radiant, Lattice Diamond, Intel Quartus (Standard and Pro),
+        AMD Vivado, Achronix ACE, Microchip Libero SoC, and the OSS CAD Suite (Yosys/nextpnr).
       </Para>
 
       <InfoBox variant="info">

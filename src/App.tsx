@@ -4,7 +4,7 @@ import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Term, Key, Settings,
-  Play, Stop, Search, Clock, Download,
+  Play, Stop, Search, Clock, Download, GitHub, LinkedIn,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
@@ -1224,6 +1224,8 @@ export default function App() {
             <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
             <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} tooltip="License — FlexLM license status and feature listing" />
             <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} tooltip="Settings — tool paths, theme, zoom configuration" />
+            <NavBtn icon={<GitHub size={12} />} label="Git" onClick={() => window.open("https://github.com/fpga-professional-association/CovertEDA", "_blank")} tooltip="GitHub — source code, issues, and contributions" />
+            <NavBtn icon={<LinkedIn size={12} />} label="FPGA" onClick={() => window.open("https://www.linkedin.com/company/fpga-professional-association/", "_blank")} tooltip="FPGA Professional Association on LinkedIn" />
           </div>
           <div
             onClick={handleCloseProject}
