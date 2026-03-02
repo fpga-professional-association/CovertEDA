@@ -440,11 +440,11 @@ impl FpgaBackend for RadiantBackend {
 
         // Open existing .rdf or create a new project from sources
         if let Some(rdf) = Self::find_rdf_file(project_dir, top_module) {
-            let rdf_display = to_tcl_path(&rdf);
+            let rdf_display = super::to_tcl_path(&rdf);
             script.push_str(&format!("prj_open \"{}\"\n", rdf_display));
         } else {
             // No .rdf — create project from scratch, scan for sources
-            let project_dir_tcl = to_tcl_path(project_dir);
+            let project_dir_tcl = super::to_tcl_path(project_dir);
             let project_name = top_module;
 
             // Determine device family for prj_create
@@ -471,14 +471,14 @@ impl FpgaBackend for RadiantBackend {
                 )));
             }
             for src in &sources {
-                let src_tcl = to_tcl_path(src);
+                let src_tcl = super::to_tcl_path(src);
                 script.push_str(&format!("prj_add_source \"{}\"\n", src_tcl));
             }
 
             // Add constraint files
             let constraints = Self::scan_constraints(project_dir);
             for constr in &constraints {
-                let constr_tcl = to_tcl_path(constr);
+                let constr_tcl = super::to_tcl_path(constr);
                 let ext = constr.extension().and_then(|e| e.to_str()).unwrap_or("");
                 match ext {
                     "pdc" => script.push_str(&format!("prj_add_source \"{}\" -exclude_from_synth\n", constr_tcl)),
@@ -787,8 +787,8 @@ impl FpgaBackend for RadiantBackend {
         params: &HashMap<String, String>,
     ) -> BackendResult<(String, String)> {
         let ip_dir = project_dir.join("ip_cores").join(instance_name);
-        let ip_dir_tcl = to_tcl_path(&ip_dir);
-        let project_dir_tcl = to_tcl_path(project_dir);
+        let ip_dir_tcl = super::to_tcl_path(&ip_dir);
+        let project_dir_tcl = super::to_tcl_path(project_dir);
 
         // Determine the device family from the device string
         let family = if device.starts_with("LIFCL") {
@@ -855,29 +855,6 @@ puts "CovertEDA: Output directory: {ip_dir_tcl}"
         ));
 
         Ok((script, ip_dir_tcl))
-    }
-}
-
-/// Convert a WSL path to a Windows-style path for use inside TCL scripts
-/// executed by Windows-native radiantc.exe.
-/// e.g., /mnt/c/Users/foo/project/file.rdf → C:/Users/foo/project/file.rdf
-/// Non-WSL paths just get backslashes converted to forward slashes.
-fn to_tcl_path(path: &Path) -> String {
-    let s = path.display().to_string();
-    if s.starts_with("/mnt/") && s.len() > 6 {
-        // /mnt/c/Users/... → C:/Users/...
-        let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
-        let rest = &s[6..];
-        format!("{}:{}", drive, rest)
-    } else if s.starts_with('/') {
-        // WSL-native path → UNC path for Windows tool access
-        if let Ok(distro) = std::env::var("WSL_DISTRO_NAME") {
-            format!("//wsl.localhost/{}{}", distro, s)
-        } else {
-            s
-        }
-    } else {
-        s.replace('\\', "/")
     }
 }
 
@@ -1023,14 +1000,14 @@ mod tests {
     #[test]
     fn test_radiant_to_tcl_path_wsl() {
         let path = Path::new("/mnt/c/Users/foo/project/test.rdf");
-        let result = to_tcl_path(path);
+        let result = super::super::to_tcl_path(path);
         assert_eq!(result, "C:/Users/foo/project/test.rdf");
     }
 
     #[test]
     fn test_radiant_to_tcl_path_native() {
         let path = Path::new("/home/user/project/test.rdf");
-        let result = to_tcl_path(path);
+        let result = super::super::to_tcl_path(path);
         if std::env::var("WSL_DISTRO_NAME").is_ok() {
             assert!(result.starts_with("//wsl.localhost/"));
             assert!(result.ends_with("/home/user/project/test.rdf"));

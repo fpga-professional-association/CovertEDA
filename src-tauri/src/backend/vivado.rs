@@ -360,12 +360,13 @@ impl FpgaBackend for VivadoBackend {
         _stages: &[String],
         _options: &HashMap<String, String>,
     ) -> BackendResult<String> {
+        let project_dir_tcl = super::to_tcl_path(project_dir);
         Ok(format!(
             r#"# CovertEDA — Vivado Build Script
 # Device: {device}
 # Top: {top_module}
 
-open_project {project_dir}/{top_module}.xpr
+open_project {project_dir_tcl}/{top_module}.xpr
 
 synth_design -top {top_module}
 opt_design -directive Explore
@@ -381,7 +382,6 @@ write_bitstream -force {top_module}.bit
 
 close_project
 "#,
-            project_dir = project_dir.display(),
         ))
     }
 

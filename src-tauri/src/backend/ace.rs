@@ -292,17 +292,17 @@ impl FpgaBackend for AceBackend {
 
         // Open an existing .acepro or create a new project from sources
         if let Some(proj_file) = Self::find_project_file(project_dir, top_module) {
-            let proj_path = proj_file.display().to_string();
+            let proj_path = super::to_tcl_path(&proj_file);
             script.push_str(&format!("open_project \"{proj_path}\"\n"));
         } else {
             // Create project from scratch
-            let proj_dir_str = project_dir.display().to_string();
+            let proj_dir_tcl = super::to_tcl_path(project_dir);
             script.push_str(&format!(
                 "create_project \
                  -name \"{top_module}\" \
                  -device \"{device}\" \
                  -impl \"impl1\" \
-                 -dir \"{proj_dir_str}\"\n"
+                 -dir \"{proj_dir_tcl}\"\n"
             ));
 
             // Add source files
@@ -314,15 +314,15 @@ impl FpgaBackend for AceBackend {
                 )));
             }
             for src in &sources {
-                let src_str = src.display().to_string();
-                script.push_str(&format!("add_source_file \"{src_str}\"\n"));
+                let src_tcl = super::to_tcl_path(src);
+                script.push_str(&format!("add_source_file \"{src_tcl}\"\n"));
             }
 
             // Add constraint files (.pdc / .sdc)
             let constraints = Self::scan_constraints(project_dir);
             for constr in &constraints {
-                let constr_str = constr.display().to_string();
-                script.push_str(&format!("add_constraint_file \"{constr_str}\"\n"));
+                let constr_tcl = super::to_tcl_path(constr);
+                script.push_str(&format!("add_constraint_file \"{constr_tcl}\"\n"));
             }
 
             // Set top module

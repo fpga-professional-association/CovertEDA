@@ -286,12 +286,13 @@ impl FpgaBackend for DiamondBackend {
         _options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         let ldf = project_dir.join(format!("{}.ldf", top_module));
+        let ldf_tcl = super::to_tcl_path(&ldf);
         Ok(format!(
             r#"# CovertEDA — Diamond Build Script
 # Device: {device}
 # Top: {top_module}
 
-prj_project open "{ldf}"
+prj_project open "{ldf_tcl}"
 prj_run Synthesis -impl impl1 -forceOne
 prj_run Translate -impl impl1
 prj_run Map -impl impl1
@@ -300,7 +301,6 @@ prj_run Export -task Bitgen
 prj_run Export -task TimingSimFileVer
 prj_project close
 "#,
-            ldf = ldf.display(),
         ))
     }
 
@@ -400,5 +400,22 @@ mod tests {
         assert!(script.contains("prj_run Map"));
         assert!(script.contains("prj_run PAR"));
         assert!(script.contains("prj_run Export"));
+    }
+
+    #[test]
+    fn test_diamond_build_script_no_backslashes_in_paths() {
+        // Regression test for the TCL backslash escape bug:
+        // C:\Engr_CodeRepo\meg_hpm_fpga\top.ldf was interpreted by TCL as
+        // C:Engr_CodeRepomeg_hpm_fpga<TAB>op.ldf because \t is a tab escape.
+        let b = DiamondBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        // The prj_project open line must use forward slashes
+        let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
+        assert!(!open_line.contains('\\'),
+            "TCL script must not contain backslashes in paths (causes escape issues): {}",
+            open_line);
     }
 }

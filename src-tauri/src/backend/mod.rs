@@ -12,6 +12,37 @@ use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
+/// Convert a filesystem path to a TCL-safe string.
+///
+/// TCL interprets backslashes as escape characters (`\t` → tab, `\n` → newline),
+/// which silently corrupts Windows paths like `C:\top.ldf` → `C:<tab>op.ldf`.
+/// This function converts all paths to forward slashes and handles WSL path
+/// translation for Windows-native vendor tools.
+///
+/// Examples:
+/// - `C:\Users\foo\project` → `C:/Users/foo/project`
+/// - `/mnt/c/Users/foo`    → `C:/Users/foo`  (WSL → Windows drive)
+/// - `/home/user/project`  → `//wsl.localhost/<distro>/home/user/project` (WSL native → UNC, if WSL detected)
+pub fn to_tcl_path(path: &Path) -> String {
+    let s = path.display().to_string();
+    if s.starts_with("/mnt/") && s.len() > 6 {
+        // WSL mount: /mnt/c/Users/... → C:/Users/...
+        let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
+        let rest = &s[6..];
+        format!("{}:{}", drive, rest)
+    } else if s.starts_with('/') {
+        // WSL-native path — Windows tools need UNC access
+        if let Ok(distro) = std::env::var("WSL_DISTRO_NAME") {
+            format!("//wsl.localhost/{}{}", distro, s)
+        } else {
+            s
+        }
+    } else {
+        // Windows native path — flip backslashes to forward slashes
+        s.replace('\\', "/")
+    }
+}
+
 /// A detected tool version found during filesystem scanning.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -313,5 +344,34 @@ mod tests {
             assert!(!info.cli.is_empty(), "cli empty for {}", info.id);
             assert!(!info.pipeline.is_empty(), "pipeline empty for {}", info.id);
         }
+    }
+
+    #[test]
+    fn test_to_tcl_path_wsl_mount() {
+        let path = std::path::Path::new("/mnt/c/Engr_CodeRepo/meg_hpm_fpga/top.ldf");
+        let result = to_tcl_path(path);
+        assert_eq!(result, "C:/Engr_CodeRepo/meg_hpm_fpga/top.ldf");
+    }
+
+    #[test]
+    fn test_to_tcl_path_linux_native() {
+        let path = std::path::Path::new("/home/user/project/top.v");
+        let result = to_tcl_path(path);
+        if std::env::var("WSL_DISTRO_NAME").is_ok() {
+            assert!(result.starts_with("//wsl.localhost/"));
+            assert!(result.ends_with("/home/user/project/top.v"));
+        } else {
+            assert_eq!(result, "/home/user/project/top.v");
+        }
+    }
+
+    #[test]
+    fn test_to_tcl_path_no_backslash_escapes() {
+        // Ensure \t and \n in paths are NOT interpreted as tab/newline
+        // This is the exact bug reported: C:\top.ldf → C:<tab>op.ldf in TCL
+        let path = std::path::Path::new("/mnt/c/Users/tcove/projects/test/top.ldf");
+        let result = to_tcl_path(path);
+        assert!(!result.contains('\\'), "TCL path must not contain backslashes: {}", result);
+        assert!(result.contains("top.ldf"), "path must preserve filename: {}", result);
     }
 }

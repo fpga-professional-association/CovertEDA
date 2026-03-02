@@ -486,7 +486,7 @@ impl FpgaBackend for QuartusBackend {
         stages: &[String],
         options: &HashMap<String, String>,
     ) -> BackendResult<String> {
-        let project_path_tcl = to_quartus_tcl_path(project_dir);
+        let project_path_tcl = super::to_tcl_path(project_dir);
 
         let _all_ids = ["synth", "fit", "sta", "asm"];
         let run_stage = |id: &str| -> bool {
@@ -694,8 +694,8 @@ if {{[llength $sdc_files] > 0}} {{
         params: &HashMap<String, String>,
     ) -> BackendResult<(String, String)> {
         let ip_dir = project_dir.join("ip").join(instance_name);
-        let ip_dir_tcl = to_quartus_tcl_path(&ip_dir);
-        let _project_tcl = to_quartus_tcl_path(project_dir);
+        let ip_dir_tcl = super::to_tcl_path(&ip_dir);
+        let _project_tcl = super::to_tcl_path(project_dir);
 
         // Determine the device family
         let family = if device.starts_with("5C") {
@@ -773,18 +773,6 @@ puts "CovertEDA: Output directory: {ip_dir_tcl}"
         ));
 
         Ok((script, ip_dir_tcl))
-    }
-}
-
-/// Convert a WSL path to a Windows-style path for use inside Quartus TCL.
-fn to_quartus_tcl_path(path: &Path) -> String {
-    let s = path.display().to_string();
-    if s.starts_with("/mnt/") && s.len() > 6 {
-        let drive = s.chars().nth(5).unwrap().to_uppercase().to_string();
-        let rest = &s[6..];
-        format!("{}:{}", drive, rest)
-    } else {
-        s.replace('\\', "/")
     }
 }
 
@@ -866,7 +854,7 @@ mod tests {
 
     #[test]
     fn test_quartus_to_tcl_path_wsl() {
-        let result = to_quartus_tcl_path(Path::new("/mnt/c/intelFPGA/project"));
+        let result = super::super::to_tcl_path(Path::new("/mnt/c/intelFPGA/project"));
         assert_eq!(result, "C:/intelFPGA/project");
     }
 }
