@@ -1,0 +1,12 @@
+# Lattice Diamond / OSS constraint file for blinky
+# Update pin assignments for your board
+
+LOCATE COMP "clk"   SITE "P3";
+LOCATE COMP "rst_n" SITE "T2";
+LOCATE COMP "led"   SITE "H11";
+
+IOBUF PORT "clk"   IO_TYPE=LVCMOS33;
+IOBUF PORT "rst_n" IO_TYPE=LVCMOS33;
+IOBUF PORT "led"   IO_TYPE=LVCMOS33;
+
+FREQUENCY PORT "clk" 100.000000 MHz;
