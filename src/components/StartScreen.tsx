@@ -31,6 +31,7 @@ import {
   exitApp,
   importVendorProject,
   createProject,
+  openUrl,
   type WhichResult,
   type DetectedVersion,
 } from "../hooks/useTauri";
@@ -214,7 +215,7 @@ export default function StartScreen({
         <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.1.0</span>
         <div style={{ flex: 1 }} />
         <span
-          onClick={() => window.open("https://github.com/fpga-professional-association/CovertEDA", "_blank")}
+          onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")}
           className="ceda-ss-icon"
           title="GitHub Repository"
           style={{
@@ -235,7 +236,7 @@ export default function StartScreen({
           GitHub
         </span>
         <span
-          onClick={() => window.open("https://www.linkedin.com/company/fpga-professional-association/", "_blank")}
+          onClick={() => openUrl("https://www.linkedin.com/company/fpga-professional-association/")}
           className="ceda-ss-icon"
           title="FPGA Professional Association on LinkedIn"
           style={{

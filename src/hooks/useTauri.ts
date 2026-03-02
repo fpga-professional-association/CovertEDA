@@ -34,6 +34,19 @@ export async function listen<T>(
   return unlisten;
 }
 
+/**
+ * Open a URL in the user's default browser.
+ * Uses Tauri shell plugin when in Tauri, falls back to window.open in browser.
+ */
+export async function openUrl(url: string): Promise<void> {
+  if (isTauri) {
+    const { open } = await import("@tauri-apps/plugin-shell");
+    await open(url);
+  } else {
+    window.open(url, "_blank");
+  }
+}
+
 // ── Typed command wrappers ──
 
 export async function getFileTree(projectDir: string) {

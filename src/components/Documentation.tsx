@@ -1,6 +1,7 @@
 import { useState, useCallback, memo } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Badge } from "./shared";
+import { openUrl } from "../hooks/useTauri";
 
 // ── Section definitions ──
 
@@ -946,7 +947,7 @@ function AboutSection() {
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.accent, marginBottom: 4 }}>GitHub</div>
           <div
-            onClick={() => window.open("https://github.com/fpga-professional-association/CovertEDA", "_blank")}
+            onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")}
             style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all", cursor: "pointer", textDecoration: "underline" }}
           >
             github.com/fpga-professional-association/CovertEDA
@@ -958,7 +959,7 @@ function AboutSection() {
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.cyan, marginBottom: 4 }}>LinkedIn</div>
           <div
-            onClick={() => window.open("https://www.linkedin.com/company/fpga-professional-association/", "_blank")}
+            onClick={() => openUrl("https://www.linkedin.com/company/fpga-professional-association/")}
             style={{ fontSize: 9, fontFamily: MONO, color: C.t2, lineHeight: 1.5, wordBreak: "break-all", cursor: "pointer", textDecoration: "underline" }}
           >
             linkedin.com/company/fpga-professional-association
