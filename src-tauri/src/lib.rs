@@ -85,6 +85,7 @@ pub fn run() {
             commands::import_vendor_project,
             commands::detect_tool_edition,
             commands::verify_device_part,
+            commands::open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

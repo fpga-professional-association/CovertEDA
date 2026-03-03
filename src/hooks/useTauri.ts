@@ -36,12 +36,12 @@ export async function listen<T>(
 
 /**
  * Open a URL in the user's default browser.
- * Uses Tauri shell plugin when in Tauri, falls back to window.open in browser.
+ * Uses a Rust command that handles WSL (cmd.exe /c start) and native Linux (xdg-open).
+ * Falls back to window.open in browser dev mode.
  */
 export async function openUrl(url: string): Promise<void> {
   if (isTauri) {
-    const { open } = await import("@tauri-apps/plugin-shell");
-    await open(url);
+    await invoke<void>("open_url", { url });
   } else {
     window.open(url, "_blank");
   }

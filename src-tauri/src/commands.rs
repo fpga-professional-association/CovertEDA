@@ -2860,6 +2860,50 @@ pub fn open_in_file_manager(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        // On WSL, use cmd.exe /c start to open in Windows default browser
+        if std::fs::read_to_string("/proc/version")
+            .unwrap_or_default()
+            .contains("microsoft")
+        {
+            // cmd.exe /c start requires replacing & with ^& in URLs
+            let escaped = url.replace('&', "^&");
+            return std::process::Command::new("cmd.exe")
+                .args(["/c", "start", &escaped])
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| format!("Failed to open URL: {}", e));
+        }
+        // Native Linux
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open URL: {}", e))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open URL: {}", e))
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", &url.replace('&', "^&")])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open URL: {}", e))
+    }
+}
+
+#[tauri::command]
 pub fn get_app_config() -> Result<crate::config::AppConfig, String> {
     Ok(crate::config::AppConfig::load())
 }
