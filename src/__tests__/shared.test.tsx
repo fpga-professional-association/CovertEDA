@@ -117,8 +117,8 @@ describe("Select", () => {
     renderWithTheme(<Select value="a" onChange={onChange} options={options} />);
     // Open dropdown
     fireEvent.click(screen.getByText("Option A"));
-    // Click a different option
-    fireEvent.click(screen.getByText("Option C"));
+    // Select uses onMouseDown, not onClick
+    fireEvent.mouseDown(screen.getByText("Option C"));
     expect(onChange).toHaveBeenCalledWith("c");
   });
 });

@@ -955,7 +955,7 @@ export default function ReportViewer({
         {/* Row 2: Build Logs + export (only when build data exists) */}
         {hasBuildData && (
           <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
-            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 600, padding: "0 6px", letterSpacing: 0.5 }}>BUILD LOGS</span>
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t2, fontWeight: 700, padding: "4px 8px", letterSpacing: 0.5, background: C.s3, borderRadius: 4 }}>BUILD LOGS</span>
             {stageTabs.map((t) => (
               <button
                 key={t.id}

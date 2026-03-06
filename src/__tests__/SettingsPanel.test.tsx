@@ -16,10 +16,13 @@ vi.mock("../hooks/useTauri", () => ({
     ai_model: null,
     ai_provider: null,
     ai_base_url: null,
+    selected_versions: {},
   })),
   saveAppConfig: vi.fn(() => Promise.resolve()),
   pickDirectory: vi.fn(() => Promise.resolve(null)),
   pickFile: vi.fn(() => Promise.resolve(null)),
+  getAiApiKey: vi.fn(() => Promise.resolve(null)),
+  setAiApiKey: vi.fn(() => Promise.resolve()),
 }));
 
 describe("SettingsPanel", () => {
