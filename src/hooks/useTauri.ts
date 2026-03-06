@@ -516,18 +516,17 @@ export async function checkLicenses(): Promise<LicenseCheckResult> {
 
 export async function getAiApiKey(): Promise<string | null> {
   if (!isTauri) {
-    // Browser fallback: read from app config
-    const cfg = await getAppConfig();
-    return cfg.ai_api_key;
+    try { return localStorage.getItem("coverteda_ai_key"); } catch { return null; }
   }
   return invoke<string | null>("get_ai_api_key");
 }
 
 export async function setAiApiKey(key: string | null): Promise<void> {
   if (!isTauri) {
-    // Browser fallback: save to app config
-    const cfg = await getAppConfig();
-    await saveAppConfig({ ...cfg, ai_api_key: key });
+    try {
+      if (key) localStorage.setItem("coverteda_ai_key", key);
+      else localStorage.removeItem("coverteda_ai_key");
+    } catch { /* ignore */ }
     return;
   }
   return invoke<void>("set_ai_api_key", { key });
@@ -558,28 +557,37 @@ export interface AppConfig {
   selected_versions: Record<string, string>;
 }
 
+const DEFAULT_APP_CONFIG: AppConfig = {
+  tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
+  license_servers: [],
+  default_backend: "radiant",
+  theme: "dark",
+  scale_factor: 1.0,
+  license_file: null,
+  license_files: {},
+  ai_api_key: null,
+  ai_model: null,
+  ai_provider: null,
+  ai_base_url: null,
+  selected_versions: {},
+};
+
 export async function getAppConfig(): Promise<AppConfig> {
   if (!isTauri) {
-    return {
-      tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
-      license_servers: [],
-      default_backend: "radiant",
-      theme: "dark",
-      scale_factor: 1.0,
-      license_file: null,
-      license_files: {},
-      ai_api_key: null,
-      ai_model: null,
-      ai_provider: null,
-      ai_base_url: null,
-      selected_versions: {},
-    };
+    try {
+      const raw = localStorage.getItem("coverteda_config");
+      if (raw) return { ...DEFAULT_APP_CONFIG, ...JSON.parse(raw) };
+    } catch { /* ignore */ }
+    return { ...DEFAULT_APP_CONFIG };
   }
   return invoke<AppConfig>("get_app_config");
 }
 
 export async function saveAppConfig(config: AppConfig): Promise<void> {
-  if (!isTauri) return;
+  if (!isTauri) {
+    try { localStorage.setItem("coverteda_config", JSON.stringify(config)); } catch { /* ignore */ }
+    return;
+  }
   return invoke<void>("save_app_config", { config });
 }
 

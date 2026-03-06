@@ -185,6 +185,8 @@ export default function App() {
   const [cleaning, setCleaning] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [perfOverlay, setPerfOverlay] = useState(false);
+  const [sourceContents, setSourceContents] = useState<Record<string, string>>({});
+  const [aiMdContent, setAiMdContent] = useState<string | null>(null);
 
   // ── Build config auto-save state ──
   const [buildSaveStatus, setBuildSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
@@ -206,6 +208,55 @@ export default function App() {
     );
     return match?.path;
   }, [realFiles, bid, B.constrExt]);
+
+  // Load source file contents for AI context (RTL, constraints, testbenches)
+  useEffect(() => {
+    if (!realFiles || !isTauri) { setSourceContents({}); return; }
+    let cancelled = false;
+    const eligible = realFiles
+      .filter((f) => (f.ty === "rtl" || f.ty === "constr" || f.ty === "tb") && f.path && f.ty !== "folder" as string)
+      .slice(0, 15);
+    if (eligible.length === 0) { setSourceContents({}); return; }
+
+    const MAX_PER_FILE = 2000;
+    const MAX_TOTAL = 12000;
+
+    Promise.all(
+      eligible.map((f) =>
+        readFile(f.path!).then((fc) => ({ name: f.n, path: f.path!, content: fc.isBinary ? null : fc.content })).catch(() => null)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      const out: Record<string, string> = {};
+      let total = 0;
+      for (const r of results) {
+        if (!r || !r.content) continue;
+        if (total >= MAX_TOTAL) break;
+        const trimmed = r.content.length > MAX_PER_FILE
+          ? r.content.slice(0, MAX_PER_FILE) + "\n... (truncated)"
+          : r.content;
+        if (total + trimmed.length > MAX_TOTAL) break;
+        out[r.name] = trimmed;
+        total += trimmed.length;
+      }
+      setSourceContents(out);
+    });
+    return () => { cancelled = true; };
+  }, [realFiles]);
+
+  // Load ai.md project notes for AI context
+  useEffect(() => {
+    if (!projectDir || !isTauri) { setAiMdContent(null); return; }
+    readFile(`${projectDir}/ai.md`)
+      .then((fc) => {
+        if (!fc.isBinary && fc.content) {
+          setAiMdContent(fc.content.length > 3000 ? fc.content.slice(0, 3000) + "\n... (truncated)" : fc.content);
+        } else {
+          setAiMdContent(null);
+        }
+      })
+      .catch(() => setAiMdContent(null));
+  }, [projectDir]);
 
   // Rich AI project context — assembled from all available state
   const aiProjectContext = useMemo(() => {
@@ -281,8 +332,24 @@ export default function App() {
       for (const e of errLines) lines.push(`  ${e.m}`);
     }
 
+    // Source file contents
+    const srcKeys = Object.keys(sourceContents);
+    if (srcKeys.length > 0) {
+      lines.push(`\nSource file contents:`);
+      for (const name of srcKeys) {
+        lines.push(`--- ${name} ---`);
+        lines.push(sourceContents[name]);
+      }
+    }
+
+    // ai.md project notes
+    if (aiMdContent) {
+      lines.push(`\nProject AI notes (ai.md):`);
+      lines.push(aiMdContent);
+    }
+
     return lines.join("\n");
-  }, [project, B, building, bStep, buildFailed, realTimingReport, realUtilReport, realDrcReport, realPowerReport, gitState, logs, realFiles]);
+  }, [project, B, building, bStep, buildFailed, realTimingReport, realUtilReport, realDrcReport, realPowerReport, gitState, logs, realFiles, sourceContents, aiMdContent]);
 
   // Load backends and config on mount; restore project if page was reloaded
   useEffect(() => {
@@ -1779,6 +1846,8 @@ export default function App() {
               <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
                 <AiAssistant
                   projectContext={aiProjectContext}
+                  projectDir={projectDir}
+                  onOpenFile={handleFileClick}
                 />
               </div>
               </div>
