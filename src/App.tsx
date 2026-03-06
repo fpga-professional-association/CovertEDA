@@ -48,16 +48,17 @@ import {
   saveProject,
   gitCommit,
   getGitStatus,
+  gitLog,
   saveBuildRecord,
   getProjectConfigAtHead,
   detectToolEdition,
   openUrl,
 } from "./hooks/useTauri";
-import type { RustGitStatus } from "./hooks/useTauri";
+import type { RustGitStatus, GitLogEntry } from "./hooks/useTauri";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-function mapGitStatus(r: RustGitStatus): GitState {
+function mapGitStatus(r: RustGitStatus, logEntries?: GitLogEntry[]): GitState {
   return {
     branch: r.branch,
     commit: r.commitHash,
@@ -72,7 +73,12 @@ function mapGitStatus(r: RustGitStatus): GitState {
     untracked: r.untracked,
     stashes: 0,
     tags: [],
-    recentCommits: [],
+    recentCommits: (logEntries ?? []).map((e) => ({
+      hash: e.hash,
+      msg: e.message,
+      time: e.timeAgo,
+      author: e.author,
+    })),
   };
 }
 
@@ -201,6 +207,70 @@ export default function App() {
     return match?.path;
   }, [realFiles, bid, B.constrExt]);
 
+  // Rich AI project context — assembled from all available state
+  const aiProjectContext = useMemo(() => {
+    if (!project) return undefined;
+    const lines: string[] = [];
+
+    // Project basics
+    lines.push(`Project: ${project.name}`);
+    lines.push(`Backend: ${B.name} (${B.id})`);
+    lines.push(`Device: ${project.device}`);
+    lines.push(`Top Module: ${project.topModule}`);
+    if (project.sourcePatterns?.length) lines.push(`Source patterns: ${project.sourcePatterns.join(", ")}`);
+    if (project.constraintFiles?.length) lines.push(`Constraint files: ${project.constraintFiles.join(", ")}`);
+
+    // Build status
+    lines.push(`\nBuild Status: ${building ? "RUNNING" : bStep >= 0 ? `Completed (stage ${bStep})` : "Not built"}`);
+    if (buildFailed) lines.push(`Build: FAILED`);
+
+    // Timing report summary
+    if (realTimingReport) {
+      const s = realTimingReport.summary;
+      lines.push(`\nTiming: WNS=${s.wns}, TNS=${s.tns}, Fmax=${s.fmax}`);
+      if (s.failingPaths > 0) lines.push(`  ${s.failingPaths} failing path(s)`);
+    }
+
+    // Utilization summary
+    if (realUtilReport) {
+      lines.push(`\nUtilization:`);
+      for (const cat of realUtilReport.summary) {
+        for (const item of cat.items) {
+          if (item.total > 0) {
+            lines.push(`  ${item.r}: ${item.used}/${item.total} (${((item.used / item.total) * 100).toFixed(1)}%)`);
+          }
+        }
+      }
+    }
+
+    // DRC summary
+    if (realDrcReport && realDrcReport.items.length > 0) {
+      lines.push(`\nDRC: ${realDrcReport.summary.errors} errors, ${realDrcReport.summary.critWarns} critical warnings, ${realDrcReport.summary.warnings} warnings`);
+      for (const v of realDrcReport.items.slice(0, 5)) {
+        lines.push(`  [${v.sev}] ${v.code}: ${v.msg}`);
+      }
+    }
+
+    // Power summary
+    if (realPowerReport) {
+      lines.push(`\nPower: Total=${realPowerReport.total}, Confidence=${realPowerReport.confidence}`);
+    }
+
+    // Git state
+    if (gitState) {
+      lines.push(`\nGit: branch=${gitState.branch}, dirty=${gitState.dirty}`);
+    }
+
+    // Recent build log errors (last 10 error lines)
+    const errLines = logs.filter((l) => l.t === "err").slice(-10);
+    if (errLines.length > 0) {
+      lines.push(`\nRecent build errors:`);
+      for (const e of errLines) lines.push(`  ${e.m}`);
+    }
+
+    return lines.join("\n");
+  }, [project, B, building, bStep, buildFailed, realTimingReport, realUtilReport, realDrcReport, realPowerReport, gitState, logs]);
+
   // Load backends and config on mount; restore project if page was reloaded
   useEffect(() => {
     perf("mount_effect");
@@ -287,9 +357,12 @@ export default function App() {
     getProjectConfigAtHead(dir).then(setHeadConfig).catch(() => setHeadConfig(null));
 
     if (isTauri) {
-      // Load git status
-      getGitStatus(dir)
-        .then((r) => { perf("git_status_loaded"); setGitState(mapGitStatus(r)); })
+      // Load git status + log
+      Promise.all([
+        getGitStatus(dir),
+        gitLog(dir, 20).catch(() => [] as GitLogEntry[]),
+      ])
+        .then(([r, log]) => { perf("git_status_loaded"); setGitState(mapGitStatus(r, log)); })
         .catch(() => setGitState(null));
 
       // Load real file tree
@@ -672,10 +745,13 @@ export default function App() {
           }
           if (projectDir) saveBuildRecord(projectDir, enriched).catch(() => {});
         }).catch(() => { if (projectDir) saveBuildRecord(projectDir, record).catch(() => {}); });
-        // Refresh git status (build may have created new files)
+        // Refresh git status + log (build may have created new files)
         if (projectDir) {
-          getGitStatus(projectDir)
-            .then((r) => setGitState(mapGitStatus(r)))
+          Promise.all([
+            getGitStatus(projectDir),
+            gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+          ])
+            .then(([r, log]) => setGitState(mapGitStatus(r, log)))
             .catch(() => {});
         }
       }
@@ -714,9 +790,12 @@ export default function App() {
       const hash = await gitCommit(projectDir, msg);
       if (commitCancelled.current) { setCommitting(false); return; }
       setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
-      // Refresh git status and HEAD config in parallel (don't block build start)
+      // Refresh git status/log and HEAD config in parallel (don't block build start)
       Promise.all([
-        getGitStatus(projectDir).then((r) => setGitState(mapGitStatus(r))).catch(() => {}),
+        Promise.all([
+          getGitStatus(projectDir),
+          gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+        ]).then(([r, log]) => setGitState(mapGitStatus(r, log))).catch(() => {}),
         getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {}),
       ]);
     } catch (err) {
@@ -787,8 +866,11 @@ export default function App() {
   const refreshAll = useCallback(() => {
     if (!projectDir) return;
     getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
-    getGitStatus(projectDir)
-      .then((r) => setGitState(mapGitStatus(r)))
+    Promise.all([
+      getGitStatus(projectDir),
+      gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+    ])
+      .then(([r, log]) => setGitState(mapGitStatus(r, log)))
       .catch(() => setGitState(null));
   }, [projectDir]);
 
@@ -800,9 +882,12 @@ export default function App() {
     try {
       const hash = await gitCommit(projectDir, msg);
       setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}` }]);
-      // Refresh git status, HEAD config, and file tree in parallel
+      // Refresh git status/log, HEAD config, and file tree in parallel
       Promise.all([
-        getGitStatus(projectDir).then((r) => setGitState(mapGitStatus(r))).catch(() => {}),
+        Promise.all([
+          getGitStatus(projectDir),
+          gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+        ]).then(([r, log]) => setGitState(mapGitStatus(r, log))).catch(() => {}),
         getProjectConfigAtHead(projectDir).then(setHeadConfig).catch(() => {}),
         getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}),
       ]);
@@ -1346,7 +1431,7 @@ export default function App() {
         )}
 
         {/* ══════ MAIN CONTENT ══════ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
           {/* Top bar */}
           <div
             style={{
@@ -1431,7 +1516,7 @@ export default function App() {
           </div>
 
           <Suspense fallback={null}>
-          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+          <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0 }}>
             {/* File Viewer (overlay — does not unmount panel beneath) */}
             {viewingFile && (
               <div style={{ position: "absolute", inset: 0, zIndex: 10, overflow: "auto", padding: 12, background: C.bg }}>
@@ -1518,6 +1603,7 @@ export default function App() {
                   backendId={bid}
                   device={project?.device ?? B.defaultDev}
                   constraintFile={constraintFilePath}
+                  projectDir={projectDir}
                 />
               </div>
             )}
@@ -1679,7 +1765,7 @@ export default function App() {
               <div style={{ display: sec === "ai" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
               <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
                 <AiAssistant
-                  projectContext={project ? `Project: ${project.name}, Backend: ${B.name}, Device: ${project.device}, Top: ${project.topModule}` : undefined}
+                  projectContext={aiProjectContext}
                 />
               </div>
               </div>

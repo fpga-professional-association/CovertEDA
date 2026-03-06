@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Input } from "./shared";
 import { Brain } from "./Icons";
-import { getAppConfig, saveAppConfig, AppConfig } from "../hooks/useTauri";
+import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, AppConfig } from "../hooks/useTauri";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -151,9 +151,9 @@ export default function AiAssistant({ projectContext }: { projectContext?: strin
   const provider = getProvider(providerId);
   const effectiveModel = providerId === "ollama" ? ollamaModel : model;
 
-  // Load config on mount
+  // Load config on mount — API key comes from OS keyring, rest from config
   useEffect(() => {
-    getAppConfig().then((cfg) => {
+    Promise.all([getAppConfig(), getAiApiKey()]).then(([cfg, key]) => {
       configRef.current = cfg;
       const pid = cfg.ai_provider ?? "anthropic";
       setProviderId(pid);
@@ -168,8 +168,8 @@ export default function AiAssistant({ projectContext }: { projectContext?: strin
 
       const prov = getProvider(pid);
       if (prov.keyRequired) {
-        if (cfg.ai_api_key) {
-          setApiKey(cfg.ai_api_key);
+        if (key) {
+          setApiKey(key);
           setShowSetup(false);
         } else {
           setShowSetup(true);
@@ -200,8 +200,8 @@ export default function AiAssistant({ projectContext }: { projectContext?: strin
   const saveKey = useCallback((key: string) => {
     setApiKey(key);
     setShowSetup(false);
-    persistConfig({ ai_api_key: key });
-  }, [persistConfig]);
+    setAiApiKey(key).catch(() => {});
+  }, []);
 
   const selectProvider = useCallback((pid: string) => {
     setProviderId(pid);
@@ -404,7 +404,7 @@ export default function AiAssistant({ projectContext }: { projectContext?: strin
                 style={{ width: "100%", marginBottom: 4 }}
               />
               <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
-                {provider.keyHelp}. Stored locally only.
+                {provider.keyHelp}. Stored securely in OS keyring.
               </div>
             </div>
           )}

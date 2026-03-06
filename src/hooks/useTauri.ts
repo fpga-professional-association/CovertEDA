@@ -71,6 +71,18 @@ export async function getGitStatus(projectDir: string): Promise<RustGitStatus> {
   return invoke<RustGitStatus>("get_git_status", { projectDir });
 }
 
+export interface GitLogEntry {
+  hash: string;
+  message: string;
+  author: string;
+  timeAgo: string;
+}
+
+export async function gitLog(projectDir: string, maxCount: number = 20): Promise<GitLogEntry[]> {
+  if (!isTauri) return [];
+  return invoke<GitLogEntry[]>("git_log", { projectDir, maxCount });
+}
+
 export async function gitIsDirty(projectDir: string): Promise<boolean> {
   if (!isTauri) return false;
   return invoke<boolean>("git_is_dirty", { projectDir });
@@ -498,6 +510,27 @@ export async function checkLicenses(): Promise<LicenseCheckResult> {
     };
   }
   return invoke<LicenseCheckResult>("check_licenses");
+}
+
+// ── Secure AI API Key (OS keyring) ──
+
+export async function getAiApiKey(): Promise<string | null> {
+  if (!isTauri) {
+    // Browser fallback: read from app config
+    const cfg = await getAppConfig();
+    return cfg.ai_api_key;
+  }
+  return invoke<string | null>("get_ai_api_key");
+}
+
+export async function setAiApiKey(key: string | null): Promise<void> {
+  if (!isTauri) {
+    // Browser fallback: save to app config
+    const cfg = await getAppConfig();
+    await saveAppConfig({ ...cfg, ai_api_key: key });
+    return;
+  }
+  return invoke<void>("set_ai_api_key", { key });
 }
 
 // ── App Config ──
@@ -980,6 +1013,57 @@ export async function scanSourceDirectories(projectDir: string): Promise<SourceD
 export async function detectTopModule(projectDir: string, sourcePatterns: string[]): Promise<string | null> {
   if (!isTauri) return null;
   return invoke<string | null>("detect_top_module", { projectDir, sourcePatterns });
+}
+
+// ── Package Pin Listing ──
+
+export interface PackagePin {
+  pin: string;
+  bank: string | null;
+  function: string;
+  diffPair: string | null;
+  rOhms?: number;
+  lNh?: number;
+  cPf?: number;
+}
+
+export interface DevicePinData {
+  pins: PackagePin[];
+  ioStandards: string[];
+  driveStrengths: string[];
+}
+
+export async function listPackagePins(backendId: string, device: string): Promise<DevicePinData> {
+  if (!isTauri) return { pins: [], ioStandards: [], driveStrengths: [] };
+  return invoke<DevicePinData>("list_package_pins", { backendId, device });
+}
+
+// ── Pad Report (post-build pinout) ──
+
+export interface PadPinEntry {
+  portName: string;
+  pin: string;
+  bank: string;
+  bufferType: string;
+  site: string;
+  ioStandard: string;
+  drive: string;
+  direction: string;
+}
+
+export interface PadBankVccio {
+  bank: string;
+  vccio: string;
+}
+
+export interface PadReport {
+  assignedPins: PadPinEntry[];
+  vccioBanks: PadBankVccio[];
+}
+
+export async function getPadReport(backendId: string, implDir: string): Promise<PadReport | null> {
+  if (!isTauri) return null;
+  return invoke<PadReport | null>("get_pad_report", { backendId, implDir });
 }
 
 // ── Vendor Project Import ──

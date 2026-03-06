@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { ThemeId } from "../theme";
 import { Btn, Input } from "./shared";
-import { getAppConfig, saveAppConfig, pickDirectory, pickFile, AppConfig } from "../hooks/useTauri";
+import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, pickDirectory, pickFile, AppConfig } from "../hooks/useTauri";
 
 const SCALE_PRESETS = [
   { label: "50%", value: 0.5 },
@@ -108,9 +108,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
+  const [aiKey, setAiKey] = useState("");
 
   useEffect(() => {
     getAppConfig().then(setConfig);
+    getAiApiKey().then((k) => setAiKey(k ?? ""));
   }, []);
 
   const save = useCallback(async (updated: AppConfig) => {
@@ -380,6 +382,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 <div
                   key={p.id}
                   onClick={() => {
+                    const switchingProvider = p.id !== (config?.ai_provider ?? "anthropic");
+                    if (switchingProvider) {
+                      setAiKey("");
+                      setAiApiKey(null).catch(() => {});
+                    }
                     setConfig((prev) => {
                       if (!prev) return prev;
                       const defaultModel = p.models.length > 0 ? p.models[0].id : (prev.ai_model ?? "llama3.1");
@@ -387,7 +394,6 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                         ...prev,
                         ai_provider: p.id,
                         ai_model: defaultModel,
-                        ai_api_key: p.id === (prev.ai_provider ?? "anthropic") ? prev.ai_api_key : null,
                       };
                       save(updated);
                       return updated;
@@ -423,21 +429,17 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <span style={label}>API KEY</span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Input
-                      value={config?.ai_api_key ?? ""}
+                      value={aiKey}
                       onChange={(v) => {
-                        setConfig((prev) => {
-                          if (!prev) return prev;
-                          const updated = { ...prev, ai_api_key: v || null };
-                          save(updated);
-                          return updated;
-                        });
+                        setAiKey(v);
+                        setAiApiKey(v || null).catch(() => {});
                       }}
                       placeholder={prov?.keyPlaceholder ?? "API key"}
                       style={{ flex: 1 }}
                     />
                   </div>
                   <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
-                    {prov?.keyHelp ?? "Enter your API key"}. Stored locally only.
+                    {prov?.keyHelp ?? "Enter your API key"}. Stored securely in OS keyring.
                   </div>
                 </div>
               )}

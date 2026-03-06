@@ -113,6 +113,16 @@ pub async fn get_git_status(project_dir: String) -> Result<GitStatus, String> {
 }
 
 #[tauri::command]
+pub async fn git_log(project_dir: String, max_count: Option<usize>) -> Result<Vec<crate::types::GitLogEntry>, String> {
+    let count = max_count.unwrap_or(20);
+    tokio::task::spawn_blocking(move || {
+        crate::git::get_log(&PathBuf::from(project_dir), count)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn git_is_dirty(project_dir: String) -> Result<bool, String> {
     tokio::task::spawn_blocking(move || {
         crate::git::is_dirty(&PathBuf::from(project_dir))
@@ -1270,6 +1280,20 @@ pub fn get_io_report(
         .collect();
 
     Ok(Some(IoReport { banks }))
+}
+
+#[tauri::command]
+pub fn get_pad_report(
+    state: State<'_, AppState>,
+    backend_id: String,
+    impl_dir: String,
+) -> Result<Option<PadReport>, String> {
+    let impl_path = PathBuf::from(&impl_dir);
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend.parse_pad_report(&impl_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -2913,6 +2937,45 @@ pub fn save_app_config(config: crate::config::AppConfig) -> Result<(), String> {
     config.save().map_err(|e| e.to_string())
 }
 
+// ── Secure AI API Key (OS keyring) ──
+
+#[tauri::command]
+pub fn get_ai_api_key() -> Result<Option<String>, String> {
+    // 1. Try OS keyring first
+    match keyring::Entry::new("coverteda", "ai_api_key") {
+        Ok(entry) => match entry.get_password() {
+            Ok(key) => return Ok(Some(key)),
+            Err(keyring::Error::NoEntry) => {}
+            Err(_) => {} // Keyring unavailable — fall through to TOML
+        },
+        Err(_) => {} // Keyring unavailable
+    }
+    // 2. Fallback: read from config TOML (migration path)
+    let config = crate::config::AppConfig::load();
+    Ok(config.ai_api_key.clone())
+}
+
+#[tauri::command]
+pub fn set_ai_api_key(key: Option<String>) -> Result<(), String> {
+    if let Ok(entry) = keyring::Entry::new("coverteda", "ai_api_key") {
+        match &key {
+            Some(k) if !k.is_empty() => {
+                entry.set_password(k).map_err(|e| e.to_string())?;
+            }
+            _ => {
+                let _ = entry.delete_credential(); // ignore "no entry" error
+            }
+        }
+    }
+    // Clear the TOML field (migration: remove plaintext)
+    let mut config = crate::config::AppConfig::load();
+    if config.ai_api_key.is_some() {
+        config.ai_api_key = None;
+        config.save().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // ── System stats for "Stats for Nerds" overlay ──
 
 #[derive(serde::Serialize, Clone)]
@@ -3395,6 +3458,8 @@ pub async fn import_vendor_project(dir: String) -> Result<VendorImportResult, St
             ("xpr", "vivado"),
             ("ldf", "diamond"),
             ("rdf", "radiant"),
+            ("acepro", "ace"),
+            ("prjx", "libero"),
         ];
 
         let mut found_file: Option<(PathBuf, &str, &str)> = None;
@@ -3420,6 +3485,72 @@ pub async fn import_vendor_project(dir: String) -> Result<VendorImportResult, St
         let (vendor_path, vendor_type, backend_id) = match found_file {
             Some(f) => f,
             None => {
+                // No vendor project file found — try scanning TCL files for project commands
+                if let Ok(entries) = std::fs::read_dir(&project_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if !path.is_file() { continue; }
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if ext != "tcl" { continue; }
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            let content_lower = content.to_lowercase();
+                            // Detect vendor from TCL patterns
+                            let detected_backend = if content_lower.contains("prj_project new") || content_lower.contains("prj_project open") {
+                                Some("radiant")
+                            } else if content_lower.contains("create_project") && content_lower.contains("vivado") {
+                                Some("vivado")
+                            } else if content_lower.contains("project_new") || content_lower.contains("quartus_sh") {
+                                Some("quartus")
+                            } else if content_lower.contains("open_project") && content_lower.contains("ace") {
+                                Some("ace")
+                            } else {
+                                None
+                            };
+                            if let Some(bid) = detected_backend {
+                                // Try to extract device and top_module from TCL
+                                let mut device = String::new();
+                                let mut top_module = String::new();
+                                for line in content.lines() {
+                                    let trimmed = line.trim();
+                                    // Common patterns: -device "LIFCL-40", -part xc7a35t, etc.
+                                    if let Some(pos) = trimmed.find("-device") {
+                                        let after = &trimmed[pos + 7..].trim_start();
+                                        let dev = after.trim_start_matches(|c: char| c == '"' || c == '{' || c == ' ');
+                                        let end = dev.find(|c: char| c == '"' || c == '}' || c == ' ' || c == '\t').unwrap_or(dev.len());
+                                        if end > 0 { device = dev[..end].to_string(); }
+                                    }
+                                    if let Some(pos) = trimmed.find("-part") {
+                                        let after = &trimmed[pos + 5..].trim_start();
+                                        let dev = after.trim_start_matches(|c: char| c == '"' || c == '{' || c == ' ');
+                                        let end = dev.find(|c: char| c == '"' || c == '}' || c == ' ' || c == '\t').unwrap_or(dev.len());
+                                        if end > 0 && device.is_empty() { device = dev[..end].to_string(); }
+                                    }
+                                    if let Some(pos) = trimmed.find("-top") {
+                                        let after = &trimmed[pos + 4..].trim_start();
+                                        let m = after.trim_start_matches(|c: char| c == '"' || c == '{' || c == ' ');
+                                        let end = m.find(|c: char| c == '"' || c == '}' || c == ' ' || c == '\t').unwrap_or(m.len());
+                                        if end > 0 { top_module = m[..end].to_string(); }
+                                    }
+                                }
+                                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                                return Ok(VendorImportResult {
+                                    found: true,
+                                    vendor_file: file_name.clone(),
+                                    vendor_type: "tcl".to_string(),
+                                    backend_id: bid.to_string(),
+                                    device,
+                                    top_module,
+                                    source_files: Vec::new(),
+                                    constraint_files: Vec::new(),
+                                    project_name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("project").to_string(),
+                                    warnings: vec![format!("Detected {} backend from TCL script: {}", bid, file_name)],
+                                    summary: vec![format!("TCL project script: {}", file_name)],
+                                });
+                            }
+                        }
+                    }
+                }
+
                 return Ok(VendorImportResult {
                     found: false,
                     vendor_file: String::new(),
@@ -3556,6 +3687,21 @@ pub async fn import_vendor_project(dir: String) -> Result<VendorImportResult, St
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// ── Package pin listing ──
+
+#[tauri::command]
+pub async fn list_package_pins(
+    backend_id: String,
+    device: String,
+    state: State<'_, AppState>,
+) -> Result<crate::backend::DevicePinData, String> {
+    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let backend = registry
+        .get(&backend_id)
+        .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+    backend.list_device_pin_data(&device).map_err(|e| e.to_string())
 }
 
 // ── Feature 4: Tool edition detection ──
