@@ -220,6 +220,19 @@ export default function App() {
     if (project.sourcePatterns?.length) lines.push(`Source patterns: ${project.sourcePatterns.join(", ")}`);
     if (project.constraintFiles?.length) lines.push(`Constraint files: ${project.constraintFiles.join(", ")}`);
 
+    // File tree listing
+    if (realFiles && realFiles.length > 0) {
+      lines.push(`\nProject files:`);
+      for (const f of realFiles) {
+        if (f.ty !== "folder") {
+          const indent = "  ".repeat(Math.max(0, f.d));
+          const synth = f.synth ? " [in synthesis]" : "";
+          const git = f.git && f.git !== "clean" ? ` (${f.git})` : "";
+          lines.push(`${indent}${f.n}${synth}${git}`);
+        }
+      }
+    }
+
     // Build status
     lines.push(`\nBuild Status: ${building ? "RUNNING" : bStep >= 0 ? `Completed (stage ${bStep})` : "Not built"}`);
     if (buildFailed) lines.push(`Build: FAILED`);
@@ -269,7 +282,7 @@ export default function App() {
     }
 
     return lines.join("\n");
-  }, [project, B, building, bStep, buildFailed, realTimingReport, realUtilReport, realDrcReport, realPowerReport, gitState, logs]);
+  }, [project, B, building, bStep, buildFailed, realTimingReport, realUtilReport, realDrcReport, realPowerReport, gitState, logs, realFiles]);
 
   // Load backends and config on mount; restore project if page was reloaded
   useEffect(() => {
