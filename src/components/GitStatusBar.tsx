@@ -198,10 +198,13 @@ export default function GitStatusBar({
               top: 28,
               left: 80,
               width: 520,
+              maxHeight: "70vh",
               background: C.s1,
               border: `1px solid ${C.b2}`,
               borderRadius: 8,
               overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
               boxShadow: "0 12px 40px rgba(0,0,0,.5)",
               animation: "slideDown .12s ease",
               zIndex: 701,
@@ -225,7 +228,12 @@ export default function GitStatusBar({
               <div style={{ flex: 1 }} />
               <Badge color={C.ok}>{"\u2191"}{git.ahead} ahead</Badge>
             </div>
-            {git.recentCommits.map((c, i) => (
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            {git.recentCommits.length === 0 ? (
+              <div style={{ padding: "16px 14px", fontSize: 9, fontFamily: MONO, color: C.t3, textAlign: "center" }}>
+                No commits yet
+              </div>
+            ) : git.recentCommits.map((c, i) => (
               <HoverRow
                 key={i}
                 style={{
@@ -276,6 +284,7 @@ export default function GitStatusBar({
                 )}
               </HoverRow>
             ))}
+            </div>
           </div>
         </div>
       )}

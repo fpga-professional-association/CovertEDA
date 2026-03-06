@@ -441,7 +441,7 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
   const [openFolders, setOpenFolders] = useState<Set<string>>(() => {
     const keys = new Set<string>();
     files.forEach((f) => {
-      if (f.ty === "folder") keys.add(folderKey(f));
+      if (f.ty === "folder" && !COLLAPSED_BY_DEFAULT.has(f.n)) keys.add(folderKey(f));
     });
     return keys;
   });
@@ -453,7 +453,8 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
       files.forEach((f) => {
         if (f.ty === "folder") {
           const key = folderKey(f);
-          if (!next.has(key)) next.add(key); // new folders default open
+          // New folders default open unless in collapsed-by-default set
+          if (!next.has(key) && !COLLAPSED_BY_DEFAULT.has(f.n)) next.add(key);
         }
       });
       return next;
@@ -850,5 +851,8 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
 function folderKey(f: ProjectFile): string {
   return f.path ?? `${f.d}:${f.n}`;
 }
+
+/** Folders that should start collapsed (build output directories). */
+const COLLAPSED_BY_DEFAULT = new Set(["impl1", "build", "output", ".coverteda", "node_modules", ".git"]);
 
 export default FileTree;

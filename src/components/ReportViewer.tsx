@@ -888,7 +888,6 @@ export default function ReportViewer({
       badgeColor: drcErrors > 0 ? C.err : undefined,
     },
     { id: "io", l: "I/O", icon: <Pin /> },
-    { id: "timing-analysis", l: "Timing Analysis", icon: <Arrow /> },
   ];
 
   const stageTabs: { id: ReportTab; l: string }[] = [
@@ -898,6 +897,9 @@ export default function ReportViewer({
     { id: "bitstream", l: "Bitstream" },
     { id: "files", l: "Files" },
   ];
+
+  // Show build logs row only when build data exists
+  const hasBuildData = building || REPORTS.timing || REPORTS.utilization || REPORTS.power || REPORTS.drc;
 
   // Determine if export is available for current tab
   const canExport = (rptTab === "timing" && !!REPORTS.timing) ||
@@ -950,33 +952,36 @@ export default function ReportViewer({
         <div style={{ display: "flex", gap: 1 }}>
           {analysisTabs.map((t) => tabBtn(t.id, t.l, rptTab === t.id, t.icon, t.badge, t.badgeColor))}
         </div>
-        {/* Row 2: Stage tabs + export */}
-        <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
-          {stageTabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setRptTab(t.id)}
-              style={{
-                padding: "5px 10px",
-                background: rptTab === t.id ? C.accentDim : "transparent",
-                border: "none", borderRadius: 4,
-                color: rptTab === t.id ? C.t1 : C.t3,
-                fontSize: 9, fontFamily: MONO, fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {t.l}
-            </button>
-          ))}
-          <div style={{ flex: 1 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {exportMsg && (
-              <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
-            )}
-            <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
-            <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>
+        {/* Row 2: Build Logs + export (only when build data exists) */}
+        {hasBuildData && (
+          <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 600, padding: "0 6px", letterSpacing: 0.5 }}>BUILD LOGS</span>
+            {stageTabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setRptTab(t.id)}
+                style={{
+                  padding: "5px 10px",
+                  background: rptTab === t.id ? C.accentDim : "transparent",
+                  border: "none", borderRadius: 4,
+                  color: rptTab === t.id ? C.t1 : C.t3,
+                  fontSize: 9, fontFamily: MONO, fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {t.l}
+              </button>
+            ))}
+            <div style={{ flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              {exportMsg && (
+                <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
+              )}
+              <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
+              <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ═══════════ ISSUES BANNER (cross-report) ═══════════ */}
@@ -1150,6 +1155,11 @@ export default function ReportViewer({
                   ))}
                 </Collapsible>
               )}
+
+              {/* ── Root Cause Analysis (from TimingAnalyzer) ── */}
+              <Collapsible title="Root Cause Analysis" defaultOpen={false}>
+                <TimingAnalyzer timing={REPORTS.timing ?? null} />
+              </Collapsible>
 
               {/* ── Level 4: Raw vendor report ── */}
               <RawLogDrawer projectDir={projectDir} reportType="timing" />
@@ -1455,11 +1465,6 @@ export default function ReportViewer({
             </>
           );
         })()}
-
-        {/* ════════════════ TIMING ANALYSIS ════════════════ */}
-        {rptTab === "timing-analysis" && (
-          <TimingAnalyzer timing={REPORTS.timing ?? null} />
-        )}
 
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (

@@ -568,8 +568,9 @@ function AiAssistantSection() {
 
       <SubHeading>FPGA Design Help</SubHeading>
       <Para>
-        The AI Assistant is a built-in chat interface powered by Claude that understands FPGA design, HDL languages,
-        vendor toolchains, and common design patterns. It can help with:
+        The AI Assistant is a built-in chat interface that understands FPGA design, HDL languages,
+        vendor toolchains, and common design patterns. It supports multiple providers including Anthropic (Claude),
+        OpenAI, Google Gemini, Mistral, xAI, DeepSeek, and local models via Ollama. It can help with:
       </Para>
       <div style={{ paddingLeft: 16, marginBottom: 10 }}>
         <Para>
@@ -583,16 +584,63 @@ function AiAssistantSection() {
 
       <SubHeading>Project Context</SubHeading>
       <Para>
-        The AI assistant automatically receives context about your current project, including the project name,
-        active backend, target device, and top module. This allows it to provide device-specific advice without
-        you having to specify these details in every question.
+        The AI assistant automatically receives rich context about your current project, including the project name,
+        active backend, target device, top module, build status, timing/utilization/power/DRC reports, git state,
+        and the full project file tree. Source file contents (RTL, constraints, and testbenches) are also loaded
+        automatically -- up to 15 files, capped at 2000 characters per file. This allows the assistant to reference
+        your actual code directly without you having to paste anything.
+      </Para>
+
+      <SubHeading>Project AI Notes (.coverteda_ai)</SubHeading>
+      <Para>
+        Click the <strong style={{ color: C.t1 }}>.coverteda_ai</strong> button in the AI Assistant header to create
+        or open a project-level AI notes file. This file is automatically included in the AI context on every message.
+        Use it to record design decisions, known issues, coding style preferences, or any persistent notes you want
+        the AI to always be aware of. The file is created in your project root and can be edited like any other file.
+        A green dot appears on the button when the file is actively loaded into context.
+      </Para>
+
+      <SubHeading>Prompt Library</SubHeading>
+      <Para>
+        Click <strong style={{ color: C.t1 }}>Prompts</strong> in the header to open the prompt library panel on the
+        right side of the chat. The library includes 8 built-in FPGA-specific prompts covering common tasks like
+        HDL review, timing analysis, constraint generation, power optimization, and testbench writing. Click any
+        prompt to populate the input field.
+      </Para>
+      <Para>
+        You can also save your own prompts. Type a prompt in the input field, click{" "}
+        <strong style={{ color: C.t1 }}>Save Current</strong> in the panel, give it a title, and it will be stored
+        in <Code>.coverteda_prompts.json</Code> in your project directory. Saved prompts persist across sessions
+        and can be deleted with the (x) button on hover.
+      </Para>
+
+      <SubHeading>Skills</SubHeading>
+      <Para>
+        Skills are reusable prompt templates with <Code>{"{{placeholder}}"}</Code> substitution. Three built-in skills
+        are included:
+      </Para>
+      <div style={{ paddingLeft: 16, marginBottom: 10 }}>
+        <Para>
+          <strong style={{ color: C.accent }}>Code Review</strong> -- Review a specific file for synthesis issues with
+          a configurable focus area.<br />
+          <strong style={{ color: C.accent }}>Constraint Generator</strong> -- Generate timing constraints for a clock
+          at a specified frequency.<br />
+          <strong style={{ color: C.accent }}>Module Generator</strong> -- Generate an HDL module from a name, language,
+          and description.
+        </Para>
+      </div>
+      <Para>
+        Click a skill in the Prompts panel to open a parameter form. Fill in the placeholders and click{" "}
+        <strong style={{ color: C.t1 }}>Apply</strong> to expand the template into the input field. You can create
+        custom skills with the <strong style={{ color: C.t1 }}>New Skill</strong> button -- define a name, description,
+        and template with <Code>{"{{placeholder}}"}</Code> markers.
       </Para>
 
       <SubHeading>Configuration</SubHeading>
       <Para>
-        Set your Claude API key in <strong style={{ color: C.t1 }}>Settings &gt; AI Assistant</strong>. You can choose
-        between Claude Sonnet 4.6 (faster, default), Claude Opus 4.6 (more capable), and Claude Haiku 4.5 (most economical).
-        Your API key is stored locally and never sent anywhere except the Anthropic API.
+        Click <strong style={{ color: C.t1 }}>Settings</strong> in the AI header to choose your provider and model.
+        API keys are stored securely in the OS keyring (Tauri) or localStorage (browser). Your key is never sent
+        anywhere except the selected provider's API endpoint. For local inference, select Ollama -- no API key needed.
       </Para>
     </div>
   );
@@ -818,9 +866,9 @@ function SettingsSection() {
 
       <SubHeading>AI Assistant Configuration</SubHeading>
       <Para>
-        Set your Claude API key and choose the AI model. Your API key is stored locally in the app configuration
-        file and is never sent to any server except the Anthropic API endpoint. Available models: Sonnet 4.6
-        (default), Opus 4.6, Haiku 4.5.
+        Choose your AI provider (Anthropic, OpenAI, Google Gemini, Mistral, xAI, DeepSeek, or Ollama) and model.
+        API keys are stored securely in the OS keyring and persist across sessions. For local inference with Ollama,
+        no API key is required -- just set the URL if it differs from the default localhost:11434.
       </Para>
 
       <SubHeading>License File</SubHeading>

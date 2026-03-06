@@ -224,6 +224,35 @@ pub struct IoBankPin {
     pub direction: String,
 }
 
+// ── Pad Report (post-build pinout) ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PadReport {
+    pub assigned_pins: Vec<PadPinEntry>,
+    pub vccio_banks: Vec<PadBankVccio>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PadPinEntry {
+    pub port_name: String,
+    pub pin: String,
+    pub bank: String,
+    pub buffer_type: String,
+    pub site: String,
+    pub io_standard: String,
+    pub drive: String,
+    pub direction: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PadBankVccio {
+    pub bank: String,
+    pub vccio: String,
+}
+
 // ── Report File Discovery ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,6 +320,17 @@ pub struct GitStatus {
     pub unstaged: u32,
     pub untracked: u32,
     pub dirty: bool,
+}
+
+// ── Git Log Entry ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLogEntry {
+    pub hash: String,
+    pub message: String,
+    pub author: String,
+    pub time_ago: String,
 }
 
 // ── Backend Info ──

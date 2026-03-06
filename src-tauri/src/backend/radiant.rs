@@ -613,6 +613,48 @@ impl FpgaBackend for RadiantBackend {
         Ok(stdout.contains("VALID"))
     }
 
+    fn parse_pad_report(&self, impl_dir: &Path) -> BackendResult<Option<crate::types::PadReport>> {
+        // Search for *.pad files in impl_dir and impl_dir/impl1/
+        let search_dirs = [
+            impl_dir.to_path_buf(),
+            impl_dir.join("impl1"),
+        ];
+        for dir in &search_dirs {
+            if !dir.exists() { continue; }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("pad") {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Some(report) = crate::parser::pad::parse_radiant_pad(&content) {
+                                return Ok(Some(report));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn list_package_pins(&self, device: &str) -> BackendResult<Vec<super::PackagePin>> {
+        let install = self.install_dir.as_ref().ok_or_else(|| {
+            BackendError::ToolNotFound("Radiant install directory not found".into())
+        })?;
+        let ibis_dirs = super::find_lattice_ibis_dirs(install);
+        super::parse_lattice_ibis_pins(device, &ibis_dirs)
+    }
+
+    fn list_device_pin_data(&self, device: &str) -> BackendResult<super::DevicePinData> {
+        let install = self.install_dir.as_ref().ok_or_else(|| {
+            BackendError::ToolNotFound("Radiant install directory not found".into())
+        })?;
+        let ibis_dirs = super::find_lattice_ibis_dirs(install);
+        let pins = super::parse_lattice_ibis_pins(device, &ibis_dirs)?;
+        let (io_standards, drive_strengths) = super::parse_lattice_ibis_capabilities(device, &ibis_dirs);
+        Ok(super::DevicePinData { pins, io_standards, drive_strengths })
+    }
+
     fn detect_tool(&self) -> bool {
         if self.deferred { return false; }
         self.radiantc_path().is_some()
@@ -1014,5 +1056,51 @@ mod tests {
         } else {
             assert_eq!(result, "/home/user/project/test.rdf");
         }
+    }
+
+    #[test]
+    fn test_classify_lattice_pin_user_io() {
+        let (func, bank, diff) = super::super::classify_lattice_pin("PB4A");
+        assert_eq!(func, "User I/O");
+        assert_eq!(bank, Some("Bank 4 (Bottom)".to_string()));
+        assert_eq!(diff, Some("PB4B".to_string()));
+
+        let (func, bank, diff) = super::super::classify_lattice_pin("PL2B");
+        assert_eq!(func, "User I/O");
+        assert_eq!(bank, Some("Bank 2 (Left)".to_string()));
+        assert_eq!(diff, Some("PL2A".to_string()));
+
+        let (func, bank, diff) = super::super::classify_lattice_pin("PR9A");
+        assert_eq!(func, "User I/O");
+        assert_eq!(bank, Some("Bank 9 (Right)".to_string()));
+        assert_eq!(diff, Some("PR9B".to_string()));
+
+        let (func, bank, diff) = super::super::classify_lattice_pin("PT26A");
+        assert_eq!(func, "User I/O");
+        assert_eq!(bank, Some("Bank 26 (Top)".to_string()));
+        assert_eq!(diff, Some("PT26B".to_string()));
+    }
+
+    #[test]
+    fn test_classify_lattice_pin_power() {
+        let (func, bank, _) = super::super::classify_lattice_pin("VCC");
+        assert!(func.starts_with("Power"));
+        assert!(bank.is_none());
+
+        let (func, _, _) = super::super::classify_lattice_pin("VCCIO3");
+        assert!(func.starts_with("Power"));
+    }
+
+    #[test]
+    fn test_classify_lattice_pin_special() {
+        let (func, _, _) = super::super::classify_lattice_pin("JTAG_EN");
+        assert_eq!(func, "Config");
+
+        let (func, _, diff) = super::super::classify_lattice_pin("DPHY0_DN0");
+        assert_eq!(func, "MIPI D-PHY");
+        assert_eq!(diff, Some("DPHY0_DP0".to_string()));
+
+        let (func, _, _) = super::super::classify_lattice_pin("ADC_DP0");
+        assert_eq!(func, "ADC");
     }
 }

@@ -268,7 +268,7 @@ export function Select({
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", ...sx }}>
       <div
-        onClick={() => setOpen((p) => !p)}
+        onClick={(e) => { e.stopPropagation(); setOpen((p) => !p); }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -316,7 +316,7 @@ export function Select({
               key={o.value}
               onMouseEnter={() => setHIdx(i)}
               onMouseLeave={() => setHIdx(-1)}
-              onClick={() => { onChange(o.value); close(); }}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange(o.value); close(); }}
               style={{
                 padding: pad,
                 fontSize,

@@ -244,10 +244,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [realFiles]);
 
-  // Load ai.md project notes for AI context
+  // Load .coverteda_ai project notes for AI context
   useEffect(() => {
     if (!projectDir || !isTauri) { setAiMdContent(null); return; }
-    readFile(`${projectDir}/ai.md`)
+    readFile(`${projectDir}/.coverteda_ai`)
       .then((fc) => {
         if (!fc.isBinary && fc.content) {
           setAiMdContent(fc.content.length > 3000 ? fc.content.slice(0, 3000) + "\n... (truncated)" : fc.content);
@@ -342,9 +342,9 @@ export default function App() {
       }
     }
 
-    // ai.md project notes
+    // .coverteda_ai project notes
     if (aiMdContent) {
-      lines.push(`\nProject AI notes (ai.md):`);
+      lines.push(`\nProject AI notes (.coverteda_ai):`);
       lines.push(aiMdContent);
     }
 

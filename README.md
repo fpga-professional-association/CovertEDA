@@ -112,7 +112,7 @@ Every build is recorded with its timestamp, status, Fmax, utilization, and linke
 Status bar showing branch, commit, dirty state, and ahead/behind counts. Commit-before-build workflow links each build to a specific source state. Uses libgit2 for fast, reliable git operations.
 
 ### AI Assistant
-Built-in chat interface powered by Claude. Ask about timing violations, HDL patterns, vendor tool errors, or constraint syntax. The assistant automatically knows your project context (backend, device, top module).
+Built-in chat interface supporting multiple AI providers (Anthropic Claude, OpenAI, Google Gemini, Mistral, xAI, DeepSeek, and local Ollama). Includes a prompt library with 8 built-in FPGA prompts, user-saved prompts, and reusable skills with `{{placeholder}}` substitution. The assistant automatically receives full project context including source file contents, reports, and build state. A `.coverteda_ai` project file provides persistent AI notes that are included in every conversation.
 
 ### Command Palette
 Press Ctrl+K to search and execute any action: build, navigate to reports, switch backends, adjust zoom, open settings. Fuzzy matching finds commands as you type.
@@ -143,6 +143,24 @@ Comprehensive built-in user guide covering every feature, with collapsible secti
 
 CovertEDA **orchestrates** these tools via their CLI/TCL interfaces. It generates TCL scripts and spawns vendor processes as subprocesses -- it never evaluates TCL directly, modifies vendor databases, or bundles any vendor IP or binaries.
 
+## Verified Platforms
+
+CovertEDA is a Tauri 2 desktop app. The full desktop build requires WebKitGTK 4.1 (Linux) or WebView2 (Windows). The browser-only frontend (`npm run dev`) works anywhere Node.js runs.
+
+| Platform | Version | Desktop Build | CI Tested | Notes |
+|---|---|---|---|---|
+| **Ubuntu** | 22.04 LTS (Jammy) | Yes | Yes (CI) | Primary CI platform |
+| **Ubuntu** | 24.04 LTS (Noble) | Yes | - | Supported |
+| **Windows** | 10 (1803+) / 11 | Yes | Yes (CI) | Requires VS Build Tools + WebView2 |
+| **WSL 2** | Ubuntu 22.04 | Yes | - | Tested with WSLg (Windows 11); requires X server on Windows 10 |
+| **Fedora** | 37+ | Yes | - | `webkit2gtk4.1-devel` available |
+| **Debian** | 12 (Bookworm) | Yes | - | Supported |
+| **Arch Linux** | Rolling | Yes | - | `webkit2gtk-4.1` in repos |
+| **RHEL / Rocky / Alma** | 8, 9 | No | - | Missing webkit2gtk-4.1; use Flatpak, container build, or browser mode |
+| **RHEL** | 10+ | Likely | - | Expected to have sufficient GLib/WebKitGTK |
+
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed per-platform instructions including RHEL workarounds.
+
 ## Quick Start
 
 ### Prerequisites
@@ -150,24 +168,66 @@ CovertEDA **orchestrates** these tools via their CLI/TCL interfaces. It generate
 - [Rust](https://rustup.rs/) (stable toolchain)
 - [Node.js](https://nodejs.org/) 18+ and npm
 - At least one supported FPGA toolchain installed (or use browser dev mode without one)
-- **Linux only (for Tauri):** `libwebkit2gtk-4.1-dev`, `libsoup-3.0-dev`, `libjavascriptcoregtk-4.1-dev`
+- **Linux (Tauri build):** system WebKitGTK 4.1 dev packages (see below)
+- **Windows (Tauri build):** Visual Studio Build Tools with "Desktop development with C++" and WebView2
 
-### Install & Run
+### Install on Ubuntu (22.04+)
 
 ```bash
-# Clone the repository
+# System dependencies
+sudo apt-get update
+sudo apt-get install -y \
+    libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+    libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+    build-essential curl wget file
+
+# Rust + Node.js
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc && nvm install 20
+
+# Clone, build, run
 git clone https://github.com/fpga-professional-association/CovertEDA.git
 cd CovertEDA
-
-# Install frontend dependencies
 npm install
+npx tauri dev          # Full desktop app
+# OR: npm run dev      # Browser-only (no system deps needed)
+```
 
-# Run frontend in browser (no Tauri, mock data)
-npm run dev
-# Opens http://localhost:1420
+### Install on Windows
 
-# Run full Tauri app (requires system WebKitGTK deps)
-npx tauri dev
+```powershell
+# Prerequisites
+winget install Rustlang.Rustup
+winget install OpenJS.NodeJS.LTS
+winget install Microsoft.VisualStudio.2022.BuildTools
+# During VS Build Tools install, select "Desktop development with C++"
+
+# Clone, build, run
+git clone https://github.com/fpga-professional-association/CovertEDA.git
+cd CovertEDA
+npm install
+npx tauri dev          # Full desktop app
+# OR: npm run dev      # Browser-only
+```
+
+### Install on RHEL / Rocky / AlmaLinux 8/9
+
+RHEL 8/9 cannot build the Tauri desktop app natively (missing webkit2gtk-4.1). Options:
+
+```bash
+# Option 1: Browser-only mode (works on any system with Node.js)
+sudo dnf install -y nodejs npm git
+git clone https://github.com/fpga-professional-association/CovertEDA.git
+cd CovertEDA && npm install && npm run dev
+
+# Option 2: Container build (produces AppImage/RPM on Fedora base)
+podman build -t coverteda-builder -f Containerfile .
+podman run --rm -v $(pwd):/src:Z coverteda-builder bash -c "npm ci && npx tauri build"
+
+# Option 3: Flatpak with GNOME 45+ runtime (bundles required libraries)
+# See docs/INSTALL.md for Flatpak details
 ```
 
 ### Creating a Project
@@ -272,7 +332,9 @@ src-tauri/              # Rust backend
 - [x] IP catalog with configuration and generation
 - [x] Build history with Fmax trends and git linking
 - [x] Git integration (status bar, commit-before-build)
-- [x] AI assistant (Claude)
+- [x] AI assistant (multi-provider: Claude, OpenAI, Gemini, Mistral, xAI, DeepSeek, Ollama)
+- [x] AI prompt library, skills system, and `.coverteda_ai` project notes
+- [x] CI/CD pipeline (GitHub Actions: lint, test, build) with release artifacts
 - [x] Command palette and keyboard shortcuts
 - [x] Theme support (Dark, Light, Colorblind)
 - [x] Lattice Radiant, Diamond, Intel Quartus, AMD Vivado, Achronix ACE, Microchip Libero, OSS CAD Suite backends

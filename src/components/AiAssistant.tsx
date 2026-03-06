@@ -253,7 +253,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
   const [skillParams, setSkillParams] = useState<Record<string, string>>({});
   const [skillSystemAddition, setSkillSystemAddition] = useState<string | null>(null);
 
-  // ai.md state
+  // .coverteda_ai state
   const [aiMdExists, setAiMdExists] = useState(false);
   const [aiMdToast, setAiMdToast] = useState(false);
 
@@ -305,10 +305,10 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
       .catch(() => { /* file doesn't exist yet */ });
   }, [projectDir]);
 
-  // Check if ai.md exists
+  // Check if .coverteda_ai exists
   useEffect(() => {
     if (!projectDir) return;
-    readFile(`${projectDir}/ai.md`)
+    readFile(`${projectDir}/.coverteda_ai`)
       .then((fc) => setAiMdExists(!fc.isBinary && !!fc.content))
       .catch(() => setAiMdExists(false));
   }, [projectDir]);
@@ -544,14 +544,14 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
 
   const handleAiMd = useCallback(async () => {
     if (!projectDir) return;
-    const filePath = `${projectDir}/ai.md`;
+    const filePath = `${projectDir}/.coverteda_ai`;
     if (!aiMdExists) {
       await writeTextFile(filePath, AI_MD_TEMPLATE).catch(() => {});
       setAiMdExists(true);
       setAiMdToast(true);
       setTimeout(() => setAiMdToast(false), 2000);
     }
-    if (onOpenFile) onOpenFile("ai.md", filePath);
+    if (onOpenFile) onOpenFile(".coverteda_ai", filePath);
   }, [projectDir, aiMdExists, onOpenFile]);
 
   const panelP: React.CSSProperties = {
@@ -595,7 +595,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
     padding: "6px 8px 4px",
   };
 
-  const hasAiMdInContext = !!projectContext?.includes("Project AI notes (ai.md):");
+  const hasAiMdInContext = !!projectContext?.includes("Project AI notes (.coverteda_ai):");
 
   // Setup screen
   if (showSetup || (provider.keyRequired && !apiKey)) {
@@ -702,22 +702,29 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
             )}
           </div>
 
-          <Btn
-            primary
-            small
-            onClick={() => {
-              if (provider.keyRequired) {
-                if (keyDraft.trim()) saveKey(keyDraft.trim());
-              } else {
-                setApiKey("__local__");
-                setShowSetup(false);
-                persistConfig({ ai_provider: providerId, ai_model: ollamaModel });
-              }
-            }}
-            disabled={provider.keyRequired && !keyDraft.trim()}
-          >
-            Connect
-          </Btn>
+          <div style={{ display: "flex", gap: 6 }}>
+            <Btn
+              primary
+              small
+              onClick={() => {
+                if (provider.keyRequired) {
+                  if (keyDraft.trim()) saveKey(keyDraft.trim());
+                } else {
+                  setApiKey("__local__");
+                  setShowSetup(false);
+                  persistConfig({ ai_provider: providerId, ai_model: ollamaModel });
+                }
+              }}
+              disabled={provider.keyRequired && !keyDraft.trim()}
+            >
+              Connect
+            </Btn>
+            {apiKey && (
+              <Btn small onClick={() => setShowSetup(false)}>
+                Close
+              </Btn>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -758,7 +765,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
         </div>
         {projectDir && (
           <div onClick={handleAiMd} style={headerLinkStyle}>
-            ai.md
+            .coverteda_ai
             {hasAiMdInContext && (
               <span style={{
                 position: "absolute",

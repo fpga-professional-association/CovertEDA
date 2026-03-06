@@ -427,6 +427,75 @@ close_project
         Ok(stdout.contains("VALID"))
     }
 
+    fn list_package_pins(&self, device: &str) -> BackendResult<Vec<super::PackagePin>> {
+        let vivado_bin = self.install_dir.as_ref()
+            .and_then(|d| {
+                let bin = d.join("bin").join("vivado");
+                if bin.exists() { Some(bin) } else {
+                    let bat = d.join("bin").join("vivado.bat");
+                    if bat.exists() { Some(bat) } else { None }
+                }
+            })
+            .or_else(|| which::which("vivado").ok())
+            .ok_or_else(|| BackendError::ToolNotFound("vivado not found".into()))?;
+
+        let tcl = format!(
+            r#"set part [get_parts -quiet {device}]
+if {{[llength $part] == 0}} {{ puts "ERROR: Part not found"; exit 1 }}
+set pkg_pins [get_package_pins -of_objects $part]
+foreach p $pkg_pins {{
+  set bank [get_property BANK $p]
+  set func [get_property PIN_FUNC $p]
+  set diff ""
+  catch {{ set diff [get_property DIFF_PAIR $p] }}
+  puts "$p|$bank|$func|$diff"
+}}
+exit
+"#,
+            device = device,
+        );
+
+        let tmp_path = std::env::temp_dir().join(".coverteda_pins.tcl");
+        std::fs::write(&tmp_path, &tcl).map_err(|e| BackendError::IoError(e))?;
+
+        let output = std::process::Command::new(&vivado_bin)
+            .args(["-mode", "batch", "-source"])
+            .arg(&tmp_path)
+            .output()
+            .map_err(|e| BackendError::IoError(e))?;
+
+        let _ = std::fs::remove_file(&tmp_path);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut pins = Vec::new();
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 3 {
+                pins.push(super::PackagePin {
+                    pin: parts[0].trim().to_string(),
+                    bank: if parts[1].trim().is_empty() { None } else { Some(parts[1].trim().to_string()) },
+                    function: parts[2].trim().to_string(),
+                    diff_pair: parts.get(3).and_then(|s| {
+                        let s = s.trim();
+                        if s.is_empty() { None } else { Some(s.to_string()) }
+                    }),
+                    r_ohms: None,
+                    l_nh: None,
+                    c_pf: None,
+                });
+            }
+        }
+        if pins.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BackendError::ConfigError(format!(
+                "No pins returned for device '{}'. {}",
+                device,
+                if !stderr.is_empty() { stderr.to_string() } else { "Check device part number.".to_string() }
+            )));
+        }
+        Ok(pins)
+    }
+
     fn parse_timing_report(&self, impl_dir: &Path) -> BackendResult<TimingReport> {
         let rpt = impl_dir.join("timing_summary.rpt");
         if !rpt.exists() {

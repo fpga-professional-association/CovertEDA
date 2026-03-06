@@ -114,7 +114,8 @@ export default memo(function Console({
         borderRadius: 7,
         border: `1px solid ${C.b1}`,
         overflow: "hidden",
-        height: "calc(100vh - 120px)",
+        height: "100%",
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
       }}

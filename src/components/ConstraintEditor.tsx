@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Badge, Select } from "./shared";
 import { Pin, Clock } from "./Icons";
-import { readFile, writeTextFile, pickSaveFile } from "../hooks/useTauri";
+import { readFile, writeTextFile, pickSaveFile, listPackagePins, getPadReport } from "../hooks/useTauri";
+import type { PackagePin, DevicePinData, PadReport, PadPinEntry } from "../hooks/useTauri";
 
 export interface PinAssignment {
   net: string;
@@ -86,12 +87,17 @@ const PULL_OPTIONS = ["None", "Up", "Down", "Bus Hold"];
 const SLEW_OPTIONS = ["Slow", "Fast"];
 const BANK_NUMBERS = ["0", "1", "2", "3", "4", "5", "6", "7", "8"];
 
-type ConstraintTab = "pins" | "timing" | "generated";
+type ConstraintTab = "pins" | "timing" | "generated" | "pinout";
+
+type PinWarning = { type: "error" | "warn"; msg: string };
+
+type PinoutFilter = "all" | "user_io" | "assigned" | "unassigned" | "errors";
 
 interface ConstraintEditorProps {
   backendId: string;
   device: string;
   constraintFile?: string;
+  projectDir?: string;
 }
 
 function cellInput(
@@ -633,7 +639,7 @@ function quickHash(s: string): number {
 const PIN_COLS = ["net", "pin", "dir", "ioStandard", "drive", "pull", "slew", "openDrain", "schmitt", "bank", "diffPair"] as const;
 type CellAddr = { row: number; col: number };
 
-export default function ConstraintEditor({ backendId, device, constraintFile }: ConstraintEditorProps) {
+export default function ConstraintEditor({ backendId, device, constraintFile, projectDir }: ConstraintEditorProps) {
   const { C, MONO } = useTheme();
   const [tab, setTab] = useState<ConstraintTab>("pins");
   const [pins, setPins] = useState<PinAssignment[]>([]);
@@ -655,6 +661,29 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   });
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // ── Bulk add state ──
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkPreview, setBulkPreview] = useState<PinAssignment[]>([]);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // ── Browse pins state ──
+  const [showBrowsePins, setShowBrowsePins] = useState(false);
+  const [packagePins, setPackagePins] = useState<PackagePin[]>([]);
+  const [pinsLoading, setPinsLoading] = useState(false);
+  const [pinsError, setPinsError] = useState<string | null>(null);
+  const [pinSearch, setPinSearch] = useState("");
+  const [pinFilter, setPinFilter] = useState<"all" | "user_io">("user_io");
+  const [selectedPkgPins, setSelectedPkgPins] = useState<Set<string>>(new Set());
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [deviceIoStandards, setDeviceIoStandards] = useState<string[] | null>(null);
+  const [deviceDriveStrengths, setDeviceDriveStrengths] = useState<string[] | null>(null);
+  const pinsCacheRef = useRef<Record<string, DevicePinData>>({});
+
+  // ── Pinout tab state ──
+  const [pinoutFilter, setPinoutFilter] = useState<PinoutFilter>("all");
+  const [buildPinout, setBuildPinout] = useState<PadReport | null>(null);
+
   // ── File save/load state ──
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -664,8 +693,8 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const loadedOnce = useRef(false);
 
-  const standards = IO_STANDARDS[backendId] ?? IO_STANDARDS.radiant;
-  const drives = DRIVE_STRENGTHS[backendId] ?? DRIVE_STRENGTHS.radiant;
+  const standards = (deviceIoStandards && deviceIoStandards.length > 0) ? deviceIoStandards : (IO_STANDARDS[backendId] ?? IO_STANDARDS.radiant);
+  const drives = (deviceDriveStrengths && deviceDriveStrengths.length > 0) ? deviceDriveStrengths : (DRIVE_STRENGTHS[backendId] ?? DRIVE_STRENGTHS.radiant);
 
   // ── Load constraint file on mount or when constraintFile changes ──
   useEffect(() => {
@@ -750,6 +779,87 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
 
   const netSuggestions = useMemo(() => generateNetSuggestions(pins.map((p) => p.net)), [pins]);
 
+  // ── Pin↔Signal mapping ──
+  const pinToSignalMap = useMemo(() => {
+    const map = new Map<string, PinAssignment>();
+    for (const p of pins) { if (p.pin) map.set(p.pin, p); }
+    return map;
+  }, [pins]);
+
+  // ── Pin validation ──
+  const pinValidation = useMemo(() => {
+    const validPinNames = new Set(packagePins.map((p) => p.pin));
+    const hasDevicePins = packagePins.length > 0;
+    const result = new Map<number, PinWarning[]>();
+    const pinCounts = new Map<string, number[]>();
+    const netCounts = new Map<string, number[]>();
+
+    // Count occurrences of each pin and net
+    for (let i = 0; i < pins.length; i++) {
+      if (pins[i].pin) {
+        const arr = pinCounts.get(pins[i].pin) ?? [];
+        arr.push(i);
+        pinCounts.set(pins[i].pin, arr);
+      }
+      if (pins[i].net) {
+        const arr = netCounts.get(pins[i].net) ?? [];
+        arr.push(i);
+        netCounts.set(pins[i].net, arr);
+      }
+    }
+
+    for (let i = 0; i < pins.length; i++) {
+      const warnings: PinWarning[] = [];
+      const p = pins[i];
+
+      // Empty pin or net
+      if (!p.pin) warnings.push({ type: "warn", msg: "No pin assigned" });
+      if (!p.net) warnings.push({ type: "warn", msg: "No net name" });
+
+      // Pin not on device
+      if (hasDevicePins && p.pin && !validPinNames.has(p.pin)) {
+        warnings.push({ type: "error", msg: `Pin ${p.pin} not found on device` });
+      }
+
+      // Function mismatch (Power/GND/Config pin)
+      if (hasDevicePins && p.pin) {
+        const devPin = packagePins.find((dp) => dp.pin === p.pin);
+        if (devPin) {
+          const fn = devPin.function.toLowerCase();
+          if (fn.includes("gnd") || fn.includes("vcc") || fn.includes("power")) {
+            warnings.push({ type: "error", msg: `Pin ${p.pin} is a power/ground pin` });
+          } else if (fn.includes("config") || fn.includes("reserved")) {
+            warnings.push({ type: "warn", msg: `Pin ${p.pin} is a configuration pin` });
+          }
+        }
+      }
+
+      // Duplicate pin
+      if (p.pin && (pinCounts.get(p.pin)?.length ?? 0) > 1) {
+        warnings.push({ type: "error", msg: `Pin ${p.pin} assigned to multiple nets` });
+      }
+
+      // Duplicate net
+      if (p.net && (netCounts.get(p.net)?.length ?? 0) > 1) {
+        warnings.push({ type: "error", msg: `Net "${p.net}" appears on multiple rows` });
+      }
+
+      if (warnings.length > 0) result.set(i, warnings);
+    }
+    return result;
+  }, [pins, packagePins]);
+
+  const validationSummary = useMemo(() => {
+    let errors = 0, warns = 0;
+    for (const ws of pinValidation.values()) {
+      for (const w of ws) {
+        if (w.type === "error") errors++;
+        else warns++;
+      }
+    }
+    return { errors, warns };
+  }, [pinValidation]);
+
   const updatePin = useCallback((idx: number, field: keyof PinAssignment, value: string | boolean) => {
     setPins((prev) => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
     setDirty(true);
@@ -781,6 +891,98 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
     // Keep form open for rapid multi-pin entry — just clear net+pin
     setDirty(true);
   }, [newPin, pins]);
+
+  // ── Bulk add parsing ──
+  const parseBulkText = useCallback((text: string) => {
+    const lines = text.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#") && !l.trim().startsWith("//"));
+    const parsed: PinAssignment[] = [];
+    const errors: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      // Accept: "net pin [io_standard]" separated by space/tab/comma
+      const parts = line.split(/[\s,]+/).filter(Boolean);
+      if (parts.length < 2) {
+        errors.push(`Line ${i + 1}: need at least net and pin (got "${line}")`);
+        continue;
+      }
+      const net = parts[0];
+      const pin = parts[1];
+      const ioStd = parts[2] || newPin.ioStandard;
+      if (pins.some((p) => p.net === net) || parsed.some((p) => p.net === net)) {
+        errors.push(`Line ${i + 1}: duplicate net "${net}"`);
+        continue;
+      }
+      parsed.push({
+        net, pin, dir: "input", ioStandard: ioStd,
+        pull: "None", slew: "Slow", locked: false,
+      });
+    }
+    setBulkPreview(parsed);
+    setBulkError(errors.length > 0 ? errors.join("; ") : null);
+  }, [pins, newPin.ioStandard]);
+
+  const applyBulkAdd = useCallback(() => {
+    if (bulkPreview.length === 0) return;
+    setPins((prev) => [...prev, ...bulkPreview]);
+    setDirty(true);
+    setShowBulkAdd(false);
+    setBulkText("");
+    setBulkPreview([]);
+    setBulkError(null);
+  }, [bulkPreview]);
+
+  // ── Browse pins ──
+  const fetchPackagePins = useCallback(async () => {
+    if (!device) { setPinsError("No device selected"); return; }
+    // Check cache first
+    const cacheKey = `${backendId}:${device}`;
+    if (pinsCacheRef.current[cacheKey]) {
+      const cached = pinsCacheRef.current[cacheKey];
+      setPackagePins(cached.pins);
+      if (cached.ioStandards.length > 0) setDeviceIoStandards(cached.ioStandards);
+      if (cached.driveStrengths.length > 0) setDeviceDriveStrengths(cached.driveStrengths);
+      return;
+    }
+    setPinsLoading(true);
+    setPinsError(null);
+    try {
+      const result = await listPackagePins(backendId, device);
+      pinsCacheRef.current[cacheKey] = result;
+      setPackagePins(result.pins);
+      if (result.ioStandards.length > 0) setDeviceIoStandards(result.ioStandards);
+      if (result.driveStrengths.length > 0) setDeviceDriveStrengths(result.driveStrengths);
+    } catch (e) {
+      setPinsError(`${e}`);
+      setPackagePins([]);
+    } finally {
+      setPinsLoading(false);
+    }
+  }, [backendId, device]);
+
+  // ── Eager load pin capabilities for Lattice backends ──
+  useEffect(() => {
+    if (device && (backendId === "radiant" || backendId === "diamond")) {
+      fetchPackagePins();
+    }
+  }, [device, backendId, fetchPackagePins]);
+
+  const addSelectedPkgPins = useCallback(() => {
+    const toAdd: PinAssignment[] = [];
+    for (const pinName of selectedPkgPins) {
+      if (!pins.some((p) => p.pin === pinName) && !toAdd.some((p) => p.pin === pinName)) {
+        toAdd.push({
+          net: "", pin: pinName, dir: "input", ioStandard: newPin.ioStandard,
+          pull: "None", slew: "Slow", locked: false,
+        });
+      }
+    }
+    if (toAdd.length > 0) {
+      setPins((prev) => [...prev, ...toAdd]);
+      setDirty(true);
+    }
+    setSelectedPkgPins(new Set());
+    setShowBrowsePins(false);
+  }, [selectedPkgPins, pins, newPin.ioStandard]);
 
   const updateTiming = useCallback((idx: number, field: keyof TimingConstraint, value: string | boolean) => {
     setTiming((prev) => prev.map((t, i) => i === idx ? { ...t, [field]: value } : t));
@@ -821,8 +1023,12 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
       setSelectedRows(new Set());
     }
     setSelected({ row: rowIdx, col: colIdx });
-    setEditingCell(null);
-  }, [selectionAnchor]);
+    // Don't clear editingCell if clicking inside the currently-editing cell
+    // (prevents killing Select dropdowns before they can open)
+    if (!(editingCell && editingCell.row === rowIdx && editingCell.col === colIdx)) {
+      setEditingCell(null);
+    }
+  }, [selectionAnchor, editingCell]);
 
   // ── Grid keyboard handler ──
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -1102,16 +1308,16 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
   }, [pins, timing]);
 
   const panelP: React.CSSProperties = {
-    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
+    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "visible", padding: 14,
   };
 
   const cellStyle: React.CSSProperties = {
-    fontSize: 8, fontFamily: MONO, padding: "3px 4px", whiteSpace: "nowrap",
+    fontSize: 8, fontFamily: MONO, padding: "2px 3px", whiteSpace: "nowrap",
   };
 
   const thStyle: React.CSSProperties = {
     ...cellStyle, textAlign: "left", fontWeight: 700, color: C.t3,
-    padding: "4px 4px 6px", position: "sticky" as const, top: 0,
+    padding: "3px 3px 4px", position: "sticky" as const, top: 0,
     background: C.s1, zIndex: 1, borderBottom: `2px solid ${C.b1}`,
   };
 
@@ -1195,10 +1401,13 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
         <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>{device}</span>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 1, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {(["pins", "timing", "generated"] as ConstraintTab[]).map((t) => (
+          {(["pins", "timing", "pinout", "generated"] as ConstraintTab[]).map((t) => (
             <div
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                setTab(t);
+                if (t === "pinout" && packagePins.length === 0) fetchPackagePins();
+              }}
               style={{
                 textAlign: "center", padding: "5px 10px", borderRadius: 4,
                 fontSize: 9, fontFamily: MONO, fontWeight: 600, cursor: "pointer",
@@ -1209,6 +1418,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
             >
               {t === "pins" && <><Pin /> Pins ({pins.length})</>}
               {t === "timing" && <><Clock /> Timing ({timing.length})</>}
+              {t === "pinout" && <>Pinout</>}
               {t === "generated" && <>{constraintFormat}</>}
             </div>
           ))}
@@ -1235,7 +1445,37 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
               }}
             />
             <Btn small onClick={() => setShowAdd(true)}>+ Add Pin</Btn>
+            <Btn small onClick={() => { setShowBulkAdd(true); setBulkText(""); setBulkPreview([]); setBulkError(null); }}>+ Bulk Add</Btn>
+            <Btn small onClick={() => { setShowBrowsePins(true); fetchPackagePins(); }}>Browse Pins</Btn>
+            {selectedRows.size > 1 && (
+              <Btn small onClick={() => {
+                setPins((prev) => prev.filter((_, i) => !selectedRows.has(i)));
+                setSelectedRows(new Set());
+                setSelected(null);
+                setDirty(true);
+              }}>Delete {selectedRows.size} Selected</Btn>
+            )}
           </div>
+
+          {/* Validation summary bar */}
+          {(validationSummary.errors > 0 || validationSummary.warns > 0) && (
+            <div style={{
+              display: "flex", gap: 8, alignItems: "center", padding: "4px 8px",
+              marginBottom: 6, borderRadius: 4,
+              background: validationSummary.errors > 0 ? `${C.err}08` : `${C.warn}08`,
+              border: `1px solid ${validationSummary.errors > 0 ? C.err : C.warn}20`,
+            }}>
+              {validationSummary.errors > 0 && (
+                <Badge color={C.err}>{validationSummary.errors} error{validationSummary.errors !== 1 ? "s" : ""}</Badge>
+              )}
+              {validationSummary.warns > 0 && (
+                <Badge color={C.warn}>{validationSummary.warns} warning{validationSummary.warns !== 1 ? "s" : ""}</Badge>
+              )}
+              <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
+                {validationSummary.errors > 0 ? "Fix errors before building" : "Review warnings"}
+              </span>
+            </div>
+          )}
 
           {/* Add Pin Form */}
           {showAdd && (
@@ -1277,6 +1517,210 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
             </div>
           )}
 
+          {/* Bulk Add Dialog */}
+          {showBulkAdd && (
+            <div style={{
+              padding: "12px 14px", marginBottom: 8,
+              background: C.bg, borderRadius: 6, border: `1px solid ${C.accent}30`,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
+                Bulk Add Pins
+              </div>
+              <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 6 }}>
+                Paste lines: <code>net pin [io_standard]</code> (space/tab/comma separated)
+              </div>
+              <textarea
+                value={bulkText}
+                onChange={(e) => { setBulkText(e.target.value); parseBulkText(e.target.value); }}
+                placeholder={"led[0] A4 LVCMOS33\nled[1] B4 LVCMOS33\nclk C1\nrst_n D2"}
+                rows={6}
+                style={{
+                  width: "100%", padding: "6px 8px", fontSize: 9, fontFamily: MONO,
+                  background: C.s1, color: C.t1, border: `1px solid ${C.b1}`,
+                  borderRadius: 4, resize: "vertical", outline: "none",
+                }}
+              />
+              {bulkError && (
+                <div style={{ fontSize: 8, fontFamily: MONO, color: C.warn, marginTop: 4 }}>
+                  {bulkError}
+                </div>
+              )}
+              {bulkPreview.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 8, fontFamily: MONO, color: C.ok, marginBottom: 4 }}>
+                    {bulkPreview.length} pin{bulkPreview.length !== 1 ? "s" : ""} to add:
+                  </div>
+                  <div style={{
+                    maxHeight: 120, overflowY: "auto", fontSize: 8, fontFamily: MONO,
+                    background: C.s1, borderRadius: 3, padding: "4px 8px",
+                  }}>
+                    {bulkPreview.map((p, i) => (
+                      <div key={i} style={{ color: C.t2, padding: "1px 0" }}>
+                        {p.net} → {p.pin} ({p.ioStandard})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <Btn small primary onClick={applyBulkAdd} disabled={bulkPreview.length === 0}>
+                  Add {bulkPreview.length} Pin{bulkPreview.length !== 1 ? "s" : ""}
+                </Btn>
+                <Btn small onClick={() => setShowBulkAdd(false)}>Cancel</Btn>
+              </div>
+            </div>
+          )}
+
+          {/* Browse Package Pins Dialog */}
+          {showBrowsePins && (
+            <div style={{
+              padding: "12px 14px", marginBottom: 8,
+              background: C.bg, borderRadius: 6, border: `1px solid ${C.accent}30`,
+              maxHeight: 350, display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.t1 }}>
+                  Device Pinout — {device || "no device"}
+                </div>
+                <div style={{ flex: 1 }} />
+                <input
+                  type="text" value={pinSearch}
+                  onChange={(e) => setPinSearch(e.target.value)}
+                  placeholder="Search pins..."
+                  style={{
+                    padding: "3px 8px", fontSize: 8, fontFamily: MONO,
+                    background: C.s1, color: C.t1, border: `1px solid ${C.b1}`,
+                    borderRadius: 3, outline: "none", width: 120,
+                  }}
+                />
+                <Select compact value={pinFilter}
+                  onChange={(v) => setPinFilter(v as "all" | "user_io")}
+                  options={[
+                    { value: "user_io", label: "User I/O" },
+                    { value: "all", label: "All Pins" },
+                  ]}
+                />
+                <Btn small onClick={() => setShowAdvanced((v) => !v)}
+                  style={{ fontSize: 7, opacity: showAdvanced ? 1 : 0.6 }}>
+                  {showAdvanced ? "▾ Advanced" : "▸ Advanced"}
+                </Btn>
+              </div>
+              {pinsLoading && (
+                <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, padding: 20, textAlign: "center" }}>
+                  Querying vendor tool for device pinout...
+                </div>
+              )}
+              {pinsError && (
+                <div style={{ fontSize: 9, fontFamily: MONO, color: C.warn, padding: "8px 0" }}>
+                  {pinsError.includes("not supported") || pinsError.includes("not found")
+                    ? "Install vendor tool to browse package pinout. Bulk paste always works."
+                    : pinsError
+                  }
+                </div>
+              )}
+              {!pinsLoading && !pinsError && packagePins.length > 0 && (() => {
+                const q = pinSearch.toLowerCase();
+                const filtered = packagePins.filter((p) => {
+                  if (pinFilter === "user_io" && !p.function.toLowerCase().includes("user") && !p.function.toLowerCase().includes("i/o") && p.function !== "") {
+                    // Keep pins with empty function (likely user I/O)
+                    if (p.function.toLowerCase().includes("gnd") || p.function.toLowerCase().includes("vcc") || p.function.toLowerCase().includes("config")) return false;
+                  }
+                  if (q) {
+                    const signalMatch = pinToSignalMap.get(p.pin)?.net.toLowerCase().includes(q) ?? false;
+                    return p.pin.toLowerCase().includes(q) ||
+                      (p.bank ?? "").toLowerCase().includes(q) ||
+                      p.function.toLowerCase().includes(q) ||
+                      signalMatch;
+                  }
+                  return true;
+                });
+                return (
+                  <>
+                    <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>
+                      {filtered.length} of {packagePins.length} pins shown
+                      {selectedPkgPins.size > 0 && <> — <span style={{ color: C.accent }}>{selectedPkgPins.size} selected</span></>}
+                    </div>
+                    <div style={{ flex: 1, overflowY: "auto", borderRadius: 3, border: `1px solid ${C.b1}` }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: MONO }}>
+                        <thead>
+                          <tr style={{ position: "sticky", top: 0, background: C.s1, zIndex: 1 }}>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}`, width: 20 }} title="Select pin to add"></th>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Package pin name (e.g. A1, N9)">Pin</th>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Assigned HDL signal name">Signal</th>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="I/O bank assignment">Bank</th>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Pin function: User I/O, Power, Config, SERDES, etc.">Function</th>
+                            <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Differential pair partner pin">Diff Pair</th>
+                            {showAdvanced && <>
+                              <th style={{ padding: "3px 6px", textAlign: "right", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Package resistance (milliohms) — from IBIS .pkg file">R (m&#937;)</th>
+                              <th style={{ padding: "3px 6px", textAlign: "right", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Package inductance (nanohenries) — from IBIS .pkg file">L (nH)</th>
+                              <th style={{ padding: "3px 6px", textAlign: "right", color: C.t3, borderBottom: `1px solid ${C.b1}` }} title="Package capacitance (picofarads) — from IBIS .pkg file">C (pF)</th>
+                            </>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.slice(0, 200).map((p) => {
+                            const sel = selectedPkgPins.has(p.pin);
+                            const assignedSignal = pinToSignalMap.get(p.pin);
+                            const alreadyUsed = !!assignedSignal;
+                            return (
+                              <tr
+                                key={p.pin}
+                                onClick={() => {
+                                  if (alreadyUsed) return;
+                                  setSelectedPkgPins((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(p.pin)) next.delete(p.pin); else next.add(p.pin);
+                                    return next;
+                                  });
+                                }}
+                                style={{
+                                  cursor: alreadyUsed ? "default" : "pointer",
+                                  background: sel ? `${C.accent}10` : "transparent",
+                                  borderLeft: alreadyUsed ? `3px solid ${C.ok}` : "3px solid transparent",
+                                  borderBottom: `1px solid ${C.b1}10`,
+                                }}
+                              >
+                                <td style={{ padding: "2px 6px" }}>
+                                  <input type="checkbox" checked={sel} disabled={alreadyUsed}
+                                    onChange={() => {}} style={{ accentColor: C.accent, pointerEvents: "none" }} />
+                                </td>
+                                <td style={{ padding: "2px 6px", color: C.cyan, fontWeight: 600 }}>{p.pin}</td>
+                                <td style={{ padding: "2px 6px", color: alreadyUsed ? C.ok : C.t3, fontWeight: alreadyUsed ? 600 : 400 }}>
+                                  {assignedSignal?.net || "-"}
+                                </td>
+                                <td style={{ padding: "2px 6px", color: C.t2 }}>{p.bank ?? "-"}</td>
+                                <td style={{ padding: "2px 6px", color: C.t3 }}>{p.function || "User I/O"}</td>
+                                <td style={{ padding: "2px 6px", color: C.t3 }}>{p.diffPair ?? "-"}</td>
+                                {showAdvanced && <>
+                                  <td style={{ padding: "2px 6px", color: C.t3, textAlign: "right" }}>{p.rOhms != null ? (p.rOhms * 1000).toFixed(1) : "-"}</td>
+                                  <td style={{ padding: "2px 6px", color: C.t3, textAlign: "right" }}>{p.lNh != null ? p.lNh.toFixed(2) : "-"}</td>
+                                  <td style={{ padding: "2px 6px", color: C.t3, textAlign: "right" }}>{p.cPf != null ? p.cPf.toFixed(2) : "-"}</td>
+                                </>}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                );
+              })()}
+              <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+                <Btn small primary onClick={addSelectedPkgPins} disabled={selectedPkgPins.size === 0}>
+                  Add {selectedPkgPins.size} Pin{selectedPkgPins.size !== 1 ? "s" : ""}
+                </Btn>
+                <Btn small onClick={() => { setShowBrowsePins(false); setSelectedPkgPins(new Set()); }}>Close</Btn>
+                <div style={{ flex: 1 }} />
+                <span
+                  onClick={() => { setShowBrowsePins(false); setTab("pinout"); }}
+                  style={{ fontSize: 7, fontFamily: MONO, color: C.accent, cursor: "pointer" }}
+                >
+                  Open in Pinout tab {"\u2192"}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
           {pins.length === 0 && !showAdd && (
             <div style={{
@@ -1295,28 +1739,31 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
           {pins.length > 0 && (
             <div ref={gridRef} tabIndex={0} onKeyDown={handleKeyDown}
               style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 320px)", border: `1px solid ${C.b1}`, borderRadius: 4, outline: "none" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+              <table style={{ borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
                   <tr>
-                    <th style={{ ...thStyle, width: 20 }}>{"\u2713"}</th>
-                    <th style={{ ...thStyle, minWidth: 90 }}>Net Name</th>
-                    <th style={{ ...thStyle, width: 50 }}>Pin</th>
-                    <th style={{ ...thStyle, width: 55 }}>Dir</th>
-                    <th style={{ ...thStyle, minWidth: 100 }}>I/O Standard</th>
-                    <th style={{ ...thStyle, width: 55 }}>Drive</th>
-                    <th style={{ ...thStyle, width: 55 }}>Pull</th>
-                    <th style={{ ...thStyle, width: 45 }}>Slew</th>
-                    <th style={{ ...thStyle, width: 30 }} title="Open Drain">OD</th>
-                    <th style={{ ...thStyle, width: 30 }} title="Schmitt Trigger">ST</th>
-                    <th style={{ ...thStyle, width: 35 }}>Bank</th>
-                    <th style={{ ...thStyle, minWidth: 60 }}>Diff Pair</th>
-                    <th style={{ ...thStyle, width: 40 }}></th>
+                    <th style={{ ...thStyle, width: 18 }} title="Lock pin assignment">{"\u2713"}</th>
+                    <th style={{ ...thStyle, minWidth: 70 }} title="HDL net / signal name">Net</th>
+                    <th style={{ ...thStyle, width: 40 }} title="Package pin (e.g. A1, B3)">Pin</th>
+                    <th style={{ ...thStyle, width: 32 }} title="Direction: IN, OUT, or IO (bidirectional)">Dir</th>
+                    <th style={{ ...thStyle, minWidth: 75 }} title="I/O voltage standard (e.g. LVCMOS33, LVDS)">I/O Std</th>
+                    <th style={{ ...thStyle, width: 38 }} title="Drive strength (mA)">Drive</th>
+                    <th style={{ ...thStyle, width: 38 }} title="Pull-up / pull-down resistor">Pull</th>
+                    <th style={{ ...thStyle, width: 32 }} title="Slew rate: Slow or Fast">Slew</th>
+                    <th style={{ ...thStyle, width: 22 }} title="Open Drain output">OD</th>
+                    <th style={{ ...thStyle, width: 22 }} title="Schmitt Trigger input">ST</th>
+                    <th style={{ ...thStyle, width: 28 }} title="I/O bank number">Bank</th>
+                    <th style={{ ...thStyle, minWidth: 45 }} title="Differential pair partner pin">Diff</th>
+                    <th style={{ ...thStyle, width: 22 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((p, i) => {
                     const realIdx = pins.indexOf(p);
                     const rowSel = selectedRows.has(i) || selected?.row === i;
+                    const rowWarnings = pinValidation.get(realIdx);
+                    const hasError = rowWarnings?.some((w) => w.type === "error");
+                    const hasWarn = rowWarnings && !hasError;
                     return (
                       <tr
                         key={i}
@@ -1325,6 +1772,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                           cursor: "pointer",
                           background: selectedRows.has(i) ? `${C.accent}10` :
                             i % 2 === 0 ? "transparent" : `${C.bg}50`,
+                          borderLeft: hasError ? `3px solid ${C.err}` : hasWarn ? `3px solid ${C.warn}` : "3px solid transparent",
                         }}
                       >
                         {/* Lock */}
@@ -1459,14 +1907,22 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
                         </td>
                         {/* Actions */}
                         <td style={cellStyle}>
-                          {rowSel && (
+                          {rowSel && selectedRows.size <= 1 ? (
                             <span
                               onClick={(e) => { e.stopPropagation(); removePin(realIdx); }}
-                              style={{ color: C.err, cursor: "pointer", fontSize: 7, fontWeight: 600 }}
+                              title="Remove pin assignment (Del)"
+                              style={{ color: C.t3, cursor: "pointer", fontSize: 10, fontWeight: 600, lineHeight: 1 }}
                             >
-                              {"\u2715"}
+                              {"\u2212"}
                             </span>
-                          )}
+                          ) : rowWarnings && rowWarnings.length > 0 && !rowSel ? (
+                            <span
+                              title={rowWarnings.map((w) => w.msg).join("\n")}
+                              style={{ fontSize: 9, cursor: "default", color: hasError ? C.err : C.warn }}
+                            >
+                              {hasError ? "\u26D4" : "\u26A0"}
+                            </span>
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -1479,6 +1935,166 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
           <div style={{ marginTop: 8, fontSize: 7, fontFamily: MONO, color: C.t3 }}>
             Click a cell to select, double-click or F2 to edit. Arrow keys navigate, Tab moves right, Enter moves down, Escape cancels edit. Ctrl+C copies rows, Ctrl+V pastes. Shift+Click or Shift+Arrow to select multiple rows.
           </div>
+        </div>
+      )}
+
+      {/* Pinout Tab */}
+      {tab === "pinout" && (
+        <div style={panelP}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, position: "relative", zIndex: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Device Pinout</span>
+            <Badge color={C.accent}>{packagePins.length} pins</Badge>
+            <Badge color={C.ok}>{pinToSignalMap.size} assigned</Badge>
+            {buildPinout && <Badge color={C.cyan}>Build verified ({buildPinout.assignedPins.length})</Badge>}
+            <div style={{ flex: 1 }} />
+            {projectDir && (
+              <Btn small onClick={() => {
+                getPadReport(backendId, projectDir).then((r) => setBuildPinout(r)).catch(() => {});
+              }}>Load Build Pinout</Btn>
+            )}
+            <Select compact value={pinoutFilter}
+              onChange={(v) => setPinoutFilter(v as PinoutFilter)}
+              options={[
+                { value: "all", label: "All Pins" },
+                { value: "user_io", label: "User I/O" },
+                { value: "assigned", label: "Assigned" },
+                { value: "unassigned", label: "Unassigned" },
+                { value: "errors", label: "Errors" },
+              ]}
+            />
+          </div>
+          {pinsLoading && (
+            <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, padding: 20, textAlign: "center" }}>
+              Loading device pinout...
+            </div>
+          )}
+          {!pinsLoading && packagePins.length === 0 && (
+            <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, padding: 20, textAlign: "center" }}>
+              No device pin data available. Install the vendor tool or select a device to view the pinout.
+            </div>
+          )}
+          {!pinsLoading && packagePins.length > 0 && (() => {
+            const buildPinMap = new Map<string, PadPinEntry>();
+            if (buildPinout) {
+              for (const bp of buildPinout.assignedPins) {
+                buildPinMap.set(bp.pin, bp);
+              }
+            }
+
+            const pinoutRows = packagePins.filter((dp) => {
+              const assigned = pinToSignalMap.has(dp.pin);
+              const fn = dp.function.toLowerCase();
+              const isPower = fn.includes("gnd") || fn.includes("vcc") || fn.includes("power");
+              const isConfig = fn.includes("config") || fn.includes("reserved");
+              const hasError = assigned && pinValidation.get(pins.findIndex((p) => p.pin === dp.pin))?.some((w) => w.type === "error");
+
+              switch (pinoutFilter) {
+                case "user_io": return !isPower && !isConfig;
+                case "assigned": return assigned;
+                case "unassigned": return !assigned && !isPower && !isConfig;
+                case "errors": return hasError;
+                default: return true;
+              }
+            });
+
+            return (
+              <>
+                <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>
+                  {pinoutRows.length} of {packagePins.length} pins shown
+                </div>
+                <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 340px)", border: `1px solid ${C.b1}`, borderRadius: 4 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: MONO }}>
+                    <thead>
+                      <tr style={{ position: "sticky", top: 0, background: C.s1, zIndex: 1 }}>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Pin</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Bank</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Function</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Signal</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>I/O Std</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Status</th>
+                        <th style={{ padding: "3px 6px", textAlign: "left", color: C.t3, borderBottom: `2px solid ${C.b1}` }}>Diff Pair</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pinoutRows.slice(0, 300).map((dp) => {
+                        const assigned = pinToSignalMap.get(dp.pin);
+                        const buildEntry = buildPinMap.get(dp.pin);
+                        const fn = dp.function.toLowerCase();
+                        const isPower = fn.includes("gnd") || fn.includes("vcc") || fn.includes("power");
+                        const isConfig = fn.includes("config") || fn.includes("reserved");
+
+                        let status: string;
+                        let statusColor: string;
+                        if (buildEntry && assigned) {
+                          // Check if build matches constraint
+                          if (buildEntry.portName === assigned.net) {
+                            status = "Verified";
+                            statusColor = C.cyan;
+                          } else {
+                            status = "Mismatch";
+                            statusColor = C.err;
+                          }
+                        } else if (assigned) {
+                          status = "Assigned";
+                          statusColor = C.ok;
+                        } else if (isPower) {
+                          status = "Power";
+                          statusColor = C.t3;
+                        } else if (isConfig) {
+                          status = "Config";
+                          statusColor = C.warn;
+                        } else {
+                          status = "Available";
+                          statusColor = C.t3;
+                        }
+
+                        return (
+                          <tr key={dp.pin} style={{ borderBottom: `1px solid ${C.b1}10` }}>
+                            <td style={{ padding: "2px 6px", color: C.cyan, fontWeight: 600 }}>{dp.pin}</td>
+                            <td style={{ padding: "2px 6px", color: C.t2 }}>{dp.bank ?? "-"}</td>
+                            <td style={{ padding: "2px 6px", color: C.t3 }}>{dp.function || "User I/O"}</td>
+                            <td style={{ padding: "2px 6px" }}>
+                              {assigned ? (
+                                <span
+                                  onClick={() => {
+                                    const idx = pins.findIndex((p) => p.pin === dp.pin);
+                                    if (idx >= 0) {
+                                      setTab("pins");
+                                      setSelected({ row: idx, col: 0 });
+                                    }
+                                  }}
+                                  style={{ color: C.ok, fontWeight: 600, cursor: "pointer" }}
+                                >
+                                  {assigned.net}
+                                </span>
+                              ) : buildEntry ? (
+                                <span style={{ color: C.t2, fontStyle: "italic" }}>{buildEntry.portName}</span>
+                              ) : (
+                                <span style={{ color: C.t3 }}>-</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "2px 6px", color: C.t2 }}>
+                              {assigned?.ioStandard ?? buildEntry?.ioStandard ?? "-"}
+                            </td>
+                            <td style={{ padding: "2px 6px" }}>
+                              <span style={{
+                                fontSize: 7, padding: "1px 4px", borderRadius: 2, fontWeight: 600,
+                                color: statusColor,
+                                background: `${statusColor}15`,
+                              }}>
+                                {status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "2px 6px", color: C.t3 }}>{dp.diffPair ?? "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -1588,13 +2204,13 @@ export default function ConstraintEditor({ backendId, device, constraintFile }: 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${C.b1}` }}>
-                  <th style={{ ...thStyle, width: 30 }}>On</th>
-                  <th style={{ ...thStyle, minWidth: 120 }}>Command</th>
-                  <th style={{ ...thStyle, width: 80 }}>Name</th>
-                  <th style={{ ...thStyle, minWidth: 80 }}>Target</th>
-                  <th style={{ ...thStyle, width: 70 }}>Value</th>
-                  <th style={{ ...thStyle, width: 70 }}>Reference</th>
-                  <th style={{ ...thStyle, width: 60 }}>SDC</th>
+                  <th style={{ ...thStyle, width: 30 }} title="Enable / disable this constraint">On</th>
+                  <th style={{ ...thStyle, minWidth: 120 }} title="SDC constraint type">Command</th>
+                  <th style={{ ...thStyle, width: 80 }} title="Constraint name (e.g. clock name)">Name</th>
+                  <th style={{ ...thStyle, minWidth: 80 }} title="Target net, pin, or clock">Target</th>
+                  <th style={{ ...thStyle, width: 70 }} title="Constraint value (period, delay, etc.)">Value</th>
+                  <th style={{ ...thStyle, width: 70 }} title="Reference clock for delay constraints">Reference</th>
+                  <th style={{ ...thStyle, width: 60 }} title="Generated SDC command preview">SDC</th>
                   <th style={{ ...thStyle, width: 30 }}></th>
                 </tr>
               </thead>

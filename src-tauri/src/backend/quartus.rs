@@ -685,6 +685,68 @@ if {{[llength $sdc_files] > 0}} {{
         Ok(stdout.contains("VALID"))
     }
 
+    fn list_package_pins(&self, device: &str) -> BackendResult<Vec<super::PackagePin>> {
+        let sh = self.quartus_sh_path().ok_or_else(|| {
+            BackendError::ToolNotFound("quartus_sh not found".into())
+        })?;
+        // TCL script to enumerate package pins
+        let tcl = format!(
+            r#"package require ::quartus::device
+set pins [get_pkg_pin_names -device "{}"]
+foreach p $pins {{
+  set func [get_pad_data STRING_ID -pin $p -device "{}"]
+  set bank ""
+  catch {{ set bank [get_pad_data STRING_USER_IO_BANK -pin $p -device "{}"] }}
+  set diff ""
+  catch {{ set diff [get_pad_data STRING_DIFF_PAD_ID -pin $p -device "{}"] }}
+  puts "$p|$bank|$func|$diff"
+}}
+"#,
+            device, device, device, device
+        );
+
+        let tmp_dir = std::env::temp_dir();
+        let tcl_file = tmp_dir.join(".coverteda_pins.tcl");
+        std::fs::write(&tcl_file, &tcl)
+            .map_err(|e| BackendError::IoError(e))?;
+
+        let output = std::process::Command::new(&sh)
+            .args(["-t", &tcl_file.display().to_string()])
+            .output()
+            .map_err(|e| BackendError::IoError(e))?;
+
+        let _ = std::fs::remove_file(&tcl_file);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut pins = Vec::new();
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 3 {
+                pins.push(super::PackagePin {
+                    pin: parts[0].trim().to_string(),
+                    bank: if parts[1].trim().is_empty() { None } else { Some(parts[1].trim().to_string()) },
+                    function: parts[2].trim().to_string(),
+                    diff_pair: parts.get(3).and_then(|s| {
+                        let s = s.trim();
+                        if s.is_empty() { None } else { Some(s.to_string()) }
+                    }),
+                    r_ohms: None,
+                    l_nh: None,
+                    c_pf: None,
+                });
+            }
+        }
+        if pins.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BackendError::ConfigError(format!(
+                "No pins returned for device '{}'. {}",
+                device,
+                if !stderr.is_empty() { stderr.to_string() } else { "Check device part number.".to_string() }
+            )));
+        }
+        Ok(pins)
+    }
+
     fn generate_ip_script(
         &self,
         project_dir: &Path,

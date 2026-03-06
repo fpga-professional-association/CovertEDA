@@ -1,0 +1,11 @@
+# AI Context for this project
+
+<!-- Notes here are automatically included in AI assistant context -->
+
+## Design Overview
+
+CovertEDA is a unified FPGA development frontend wrapping vendor CLIs (Lattice Diamond/Radiant, Intel Quartus, AMD Vivado, Achronix ACE) and open-source toolchains (Yosys/nextpnr) behind a single interface.
+
+## Known Issues
+
+## Style Preferences

@@ -304,6 +304,24 @@ prj_project close
         ))
     }
 
+    fn list_package_pins(&self, device: &str) -> BackendResult<Vec<super::PackagePin>> {
+        let install = self.install_dir.as_ref().ok_or_else(|| {
+            BackendError::ToolNotFound("Diamond install directory not found".into())
+        })?;
+        let ibis_dirs = super::find_lattice_ibis_dirs(install);
+        super::parse_lattice_ibis_pins(device, &ibis_dirs)
+    }
+
+    fn list_device_pin_data(&self, device: &str) -> BackendResult<super::DevicePinData> {
+        let install = self.install_dir.as_ref().ok_or_else(|| {
+            BackendError::ToolNotFound("Diamond install directory not found".into())
+        })?;
+        let ibis_dirs = super::find_lattice_ibis_dirs(install);
+        let pins = super::parse_lattice_ibis_pins(device, &ibis_dirs)?;
+        let (io_standards, drive_strengths) = super::parse_lattice_ibis_capabilities(device, &ibis_dirs);
+        Ok(super::DevicePinData { pins, io_standards, drive_strengths })
+    }
+
     fn detect_tool(&self) -> bool {
         if self.deferred { return false; }
         self.tool_path().is_some()

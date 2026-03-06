@@ -11,31 +11,32 @@ export interface DeviceInfo {
 }
 
 export const RADIANT_DEVICES: DeviceInfo[] = [
-  // CertusPro-NX (LIFCL)
-  { partNumber: "LIFCL-17-7MG121I", family: "CertusPro-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 56, package: "csfBGA121", speedGrade: "7" },
-  { partNumber: "LIFCL-17-7UWG72I", family: "CertusPro-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 26, package: "WLCSP72", speedGrade: "7" },
-  { partNumber: "LIFCL-17-7BG256I", family: "CertusPro-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 120, package: "caBGA256", speedGrade: "7" },
-  { partNumber: "LIFCL-40-7BG400I", family: "CertusPro-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "caBGA400", speedGrade: "7" },
-  { partNumber: "LIFCL-40-7BG400C", family: "CertusPro-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "caBGA400", speedGrade: "7" },
-  { partNumber: "LIFCL-40-8BG400C", family: "CertusPro-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "caBGA400", speedGrade: "8" },
-  { partNumber: "LIFCL-40-9BG256C", family: "CertusPro-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 120, package: "caBGA256", speedGrade: "9" },
+  // Certus-NX (LIFCL)
+  { partNumber: "LIFCL-17-7CSFBGA121I", family: "Certus-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 56, package: "CSFBGA121", speedGrade: "7" },
+  { partNumber: "LIFCL-17-8WLCSP72I", family: "Certus-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 26, package: "WLCSP72", speedGrade: "8" },
+  { partNumber: "LIFCL-17-7CABGA256I", family: "Certus-NX", luts: 17000, ffs: 17000, ebr: 32, dsp: 10, io: 120, package: "CABGA256", speedGrade: "7" },
+  { partNumber: "LIFCL-40-7CABGA400I", family: "Certus-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "CABGA400", speedGrade: "7" },
+  { partNumber: "LIFCL-40-7CABGA400C", family: "Certus-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "CABGA400", speedGrade: "7" },
+  { partNumber: "LIFCL-40-8CABGA400C", family: "Certus-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 220, package: "CABGA400", speedGrade: "8" },
+  { partNumber: "LIFCL-40-9CABGA256C", family: "Certus-NX", luts: 39600, ffs: 39744, ebr: 104, dsp: 28, io: 120, package: "CABGA256", speedGrade: "9" },
 
-  // CrossLink-NX (LIFCL small)
-  { partNumber: "LIFCL-33U-7MG121C", family: "CrossLink-NX", luts: 33000, ffs: 33000, ebr: 64, dsp: 56, io: 56, package: "csfBGA121", speedGrade: "7" },
-  { partNumber: "LIFCL-33U-7BG256C", family: "CrossLink-NX", luts: 33000, ffs: 33000, ebr: 64, dsp: 56, io: 120, package: "caBGA256", speedGrade: "7" },
+  // CrossLink-NX (LIFCL-33U)
+  { partNumber: "LIFCL-33U-9FCCSP104I", family: "CrossLink-NX", luts: 33000, ffs: 33000, ebr: 64, dsp: 56, io: 56, package: "FCCSP104", speedGrade: "9" },
+  { partNumber: "LIFCL-33U-9WLCSP84I", family: "CrossLink-NX", luts: 33000, ffs: 33000, ebr: 64, dsp: 56, io: 42, package: "WLCSP84", speedGrade: "9" },
 
-  // CertusNX (LFCPNX)
-  { partNumber: "LFCPNX-100-7LFG256C", family: "CertusNX", luts: 96600, ffs: 96600, ebr: 208, dsp: 80, io: 128, package: "csfBGA256", speedGrade: "7" },
-  { partNumber: "LFCPNX-100-9LFG672C", family: "CertusNX", luts: 96600, ffs: 96600, ebr: 208, dsp: 80, io: 360, package: "csfBGA672", speedGrade: "9" },
+  // CertusPro-NX (LFCPNX)
+  { partNumber: "LFCPNX-100-9ASG256C", family: "CertusPro-NX", luts: 96600, ffs: 96600, ebr: 208, dsp: 80, io: 128, package: "ASG256", speedGrade: "9" },
+  { partNumber: "LFCPNX-100-9LFG672C", family: "CertusPro-NX", luts: 96600, ffs: 96600, ebr: 208, dsp: 80, io: 360, package: "LFG672", speedGrade: "9" },
 
-  // MachXO5-NX (LMXO5)
-  { partNumber: "LMXO5-25-6MG121I", family: "MachXO5-NX", luts: 25000, ffs: 25000, ebr: 40, dsp: 0, io: 56, package: "csfBGA121", speedGrade: "6" },
-  { partNumber: "LMXO5-50-7BG256I", family: "MachXO5-NX", luts: 50000, ffs: 50000, ebr: 80, dsp: 28, io: 120, package: "caBGA256", speedGrade: "7" },
+  // MachXO5-NX (LFMXO5)
+  { partNumber: "LFMXO5-25-7BBG256I", family: "MachXO5-NX", luts: 25000, ffs: 25000, ebr: 40, dsp: 0, io: 120, package: "BBG256", speedGrade: "7" },
+  { partNumber: "LFMXO5-35-7BBG256I", family: "MachXO5-NX", luts: 35000, ffs: 35000, ebr: 56, dsp: 0, io: 120, package: "BBG256", speedGrade: "7" },
+  { partNumber: "LFMXO5-65-7BBG484I", family: "MachXO5-NX", luts: 65000, ffs: 65000, ebr: 112, dsp: 28, io: 252, package: "BBG484", speedGrade: "7" },
 
-  // Avant (LFAX)
-  { partNumber: "LFAX-17-7BBG484I", family: "Avant", luts: 17000, ffs: 17000, ebr: 48, dsp: 20, io: 252, package: "fcBGA484", speedGrade: "7" },
-  { partNumber: "LFAX-50-9BBG484C", family: "Avant", luts: 50000, ffs: 50000, ebr: 128, dsp: 56, io: 252, package: "fcBGA484", speedGrade: "9" },
-  { partNumber: "LFAX-100-9BBG784C", family: "Avant", luts: 100000, ffs: 100000, ebr: 256, dsp: 100, io: 420, package: "fcBGA784", speedGrade: "9" },
+  // Avant (LAV-AT)
+  { partNumber: "LAV-AT-E30-9ASG410C", family: "Avant-E", luts: 30000, ffs: 30000, ebr: 48, dsp: 20, io: 220, package: "ASG410", speedGrade: "9" },
+  { partNumber: "LAV-AT-E70-9LFG676C", family: "Avant-E", luts: 70000, ffs: 70000, ebr: 128, dsp: 56, io: 360, package: "LFG676", speedGrade: "9" },
+  { partNumber: "LAV-AT-E70-9LFG1156C", family: "Avant-E", luts: 70000, ffs: 70000, ebr: 128, dsp: 56, io: 620, package: "LFG1156", speedGrade: "9" },
 ];
 
 // Group devices by family

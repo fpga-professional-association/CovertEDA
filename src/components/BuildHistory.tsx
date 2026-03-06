@@ -21,6 +21,7 @@ export interface BuildRecord {
   errors: number;
   commitHash?: string;
   commitMsg?: string;
+  branch?: string;
 }
 
 interface BuildHistoryProps {
@@ -104,7 +105,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
   }, [successfulBuilds]);
 
   const panelP: React.CSSProperties = {
-    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, overflow: "hidden", padding: 14,
+    background: C.s1, borderRadius: 7, border: `1px solid ${C.b1}`, padding: 14,
   };
 
   // Loading state
@@ -202,7 +203,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.b1}` }}>
-                {["", "Time", "Source", "Duration", "Status", "Fmax", "LUT", "FF", "W", "E"].map((h) => (
+                {["", "Time", "Branch", "Commit", "Duration", "Status", "Fmax", "LUT", "FF", "W", "E"].map((h) => (
                   <th key={h} style={{
                     fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3,
                     padding: "4px 6px", textAlign: "left",
@@ -231,19 +232,38 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
                     {formatDate(b.timestamp)} {formatTime(b.timestamp)}
                   </td>
                   <td style={{ fontSize: 8, fontFamily: MONO, padding: "4px 6px" }}>
+                    {b.branch ? (
+                      <Badge color={C.accent} style={{ fontSize: 7 }}>{b.branch}</Badge>
+                    ) : (
+                      <span style={{ color: C.t3, fontStyle: "italic" }}>-</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 8, fontFamily: MONO, padding: "4px 6px" }}>
                     {b.commitHash ? (
-                      <span
-                        title={b.commitMsg ?? b.commitHash}
-                        style={{
-                          color: C.cyan,
-                          cursor: "pointer",
-                          padding: "1px 4px",
-                          borderRadius: 2,
-                          background: `${C.cyan}10`,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {b.commitHash}
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span
+                          style={{
+                            color: C.cyan,
+                            padding: "1px 4px",
+                            borderRadius: 2,
+                            background: `${C.cyan}10`,
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {b.commitHash}
+                        </span>
+                        {b.commitMsg && (
+                          <span style={{
+                            color: C.t2,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            maxWidth: 180,
+                          }}>
+                            {b.commitMsg}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span style={{ color: C.t3, fontStyle: "italic" }}>none</span>
@@ -313,6 +333,12 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
             <span style={{ color: C.t1 }}>{selected.stages.join(" \u2192 ")}</span>
             <span style={{ color: C.t3 }}>Duration:</span>
             <span style={{ color: C.t1 }}>{formatDuration(selected.duration)}</span>
+            {selected.branch && (
+              <>
+                <span style={{ color: C.t3 }}>Branch:</span>
+                <span style={{ color: C.accent, fontWeight: 600 }}>{selected.branch}</span>
+              </>
+            )}
             {selected.commitHash && (
               <>
                 <span style={{ color: C.t3 }}>Commit:</span>

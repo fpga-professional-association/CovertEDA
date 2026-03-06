@@ -35,7 +35,7 @@ import {
   type WhichResult,
   type DetectedVersion,
 } from "../hooks/useTauri";
-import type { VendorImportResult } from "../types";
+import type { VendorImportResult } from "../types"; // used by handleOpenDir
 import NewProjectWizard from "./NewProjectWizard";
 
 function relativeTime(iso: string): string {
@@ -68,10 +68,7 @@ export default function StartScreen({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDir, setWizardDir] = useState<string | undefined>();
   const [hover, setHover] = useState<string | null>(null);
-  const [noProjectMsg, setNoProjectMsg] = useState<string | null>(null);
-  const [vendorImport, setVendorImport] = useState<VendorImportResult | null>(null);
-  const [importDir, setImportDir] = useState<string>("");
-  const [importing, setImporting] = useState(false);
+  const [openingDir, setOpeningDir] = useState(false);
   const [showRecents, setShowRecents] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const [whichInfo, setWhichInfo] = useState<Record<string, WhichResult & { status: string }>>({});
@@ -105,56 +102,53 @@ export default function StartScreen({
   }, []);
 
   const handleOpenDir = async () => {
-    setNoProjectMsg(null);
-    setVendorImport(null);
     const dir = await pickDirectory();
     if (!dir) return;
-    const existing = await checkProjectDir(dir);
-    if (existing) {
-      // Must call openProject (not just checkProjectDir) to register as current_project in backend
-      const config = await openProject(dir);
-      onOpenProject(dir, config);
-    } else {
-      // Try to detect vendor project files
+    setOpeningDir(true);
+    try {
+      // 1. Check if .coverteda already exists
+      const existing = await checkProjectDir(dir);
+      if (existing) {
+        const config = await openProject(dir);
+        onOpenProject(dir, config);
+        return;
+      }
+
+      // 2. Try to detect vendor project files
+      let vendorResult: VendorImportResult | null = null;
       try {
         const result = await importVendorProject(dir);
-        if (result.found) {
-          setVendorImport(result);
-          setImportDir(dir);
-          return;
-        }
+        if (result.found) vendorResult = result;
       } catch { /* ignore */ }
-      setNoProjectMsg(
-        `No .coverteda project file found in "${dir}". Use "Create New Project" to initialize this directory as a CovertEDA project.`
-      );
-    }
-  };
 
-  const handleVendorImport = async () => {
-    if (!vendorImport || !importDir) return;
-    setImporting(true);
-    try {
-      await createProject(
-        importDir,
-        vendorImport.projectName || importDir.split("/").pop() || "project",
-        vendorImport.backendId,
-        vendorImport.device,
-        vendorImport.topModule || "top_level",
-        vendorImport.sourceFiles.length > 0
-          ? vendorImport.sourceFiles.map((f) => f)
-          : undefined,
-        vendorImport.constraintFiles.length > 0
-          ? vendorImport.constraintFiles.map((f) => f)
-          : undefined,
-      );
-      setVendorImport(null);
-      const opened = await openProject(importDir);
-      onOpenProject(importDir, opened);
+      if (vendorResult) {
+        // Auto-import: create .coverteda from vendor data (no dialog)
+        await createProject(
+          dir,
+          vendorResult.projectName || dir.split("/").pop() || "project",
+          vendorResult.backendId,
+          vendorResult.device || "auto",
+          vendorResult.topModule || "top_level",
+          vendorResult.sourceFiles.length > 0 ? vendorResult.sourceFiles : undefined,
+          vendorResult.constraintFiles.length > 0 ? vendorResult.constraintFiles : undefined,
+        );
+        const config = await openProject(dir);
+        onOpenProject(dir, config);
+        return;
+      }
+
+      // 3. Nothing found — create project with defaults
+      const dirName = dir.split("/").pop() || dir.split("\\").pop() || "project";
+      // Pick the first available backend from detected tools
+      const detectedBackend = tools.find((t) => t.available)?.backendId || "radiant";
+      await createProject(dir, dirName, detectedBackend, "auto", "top_level");
+      const config = await openProject(dir);
+      onOpenProject(dir, config);
     } catch (e) {
-      setNoProjectMsg(`Import failed: ${e}`);
-      setVendorImport(null);
+      console.error("Open directory failed:", e);
+    } finally {
+      setOpeningDir(false);
     }
-    setImporting(false);
   };
 
   const handleRecentClick = async (r: RecentProject) => {
@@ -297,7 +291,7 @@ export default function StartScreen({
 
           {/* Create New Project */}
           <div
-            onClick={() => { setNoProjectMsg(null); setWizardDir(undefined); setWizardOpen(true); }}
+            onClick={() => { setWizardDir(undefined); setWizardOpen(true); }}
             onMouseEnter={() => setHover("create")}
             onMouseLeave={() => setHover(null)}
             style={{
@@ -331,67 +325,24 @@ export default function StartScreen({
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Open Existing Directory</span>
             </div>
             <div style={{ fontSize: 10, color: C.t3, lineHeight: 1.5 }}>
-              Open a folder containing an existing <code style={{ color: C.t2 }}>.coverteda</code> project file.
+              Open any FPGA project directory. Auto-detects vendor files and creates a <code style={{ color: C.t2 }}>.coverteda</code> project.
             </div>
           </div>
 
-          {noProjectMsg && (
+          {openingDir && (
             <div style={{
               padding: "10px 12px",
-              background: `${C.warn}18`,
-              border: `1px solid ${C.warn}44`,
-              borderRadius: 6,
-              fontSize: 11,
-              color: C.warn,
-              lineHeight: 1.5,
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-            }}>
-              <span style={{ fontSize: 14, flexShrink: 0 }}>&#9888;</span>
-              <span>{noProjectMsg}</span>
-            </div>
-          )}
-
-          {/* Vendor project import dialog */}
-          {vendorImport && (
-            <div style={{
-              padding: "12px 14px",
               background: `${C.accent}08`,
               border: `1px solid ${C.accent}30`,
               borderRadius: 6,
-              fontSize: 10,
-              lineHeight: 1.6,
+              fontSize: 11,
+              color: C.t2,
+              fontFamily: MONO,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}>
-              <div style={{ fontWeight: 700, color: C.t1, marginBottom: 8, fontSize: 12 }}>
-                Import {vendorImport.vendorType.toUpperCase()} Project
-              </div>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: C.t3, marginBottom: 8 }}>
-                Found: {vendorImport.vendorFile}
-              </div>
-              {vendorImport.summary.map((s, i) => (
-                <div key={i} style={{ fontFamily: MONO, fontSize: 9, color: C.t2 }}>{s}</div>
-              ))}
-              {vendorImport.warnings.length > 0 && (
-                <div style={{ marginTop: 6 }}>
-                  {vendorImport.warnings.map((w, i) => (
-                    <div key={i} style={{ fontSize: 9, color: C.warn, fontFamily: MONO }}>{w}</div>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <Btn primary small onClick={handleVendorImport} disabled={importing}>
-                  {importing ? "Importing..." : "Import Project"}
-                </Btn>
-                <Btn small onClick={() => {
-                  setVendorImport(null);
-                  setWizardDir(importDir);
-                  setWizardOpen(true);
-                }}>
-                  Create New Instead
-                </Btn>
-                <Btn small onClick={() => setVendorImport(null)}>Cancel</Btn>
-              </div>
+              Opening directory...
             </div>
           )}
 

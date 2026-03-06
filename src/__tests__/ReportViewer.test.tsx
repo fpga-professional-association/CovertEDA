@@ -34,7 +34,9 @@ function makeProps(overrides: Partial<{
 
 describe("ReportViewer", () => {
   it("renders tab buttons for all report types", () => {
-    const props = makeProps();
+    // Stage tabs only appear when build data exists — provide a timing report
+    const timing = makeTimingReport();
+    const props = makeProps({ reports: { ...nullReports, timing } });
     renderWithTheme(<ReportViewer {...props} />);
 
     // Analysis tabs — some labels appear in multiple elements, use getAllByText
@@ -43,7 +45,7 @@ describe("ReportViewer", () => {
     expect(screen.getAllByText(/Power/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/DRC/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/I\/O/).length).toBeGreaterThan(0);
-    // Stage tabs
+    // Stage tabs (visible when build data exists)
     expect(screen.getByText("Synth")).toBeInTheDocument();
     expect(screen.getByText("Map")).toBeInTheDocument();
     expect(screen.getByText("P&R")).toBeInTheDocument();

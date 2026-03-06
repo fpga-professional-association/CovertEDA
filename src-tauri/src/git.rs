@@ -1,4 +1,4 @@
-use crate::types::GitStatus;
+use crate::types::{GitLogEntry, GitStatus};
 use git2::{Repository, StatusOptions};
 use std::path::Path;
 
@@ -84,6 +84,48 @@ pub fn get_status(project_dir: &Path) -> Result<GitStatus, String> {
         untracked,
         dirty,
     })
+}
+
+/// Get recent commit log using libgit2 revwalk.
+pub fn get_log(project_dir: &Path, max_count: usize) -> Result<Vec<GitLogEntry>, String> {
+    let repo =
+        Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
+
+    let mut revwalk = repo.revwalk().map_err(|e| format!("Revwalk error: {}", e))?;
+    revwalk
+        .push_head()
+        .map_err(|e| format!("Push HEAD error: {}", e))?;
+    revwalk.set_sorting(git2::Sort::TIME).map_err(|e| format!("Sort error: {}", e))?;
+
+    let mut entries = Vec::with_capacity(max_count);
+    for oid in revwalk.take(max_count) {
+        let oid = oid.map_err(|e| format!("Revwalk iter error: {}", e))?;
+        let commit = repo.find_commit(oid).map_err(|e| format!("Find commit error: {}", e))?;
+
+        let hash = format!("{}", &oid)[..7].to_string();
+        let message = commit
+            .message()
+            .unwrap_or("")
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_string();
+        let author = commit
+            .author()
+            .name()
+            .unwrap_or("unknown")
+            .to_string();
+        let time_ago = format_time_ago(commit.time().seconds());
+
+        entries.push(GitLogEntry {
+            hash,
+            message,
+            author,
+            time_ago,
+        });
+    }
+
+    Ok(entries)
 }
 
 /// Check if the working directory has uncommitted changes.

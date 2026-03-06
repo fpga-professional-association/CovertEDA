@@ -875,7 +875,6 @@ export default memo(function BuildPipeline({
     background: C.s1,
     borderRadius: 7,
     border: `1px solid ${C.b1}`,
-    overflow: "hidden",
     padding: 14,
   };
 

@@ -1,0 +1,40 @@
+PAD Specification File
+***************************
+
+PART TYPE:        LIFCL-40
+Performance Grade:      7_High-Performance_1.0V
+PACKAGE:          CABGA400
+Package Status:                     Final          Version 1
+
+Thu Feb 19 09:55:13 2026
+
+Pinout by Port Name:
++-----------+----------+--------------+-------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Port Name | Pin/Bank | Buffer Type  | Site  | Properties                                                                                                                                                          |
++-----------+----------+--------------+-------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| c[0]      | M14/2    | LVCMOS33_OUT | PR24B | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[1]      | N14/2    | LVCMOS33_OUT | PR24A | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[2]      | M15/2    | LVCMOS33_OUT | PR26B | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[3]      | L19/1    | LVCMOS33_OUT | PR20B | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[4]      | L20/1    | LVCMOS33_OUT | PR20A | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[5]      | N15/2    | LVCMOS33_OUT | PR27A | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[6]      | M16/2    | LVCMOS33_OUT | PR26A | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| c[7]      | N16/2    | LVCMOS33_OUT | PR27B | DRIVE:8mA SLEWRATE:MED GLITCHFILTER:OFF HYSTERESIS:NA TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:NONE CLAMP:OFF VREF:OFF |
+| clk       | E12/0    | LVCMOS33_IN  | PT76A | DRIVE:NA SLEWRATE:NA GLITCHFILTER:ON HYSTERESIS:ON TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:DOWN CLAMP:ON VREF:OFF     |
+| rst       | M17/2    | LVCMOS33_IN  | PR30A | DRIVE:NA SLEWRATE:NA GLITCHFILTER:ON HYSTERESIS:ON TERMINATION:OFF OPENDRAIN:OFF IO_TYPE:LVCMOS33 DIFFRESISTOR:OFF DIFFDRIVE:NA PULLMODE:DOWN CLAMP:ON VREF:OFF     |
++-----------+----------+--------------+-------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+Vccio by Bank:
++------+-------+
+| Bank | Vccio |
++------+-------+
+| 0    | 3.3V  |
+| 1    | 3.3V  |
+| 2    | 3.3V  |
++------+-------+
+
+Vref by Bank:
++------+-----+-----------------+---------+
+| Vref | Pin | Bank # / Vref # | Load(s) |
++------+-----+-----------------+---------+
++------+-----+-----------------+---------+
