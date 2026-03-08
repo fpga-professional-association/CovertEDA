@@ -319,6 +319,7 @@ pub struct GitStatus {
     pub staged: u32,
     pub unstaged: u32,
     pub untracked: u32,
+    pub stashes: u32,
     pub dirty: bool,
 }
 

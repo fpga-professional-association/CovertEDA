@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { ThemeId } from "../theme";
 import { Btn, Input } from "./shared";
-import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, pickDirectory, pickFile, AppConfig } from "../hooks/useTauri";
+import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, getAiApiKeyForProvider, setAiApiKeyForProvider, listAiProvidersWithKeys, pickDirectory, pickFile, AppConfig } from "../hooks/useTauri";
 
 const SCALE_PRESETS = [
   { label: "50%", value: 0.5 },
@@ -15,21 +15,23 @@ const SCALE_PRESETS = [
   { label: "300%", value: 3.0 },
 ];
 
-const THEME_OPTIONS: { id: ThemeId; label: string; desc: string }[] = [
-  { id: "dark", label: "Dark", desc: "Default dark palette" },
-  { id: "light", label: "Light", desc: "Light background" },
-  { id: "colorblind", label: "Colorblind", desc: "Deuteranopia-safe" },
+const THEME_OPTIONS: { id: ThemeId; label: string; desc: string; tooltip: string }[] = [
+  { id: "dark", label: "Dark", desc: "Default dark palette", tooltip: "High-contrast dark palette optimized for low-light environments" },
+  { id: "light", label: "Light", desc: "Light background", tooltip: "Light palette for bright environments" },
+  { id: "colorblind", label: "Colorblind", desc: "Deuteranopia-safe", tooltip: "Deuteranopia-safe color palette" },
 ];
 
 const AI_SETTINGS_PROVIDERS: {
   id: string;
   name: string;
+  tooltip: string;
   models: { id: string; label: string }[];
   keyPlaceholder: string;
   keyHelp: string;
 }[] = [
   {
     id: "anthropic", name: "Anthropic",
+    tooltip: "Use Anthropic Claude models",
     models: [
       { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
       { id: "claude-opus-4-6", label: "Opus 4.6" },
@@ -40,6 +42,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "openai", name: "OpenAI",
+    tooltip: "Use OpenAI GPT models",
     models: [
       { id: "gpt-4o", label: "GPT-4o" },
       { id: "gpt-4o-mini", label: "GPT-4o mini" },
@@ -51,6 +54,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "google", name: "Gemini",
+    tooltip: "Use Google Gemini models",
     models: [
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
@@ -61,6 +65,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "mistral", name: "Mistral",
+    tooltip: "Use Mistral AI models",
     models: [
       { id: "mistral-large-latest", label: "Mistral Large" },
       { id: "codestral-latest", label: "Codestral" },
@@ -71,6 +76,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "xai", name: "xAI",
+    tooltip: "Use xAI Grok models",
     models: [
       { id: "grok-3", label: "Grok 3" },
       { id: "grok-3-mini", label: "Grok 3 mini" },
@@ -80,6 +86,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "deepseek", name: "DeepSeek",
+    tooltip: "Use DeepSeek models",
     models: [
       { id: "deepseek-chat", label: "DeepSeek Chat" },
       { id: "deepseek-reasoner", label: "DeepSeek Reasoner" },
@@ -89,6 +96,7 @@ const AI_SETTINGS_PROVIDERS: {
   },
   {
     id: "ollama", name: "Ollama",
+    tooltip: "Use locally-hosted Ollama models",
     models: [],
     keyPlaceholder: "",
     keyHelp: "Run Ollama locally",
@@ -109,10 +117,22 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [aiKey, setAiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [providersWithKeys, setProvidersWithKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getAppConfig().then(setConfig);
-    getAiApiKey().then((k) => setAiKey(k ?? ""));
+    getAppConfig().then(async (cfg) => {
+      setConfig(cfg);
+      // Load per-provider key for current provider
+      const pid = cfg.ai_provider ?? "anthropic";
+      const key = await getAiApiKeyForProvider(pid).catch(() => null)
+        ?? await getAiApiKey().catch(() => null);
+      setAiKey(key ?? "");
+      // List which providers have saved keys
+      const withKeys = await listAiProvidersWithKeys().catch(() => []);
+      setProvidersWithKeys(new Set(withKeys));
+    });
   }, []);
 
   const save = useCallback(async (updated: AppConfig) => {
@@ -209,6 +229,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      title="Click to close settings"
       style={{
         position: "fixed",
         inset: 0,
@@ -253,6 +274,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={t.id}
+                  title={t.tooltip}
                   onClick={() => handleThemeChange(t.id)}
                   onMouseEnter={() => setHover(`theme-${t.id}`)}
                   onMouseLeave={() => setHover(null)}
@@ -289,6 +311,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               step={5}
               value={Math.round(scaleFactor * 100)}
               onChange={(e) => handleScaleChange(Number(e.target.value) / 100)}
+              title={`Set zoom to ${Math.round(scaleFactor * 100)}%`}
               style={{ flex: 1, accentColor: C.accent }}
             />
             <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>300%</span>
@@ -299,6 +322,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={s.value}
+                  title={`Set zoom to ${s.label}`}
                   onClick={() => handleScaleChange(s.value)}
                   style={{
                     padding: "3px 8px",
@@ -333,9 +357,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 value={config?.tool_paths[tf.key] ?? ""}
                 onChange={(v) => updateToolPath(tf.key, v)}
                 placeholder="Auto-detect"
+                title={`Path to ${tf.label} installation directory`}
                 style={{ flex: 1 }}
               />
-              <Btn small onClick={() => browseToolPath(tf.key)}>Browse</Btn>
+              <Btn small onClick={() => browseToolPath(tf.key)} title={`Browse filesystem for ${tf.label} installation`}>Browse</Btn>
             </div>
           </div>
         ))}
@@ -359,9 +384,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 value={config?.license_files?.[lf.vendor] ?? ""}
                 onChange={(v) => updateLicenseFile(lf.vendor, v)}
                 placeholder="Auto-detect"
+                title={`Path to ${lf.label} license file`}
                 style={{ flex: 1 }}
               />
-              <Btn small onClick={() => handleLicenseFileBrowse(lf.vendor)}>Browse</Btn>
+              <Btn small onClick={() => handleLicenseFileBrowse(lf.vendor)} title={`Browse filesystem for ${lf.label} license file`}>Browse</Btn>
             </div>
           </div>
         ))}
@@ -381,11 +407,15 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={p.id}
-                  onClick={() => {
+                  title={p.tooltip}
+                  onClick={async () => {
                     const switchingProvider = p.id !== (config?.ai_provider ?? "anthropic");
                     if (switchingProvider) {
-                      setAiKey("");
-                      setAiApiKey(null).catch(() => {});
+                      // Load per-provider key for the new provider
+                      const key = await getAiApiKeyForProvider(p.id).catch(() => null);
+                      setAiKey(key ?? "");
+                      setShowKey(false);
+                      setCopiedKey(false);
                     }
                     setConfig((prev) => {
                       if (!prev) return prev;
@@ -412,6 +442,12 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                   }}
                 >
                   {p.name}
+                  {providersWithKeys.has(p.id) && (
+                    <span style={{
+                      display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+                      background: C.ok, marginLeft: 4, verticalAlign: "middle",
+                    }} title="API key saved" />
+                  )}
                 </div>
               );
             })}
@@ -427,16 +463,72 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               {!isOllama && (
                 <div style={{ marginBottom: 12 }}>
                   <span style={label}>API KEY</span>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Input
-                      value={aiKey}
-                      onChange={(v) => {
-                        setAiKey(v);
-                        setAiApiKey(v || null).catch(() => {});
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ flex: 1, position: "relative" }}>
+                      <input
+                        type={showKey ? "text" : "password"}
+                        value={aiKey}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setAiKey(v);
+                          const pid = config?.ai_provider ?? "anthropic";
+                          setAiApiKeyForProvider(pid, v || null).catch(() => {});
+                          setAiApiKey(v || null).catch(() => {}); // backward compat
+                          // Update green dot indicators
+                          setProvidersWithKeys((prev) => {
+                            const next = new Set(prev);
+                            if (v) next.add(pid); else next.delete(pid);
+                            return next;
+                          });
+                        }}
+                        placeholder={prov?.keyPlaceholder ?? "API key"}
+                        title={`API key for ${prov?.name ?? "AI provider"}`}
+                        style={{
+                          width: "100%",
+                          padding: "5px 8px",
+                          background: C.bg,
+                          border: `1px solid ${C.b1}`,
+                          borderRadius: 4,
+                          color: C.t1,
+                          fontSize: 9,
+                          fontFamily: MONO,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <span
+                      onClick={() => setShowKey((p) => !p)}
+                      title={showKey ? "Hide API key" : "Show API key"}
+                      style={{
+                        fontSize: 7, fontFamily: MONO, padding: "3px 6px", borderRadius: 3,
+                        background: C.bg, border: `1px solid ${C.b1}`, cursor: "pointer",
+                        color: C.t2, fontWeight: 600, whiteSpace: "nowrap",
                       }}
-                      placeholder={prov?.keyPlaceholder ?? "API key"}
-                      style={{ flex: 1 }}
-                    />
+                    >
+                      {showKey ? "Hide" : "Show"}
+                    </span>
+                    <span
+                      onClick={() => {
+                        if (aiKey) {
+                          navigator.clipboard.writeText(aiKey);
+                          setCopiedKey(true);
+                          setTimeout(() => setCopiedKey(false), 1500);
+                        }
+                      }}
+                      title="Copy API key to clipboard"
+                      style={{
+                        fontSize: 7, fontFamily: MONO, padding: "3px 6px", borderRadius: 3,
+                        background: copiedKey ? `${C.ok}15` : C.bg,
+                        border: `1px solid ${copiedKey ? `${C.ok}44` : C.b1}`,
+                        cursor: aiKey ? "pointer" : "default",
+                        color: copiedKey ? C.ok : (aiKey ? C.t2 : C.t3),
+                        fontWeight: 600, whiteSpace: "nowrap",
+                        opacity: aiKey ? 1 : 0.5,
+                      }}
+                    >
+                      {copiedKey ? "\u2713 Copied" : "Copy"}
+                    </span>
                   </div>
                   <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
                     {prov?.keyHelp ?? "Enter your API key"}. Stored securely in OS keyring.
@@ -459,6 +551,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                       });
                     }}
                     placeholder="http://localhost:11434"
+                    title="Base URL for local Ollama server"
                     style={{ width: "100%" }}
                   />
                   <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
@@ -477,6 +570,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                       return (
                         <div
                           key={m.id}
+                          title={`Use ${m.label} model`}
                           onClick={() => {
                             setConfig((prev) => {
                               if (!prev) return prev;
@@ -514,6 +608,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                       });
                     }}
                     placeholder="llama3.1, codellama, mistral, etc."
+                    title="Name of the Ollama model to use"
                     style={{ width: "100%" }}
                   />
                 )}
@@ -522,9 +617,59 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           );
         })()}
 
+        {/* ── Preferred Editor ── */}
+        <div style={{ ...sectionTitle, marginTop: 8 }}>
+          <span style={{ color: C.ok }}>{"\u25CF"}</span>
+          External Editor
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <span style={label}>PREFERRED EDITOR</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input
+              value={config?.preferred_editor ?? ""}
+              onChange={(v) => {
+                setConfig((prev) => {
+                  if (!prev) return prev;
+                  const updated = { ...prev, preferred_editor: v || null };
+                  save(updated);
+                  return updated;
+                });
+              }}
+              placeholder="System Default"
+              title="Path to preferred editor executable"
+              style={{ flex: 1 }}
+            />
+            <Btn small title="Browse filesystem for editor executable" onClick={async () => {
+              const picked = await pickFile();
+              if (picked) {
+                setConfig((prev) => {
+                  if (!prev) return prev;
+                  const updated = { ...prev, preferred_editor: picked };
+                  save(updated);
+                  return updated;
+                });
+              }
+            }}>Browse</Btn>
+            {config?.preferred_editor && (
+              <Btn small title="Clear editor selection and use system default" onClick={() => {
+                setConfig((prev) => {
+                  if (!prev) return prev;
+                  const updated = { ...prev, preferred_editor: null };
+                  save(updated);
+                  return updated;
+                });
+              }}>Clear</Btn>
+            )}
+          </div>
+          <div style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginTop: 3 }}>
+            Path to editor executable (e.g. code, vim, notepad++). Leave blank for system default.
+          </div>
+        </div>
+
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <Btn small onClick={onClose} disabled={saving}>
+          <Btn small onClick={onClose} disabled={saving} title="Close settings panel">
             {saving ? "Saving..." : "Close"}
           </Btn>
         </div>

@@ -77,6 +77,6 @@ describe("BuildPipeline", () => {
 
   it("shows build complete message when all stages are done", () => {
     renderPipeline({ building: false, buildStep: 4 });
-    expect(screen.getByText(/Build complete/)).toBeInTheDocument();
+    expect(screen.getByText(/BUILD SUCCESSFUL/)).toBeInTheDocument();
   });
 });

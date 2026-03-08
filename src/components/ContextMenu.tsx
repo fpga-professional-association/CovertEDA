@@ -96,6 +96,7 @@ export default function ContextMenu({ x, y, items, onClose }: ContextMenuProps) 
             key={i}
             className="ceda-ctx-item"
             data-disabled={item.disabled || undefined}
+            title={item.label}
             onClick={() => {
               if (item.disabled) return;
               item.onClick();

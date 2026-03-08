@@ -145,6 +145,51 @@ pub fn git_head_hash(project_dir: String) -> Result<String, String> {
     crate::git::head_hash(&PathBuf::from(project_dir))
 }
 
+#[tauri::command]
+pub async fn git_list_branches(project_dir: String) -> Result<Vec<crate::git::BranchInfo>, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::list_branches(&PathBuf::from(project_dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn git_list_tags(project_dir: String) -> Result<Vec<crate::git::TagInfo>, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::list_tags(&PathBuf::from(project_dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn git_pull(project_dir: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::git_pull(&PathBuf::from(project_dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn git_push(project_dir: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::git_push(&PathBuf::from(project_dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn git_checkout(project_dir: String, branch: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        crate::git::git_checkout(&PathBuf::from(project_dir), &branch)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Generate an IP core using the vendor backend's TCL/script generation.
 /// Returns the generated TCL script content and the output directory path.
 #[tauri::command]
@@ -220,14 +265,14 @@ pub fn execute_ip_generate(
 
     std::thread::spawn(move || {
         use std::io::BufRead;
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
 
         let _ = app_handle.emit("ip:stdout", serde_json::json!({
             "genId": &gen_id_clone,
             "line": format!("Spawning: {} {}", &executable, &script_arg),
         }));
 
-        let mut cmd = Command::new(&executable);
+        let mut cmd = crate::process::no_window_cmd(&executable);
         cmd.arg(&script_arg)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -476,7 +521,7 @@ pub fn start_build(
     let log_path = project_path.join(".coverteda_build.log");
     std::thread::spawn(move || {
         use std::io::BufRead;
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
 
         // Open log file for writing
         let mut log_file = std::fs::File::create(&log_path).ok();
@@ -522,11 +567,11 @@ pub fn start_build(
 
         let mut cmd = if let Some(ref bat_path) = bat_wrapper_path {
             // Use batch wrapper (Quartus on WSL) — env vars are set inside the .bat
-            let mut c = Command::new("cmd.exe");
+            let mut c = crate::process::no_window_cmd("cmd.exe");
             c.args(["/c", bat_path]);
             c
         } else {
-            let mut c = Command::new(&executable);
+            let mut c = crate::process::no_window_cmd(&executable);
             // Backend-specific CLI flags before the script path
             match backend_id.as_str() {
                 "quartus" => { c.arg("-t"); }
@@ -1119,7 +1164,7 @@ pub fn cancel_build(
             }
             #[cfg(windows)]
             {
-                let _ = std::process::Command::new("taskkill")
+                let _ = crate::process::no_window_cmd("taskkill")
                     .args(&["/PID", &pid.to_string(), "/F"])
                     .spawn();
             }
@@ -1201,12 +1246,18 @@ pub fn get_io_report(
         .get(&backend_id)
         .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
 
-    // Find constraint files in common locations
+    // Find constraint files in common locations + vendor-specific dirs
     let ext = backend.constraint_ext();
     let search_dirs = [
         project_path.join("constraints"),
         project_path.join("src"),
         project_path.clone(),
+        // Vendor-specific build output directories
+        project_path.join("impl1"),         // Radiant/Diamond
+        project_path.join("source"),        // Radiant alt
+        project_path.join("output_files"),  // Quartus
+        project_path.join("build"),         // OSS CAD Suite
+        project_path.join("output"),        // ACE
     ];
 
     let mut all_constraints = Vec::new();
@@ -1217,7 +1268,7 @@ pub fn get_io_report(
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let path = entry.path();
-                if path.extension().map(|e| e == ext).unwrap_or(false) {
+                if path.extension().and_then(|e| e.to_str()).map(|e| e == ext.trim_start_matches('.')).unwrap_or(false) {
                     if let Ok(pins) = backend.read_constraints(&path) {
                         all_constraints.extend(pins);
                     }
@@ -1226,11 +1277,38 @@ pub fn get_io_report(
         }
     }
 
-    if all_constraints.is_empty() {
-        return Ok(None);
+    // If constraint parsing found pins, build report from those
+    if !all_constraints.is_empty() {
+        return Ok(Some(constraints_to_io_report(all_constraints)));
     }
 
-    // Group by I/O standard (acts as "bank" for grouping)
+    // Fallback: try .pad file (post-P&R pin report from Lattice Radiant/Diamond)
+    // This gives actual pin assignments even if no separate constraint file exists
+    let pad_dirs = [
+        project_path.join("impl1"),
+        project_path.clone(),
+    ];
+    for dir in &pad_dirs {
+        if !dir.exists() { continue; }
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().map(|e| e == "pad").unwrap_or(false) {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        if let Some(pad) = crate::parser::pad::parse_radiant_pad(&content) {
+                            return Ok(Some(pad_report_to_io_report(&pad)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// Convert constraint pin list into an IoReport grouped by I/O standard.
+fn constraints_to_io_report(all_constraints: Vec<PinConstraint>) -> IoReport {
     let mut groups: std::collections::HashMap<String, Vec<PinConstraint>> =
         std::collections::HashMap::new();
     for c in &all_constraints {
@@ -1243,19 +1321,7 @@ pub fn get_io_report(
     let banks: Vec<IoBank> = groups
         .into_iter()
         .map(|(io_std, pins)| {
-            let vccio = match io_std.as_str() {
-                "LVCMOS33" => "3.3V",
-                "LVCMOS25" => "2.5V",
-                "LVCMOS18" => "1.8V",
-                "LVCMOS15" => "1.5V",
-                "LVCMOS12" => "1.2V",
-                "LVTTL" => "3.3V",
-                "SSTL15" => "1.5V",
-                "SSTL18" => "1.8V",
-                "SSTL135" => "1.35V",
-                "LVDS" | "LVDS25" => "2.5V",
-                _ => "3.3V",
-            };
+            let vccio = io_standard_to_vccio(&io_std);
             let bank_pins: Vec<IoBankPin> = pins
                 .iter()
                 .map(|p| IoBankPin {
@@ -1279,7 +1345,62 @@ pub fn get_io_report(
         })
         .collect();
 
-    Ok(Some(IoReport { banks }))
+    IoReport { banks }
+}
+
+/// Convert a PadReport (from .pad file) into an IoReport grouped by physical bank.
+fn pad_report_to_io_report(pad: &crate::types::PadReport) -> IoReport {
+    use std::collections::HashMap;
+
+    // Build bank-level VCCIO lookup from pad report
+    let bank_vccio: HashMap<&str, &str> = pad.vccio_banks.iter()
+        .map(|b| (b.bank.as_str(), b.vccio.as_str()))
+        .collect();
+
+    // Group pins by physical bank
+    let mut bank_groups: HashMap<String, Vec<IoBankPin>> = HashMap::new();
+    for pin in &pad.assigned_pins {
+        let bank_id = if pin.bank.is_empty() { "Unknown".to_string() } else { format!("Bank {}", pin.bank) };
+        bank_groups.entry(bank_id).or_default().push(IoBankPin {
+            pin: pin.pin.clone(),
+            net: pin.port_name.clone(),
+            direction: pin.direction.clone(),
+        });
+    }
+
+    let mut banks: Vec<IoBank> = bank_groups.into_iter().map(|(bank_id, pins)| {
+        // Extract numeric bank from "Bank N"
+        let bank_num = bank_id.strip_prefix("Bank ").unwrap_or("");
+        let vccio = bank_vccio.get(bank_num).copied().unwrap_or("3.3V");
+        let count = pins.len() as u32;
+        IoBank {
+            id: bank_id,
+            vccio: vccio.to_string(),
+            used: count,
+            total: count,
+            pins,
+        }
+    }).collect();
+    banks.sort_by(|a, b| a.id.cmp(&b.id));
+
+    IoReport { banks }
+}
+
+/// Map I/O standard name to VCCIO voltage.
+fn io_standard_to_vccio(io_std: &str) -> &'static str {
+    match io_std {
+        "LVCMOS33" => "3.3V",
+        "LVCMOS25" => "2.5V",
+        "LVCMOS18" => "1.8V",
+        "LVCMOS15" => "1.5V",
+        "LVCMOS12" => "1.2V",
+        "LVTTL" => "3.3V",
+        "SSTL15" => "1.5V",
+        "SSTL18" => "1.8V",
+        "SSTL135" => "1.35V",
+        "LVDS" | "LVDS25" => "2.5V",
+        _ => "3.3V",
+    }
 }
 
 #[tauri::command]
@@ -1731,7 +1852,7 @@ pub fn add_tool_to_path(backend_id: String) -> Result<String, String> {
     if cfg!(target_os = "windows") {
         // Windows: read user-level PATH from registry, append, write back.
         // Using PowerShell to read/write ONLY the user PATH (not the system PATH).
-        let get_cmd = std::process::Command::new("powershell")
+        let get_cmd = crate::process::no_window_cmd("powershell")
             .args(["-NoProfile", "-Command",
                 "[Environment]::GetEnvironmentVariable('Path', 'User')"])
             .output()
@@ -1746,7 +1867,7 @@ pub fn add_tool_to_path(backend_id: String) -> Result<String, String> {
         } else {
             format!("{};{}", bin_str, user_path)
         };
-        let set_cmd = std::process::Command::new("powershell")
+        let set_cmd = crate::process::no_window_cmd("powershell")
             .args(["-NoProfile", "-Command",
                 &format!("[Environment]::SetEnvironmentVariable('Path', '{}', 'User')", new_user_path)])
             .output()
@@ -2065,17 +2186,10 @@ pub fn detect_programmer_cables(
         env_vars.insert("LM_LICENSE_FILE".into(), wsl_to_windows_path(&lic_path));
     }
 
-    let mut cmd = std::process::Command::new(&pgrcmd_str);
+    let mut cmd = crate::process::no_window_cmd(&pgrcmd_str);
     cmd.arg("-infile").arg(&xcf_arg);
     for (key, val) in &env_vars {
         cmd.env(key, val);
-    }
-
-    // Suppress console window on Windows
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
     let output = cmd.output().map_err(|e| format!("Failed to run pgrcmd: {}", e))?;
@@ -2149,7 +2263,7 @@ pub fn program_device(
 
     std::thread::spawn(move || {
         use std::io::BufRead;
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
 
         let _ = app_handle.emit("program:stdout", serde_json::json!({
             "progId": &prog_id_clone,
@@ -2164,7 +2278,7 @@ pub fn program_device(
             "line": format!("Spawning: {} -infile {}", &pgrcmd_str, &xcf_arg),
         }));
 
-        let mut cmd = Command::new(&pgrcmd_str);
+        let mut cmd = crate::process::no_window_cmd(&pgrcmd_str);
         cmd.arg("-infile")
             .arg(&xcf_arg)
             .stdout(Stdio::piped())
@@ -2172,12 +2286,6 @@ pub fn program_device(
 
         for (key, val) in &env_vars {
             cmd.env(key, val);
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000);
         }
 
         match cmd.spawn() {
@@ -2457,7 +2565,7 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
     let mut timing: Option<TimingReport> = None;
     let mut utilization: Option<ResourceReport> = None;
     let mut power: Option<PowerReport> = None;
-    let drc: Option<DrcReport>;
+    let mut drc: Option<DrcReport>;
 
     // ── Try OSS / nextpnr report.json first ──
     let report_json = build_dir.join("report.json");
@@ -2549,6 +2657,50 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
             }
         }
         drc = Some(DrcReport { errors, critical_warnings, warnings, info: info_count, waived: 0, items: drc_items });
+    }
+
+    // ── Vendor-specific DRC: merge into existing DRC report ──
+    // Radiant: .drc files in impl1/
+    if impl_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&impl_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().map(|e| e == "drc").unwrap_or(false) {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        let vendor_drc = parse_radiant_drc_content(&content);
+                        merge_drc(&mut drc, vendor_drc);
+                    }
+                }
+            }
+        }
+    }
+
+    // ACE: *_drc.rpt in output/
+    let ace_output_dir_drc = dir.join("output");
+    if ace_output_dir_drc.exists() {
+        if let Ok(entries) = std::fs::read_dir(&ace_output_dir_drc) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.ends_with("_drc.rpt") {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        let vendor_drc = parse_ace_drc_content(&content);
+                        merge_drc(&mut drc, vendor_drc);
+                    }
+                }
+            }
+        }
+    }
+
+    // Libero: drc/drc_report.rpt or drc_report.rpt
+    for candidate in [dir.join("drc").join("drc_report.rpt"), dir.join("drc_report.rpt")] {
+        if candidate.exists() {
+            if let Ok(content) = std::fs::read_to_string(&candidate) {
+                let vendor_drc = parse_libero_drc_content(&content);
+                merge_drc(&mut drc, vendor_drc);
+                break;
+            }
+        }
     }
 
     // ── Try vendor reports from impl1/ (Lattice Diamond/Radiant) ──
@@ -2689,6 +2841,99 @@ pub fn auto_load_reports(project_dir: String) -> Result<AutoReports, String> {
     }
 
     Ok(AutoReports { timing, utilization, power, drc })
+}
+
+// ── Vendor DRC parsers for auto_load_reports (no backend instance needed) ──
+
+/// Parse Radiant `.drc` file content directly.
+fn parse_radiant_drc_content(content: &str) -> DrcReport {
+    let mut errors = 0u32;
+    let mut warnings = 0u32;
+    let mut items = Vec::new();
+
+    let summary_re = regex::Regex::new(r"DRC detected (\d+) errors? and (\d+) warnings?").unwrap();
+    if let Some(caps) = summary_re.captures(content) {
+        errors = caps[1].parse().unwrap_or(0);
+        warnings = caps[2].parse().unwrap_or(0);
+    }
+
+    let item_re = regex::Regex::new(r"(?m)^(ERROR|WARNING)\s*-\s*([A-Z0-9_]+):\s*(.+)$").unwrap();
+    for caps in item_re.captures_iter(content) {
+        let sev = match &caps[1] {
+            "ERROR" => DrcSeverity::Error,
+            _ => DrcSeverity::Warning,
+        };
+        items.push(DrcItem {
+            severity: sev,
+            code: caps[2].to_string(),
+            message: caps[3].trim().to_string(),
+            location: String::new(),
+            action: String::new(),
+        });
+    }
+
+    DrcReport { errors, critical_warnings: 0, warnings, info: 0, waived: 0, items }
+}
+
+/// Parse ACE `*_drc.rpt` file content directly.
+fn parse_ace_drc_content(content: &str) -> DrcReport {
+    let mut errors = 0u32;
+    let mut warnings = 0u32;
+    let mut items = Vec::new();
+
+    let item_re = regex::Regex::new(r"(?m)^(ERROR|WARNING):\s*\[([^\]]+)\]\s*(.+)$").unwrap();
+    for caps in item_re.captures_iter(content) {
+        let sev = match &caps[1] {
+            "ERROR" => { errors += 1; DrcSeverity::Error }
+            _ => { warnings += 1; DrcSeverity::Warning }
+        };
+        items.push(DrcItem {
+            severity: sev,
+            code: caps[2].trim().to_string(),
+            message: caps[3].trim().to_string(),
+            location: String::new(),
+            action: String::new(),
+        });
+    }
+
+    DrcReport { errors, critical_warnings: 0, warnings, info: 0, waived: 0, items }
+}
+
+/// Parse Libero `drc_report.rpt` file content directly.
+fn parse_libero_drc_content(content: &str) -> DrcReport {
+    let err_re = regex::Regex::new(r"(?i)errors?\s*[:\|]\s*(\d+)").ok();
+    let warn_re = regex::Regex::new(r"(?i)warnings?\s*[:\|]\s*(\d+)").ok();
+
+    let errors = err_re
+        .and_then(|r| r.captures(content))
+        .and_then(|c| c[1].parse().ok())
+        .unwrap_or(0);
+    let warnings = warn_re
+        .and_then(|r| r.captures(content))
+        .and_then(|c| c[1].parse().ok())
+        .unwrap_or(0);
+
+    DrcReport { errors, critical_warnings: 0, warnings, info: 0, waived: 0, items: vec![] }
+}
+
+/// Merge a vendor-specific DRC report into the existing (log-based) DRC report.
+/// Vendor items are added alongside log-parsed items, and summary counts are updated.
+fn merge_drc(existing: &mut Option<DrcReport>, vendor: DrcReport) {
+    if vendor.items.is_empty() && vendor.errors == 0 && vendor.warnings == 0 {
+        return;
+    }
+    match existing {
+        Some(ref mut drc) => {
+            drc.errors += vendor.errors;
+            drc.warnings += vendor.warnings;
+            drc.critical_warnings += vendor.critical_warnings;
+            drc.info += vendor.info;
+            drc.items.extend(vendor.items);
+        }
+        None => {
+            *existing = Some(vendor);
+        }
+    }
 }
 
 /// Estimate power from nextpnr report.json utilization data
@@ -2842,7 +3087,7 @@ pub fn open_in_file_manager(path: String) -> Result<(), String> {
                 format!("{}:{}", drive.to_uppercase(), rest.replace('/', "\\"))
             } else {
                 // Use wslpath for non-/mnt/ paths
-                match std::process::Command::new("wslpath")
+                match crate::process::no_window_cmd("wslpath")
                     .args(["-w", &path])
                     .output()
                 {
@@ -2884,6 +3129,99 @@ pub fn open_in_file_manager(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_in_editor(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    let config = crate::config::AppConfig::load();
+
+    // If a preferred editor is configured, use it directly
+    if let Some(ref editor) = config.preferred_editor {
+        if !editor.is_empty() {
+            // On WSL, convert path if the editor is a Windows binary
+            let file_arg = if cfg!(target_os = "linux") {
+                let is_wsl = std::fs::read_to_string("/proc/version")
+                    .unwrap_or_default()
+                    .contains("microsoft");
+                let is_windows_editor = editor.ends_with(".exe")
+                    || editor.contains("\\")
+                    || editor.starts_with("/mnt/");
+                if is_wsl && is_windows_editor && path.starts_with("/mnt/") {
+                    let trimmed = path.strip_prefix("/mnt/").unwrap();
+                    let drive = &trimmed[..1];
+                    let rest = &trimmed[1..];
+                    format!("{}:{}", drive.to_uppercase(), rest.replace('/', "\\"))
+                } else {
+                    path.clone()
+                }
+            } else {
+                path.clone()
+            };
+            return crate::process::no_window_cmd(editor)
+                .arg(&file_arg)
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| format!("Failed to open editor '{}': {}", editor, e));
+        }
+    }
+
+    // Fall back to platform defaults
+    #[cfg(target_os = "linux")]
+    {
+        if std::fs::read_to_string("/proc/version")
+            .unwrap_or_default()
+            .contains("microsoft")
+        {
+            // WSL: use cmd.exe /c start to delegate to Windows file association
+            let win_path = if path.starts_with("/mnt/") {
+                let trimmed = path.strip_prefix("/mnt/").unwrap();
+                let drive = &trimmed[..1];
+                let rest = &trimmed[1..];
+                format!("{}:{}", drive.to_uppercase(), rest.replace('/', "\\"))
+            } else {
+                match crate::process::no_window_cmd("wslpath")
+                    .args(["-w", &path])
+                    .output()
+                {
+                    Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
+                    Err(_) => path.clone(),
+                }
+            };
+            return crate::process::no_window_cmd("cmd.exe")
+                .args(["/c", "start", "", &win_path])
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| format!("Failed to open file: {}", e));
+        }
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::process::no_window_cmd("cmd")
+            .args(["/c", "start", "", &path])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open: {}", e))
+    }
+}
+
+#[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
@@ -2894,7 +3232,7 @@ pub fn open_url(url: String) -> Result<(), String> {
         {
             // cmd.exe /c start requires replacing & with ^& in URLs
             let escaped = url.replace('&', "^&");
-            return std::process::Command::new("cmd.exe")
+            return crate::process::no_window_cmd("cmd.exe")
                 .args(["/c", "start", &escaped])
                 .spawn()
                 .map(|_| ())
@@ -2919,7 +3257,7 @@ pub fn open_url(url: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
+        crate::process::no_window_cmd("cmd")
             .args(["/c", "start", &url.replace('&', "^&")])
             .spawn()
             .map(|_| ())
@@ -2974,6 +3312,53 @@ pub fn set_ai_api_key(key: Option<String>) -> Result<(), String> {
         config.save().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+// ── Per-Provider AI API Keys ──
+
+const AI_PROVIDERS: &[&str] = &["anthropic", "openai", "google", "mistral", "xai", "deepseek"];
+
+#[tauri::command]
+pub fn get_ai_api_key_for_provider(provider: String) -> Result<Option<String>, String> {
+    let service = format!("coverteda_ai_{}", provider);
+    match keyring::Entry::new(&service, "api_key") {
+        Ok(entry) => match entry.get_password() {
+            Ok(key) => Ok(Some(key)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Ok(None),
+        },
+        Err(_) => Ok(None),
+    }
+}
+
+#[tauri::command]
+pub fn set_ai_api_key_for_provider(provider: String, key: Option<String>) -> Result<(), String> {
+    let service = format!("coverteda_ai_{}", provider);
+    if let Ok(entry) = keyring::Entry::new(&service, "api_key") {
+        match &key {
+            Some(k) if !k.is_empty() => {
+                entry.set_password(k).map_err(|e| e.to_string())?;
+            }
+            _ => {
+                let _ = entry.delete_credential();
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_ai_providers_with_keys() -> Result<Vec<String>, String> {
+    let mut result = Vec::new();
+    for &provider in AI_PROVIDERS {
+        let service = format!("coverteda_ai_{}", provider);
+        if let Ok(entry) = keyring::Entry::new(&service, "api_key") {
+            if entry.get_password().is_ok() {
+                result.push(provider.to_string());
+            }
+        }
+    }
+    Ok(result)
 }
 
 // ── System stats for "Stats for Nerds" overlay ──
@@ -3713,7 +4098,7 @@ pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, S
             "quartus" | "quartus_pro" => {
                 // Edition is now determined by which backend the user selected,
                 // but still detect for informational purposes
-                let result = std::process::Command::new("quartus_sh")
+                let result = crate::process::no_window_cmd("quartus_sh")
                     .arg("--version")
                     .output();
                 match result {
@@ -3737,7 +4122,7 @@ pub async fn detect_tool_edition(backend_id: String) -> Result<Option<String>, S
                 }
             }
             "vivado" => {
-                let result = std::process::Command::new("vivado")
+                let result = crate::process::no_window_cmd("vivado")
                     .arg("-version")
                     .output();
                 match result {
@@ -3801,4 +4186,32 @@ pub async fn verify_device_part(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Scan for vendor project files (.ldf, .qpf, .xpr, .acepro) in a directory and subdirectories.
+#[tauri::command]
+pub fn scan_project_files(
+    project_dir: String,
+    backend_id: String,
+    top_module: String,
+) -> Result<Vec<String>, String> {
+    let dir = PathBuf::from(&project_dir);
+    let files = match backend_id.as_str() {
+        "diamond" => crate::backend::diamond::DiamondBackend::find_project_files(&dir, &top_module),
+        "quartus" | "quartus_pro" => crate::backend::quartus::QuartusBackend::find_project_files(&dir, &top_module),
+        "vivado" => crate::backend::vivado::VivadoBackend::find_project_files(&dir, &top_module),
+        "radiant" => crate::backend::radiant::RadiantBackend::find_project_files(&dir, &top_module),
+        "ace" => crate::backend::ace::AceBackend::find_project_files(&dir, &top_module),
+        "libero" => crate::backend::libero::LiberoBackend::find_project_files(&dir, &top_module),
+        _ => Vec::new(),
+    };
+    // Return paths relative to project_dir when possible, otherwise absolute
+    Ok(files
+        .into_iter()
+        .map(|p| {
+            p.strip_prefix(&dir)
+                .map(|rel| rel.display().to_string())
+                .unwrap_or_else(|_| p.display().to_string())
+        })
+        .collect())
 }

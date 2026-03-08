@@ -64,6 +64,7 @@ export interface RustGitStatus {
   staged: number;
   unstaged: number;
   untracked: number;
+  stashes: number;
   dirty: boolean;
 }
 
@@ -532,6 +533,85 @@ export async function setAiApiKey(key: string | null): Promise<void> {
   return invoke<void>("set_ai_api_key", { key });
 }
 
+// ── Per-Provider AI API Keys ──
+
+export async function getAiApiKeyForProvider(provider: string): Promise<string | null> {
+  if (!isTauri) {
+    try { return localStorage.getItem(`coverteda_ai_key_${provider}`); } catch { return null; }
+  }
+  return invoke<string | null>("get_ai_api_key_for_provider", { provider });
+}
+
+export async function setAiApiKeyForProvider(provider: string, key: string | null): Promise<void> {
+  if (!isTauri) {
+    try {
+      if (key) localStorage.setItem(`coverteda_ai_key_${provider}`, key);
+      else localStorage.removeItem(`coverteda_ai_key_${provider}`);
+    } catch { /* ignore */ }
+    return;
+  }
+  return invoke<void>("set_ai_api_key_for_provider", { provider, key });
+}
+
+export async function listAiProvidersWithKeys(): Promise<string[]> {
+  if (!isTauri) {
+    try {
+      const result: string[] = [];
+      for (const p of ["anthropic", "openai", "google", "mistral", "xai", "deepseek"]) {
+        if (localStorage.getItem(`coverteda_ai_key_${p}`)) result.push(p);
+      }
+      return result;
+    } catch { return []; }
+  }
+  return invoke<string[]>("list_ai_providers_with_keys");
+}
+
+// ── Git Panel commands ──
+
+export interface BranchInfo {
+  name: string;
+  isCurrent: boolean;
+  isRemote: boolean;
+  ahead: number;
+  behind: number;
+  lastCommitHash: string;
+  lastCommitMsg: string;
+  lastCommitTime: string;
+}
+
+export interface TagInfo {
+  name: string;
+  targetHash: string;
+  message: string | null;
+  tagger: string | null;
+  timeAgo: string | null;
+}
+
+export async function gitListBranches(projectDir: string): Promise<BranchInfo[]> {
+  if (!isTauri) return [];
+  return invoke<BranchInfo[]>("git_list_branches", { projectDir });
+}
+
+export async function gitListTags(projectDir: string): Promise<TagInfo[]> {
+  if (!isTauri) return [];
+  return invoke<TagInfo[]>("git_list_tags", { projectDir });
+}
+
+export async function gitPull(projectDir: string): Promise<string> {
+  if (!isTauri) return "mock pull";
+  return invoke<string>("git_pull", { projectDir });
+}
+
+export async function gitPush(projectDir: string): Promise<string> {
+  if (!isTauri) return "mock push";
+  return invoke<string>("git_push", { projectDir });
+}
+
+export async function gitCheckout(projectDir: string, branch: string): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("git_checkout", { projectDir, branch });
+}
+
 // ── App Config ──
 
 export interface AppConfig {
@@ -555,6 +635,7 @@ export interface AppConfig {
   ai_provider: string | null;
   ai_base_url: string | null;
   selected_versions: Record<string, string>;
+  preferred_editor: string | null;
 }
 
 const DEFAULT_APP_CONFIG: AppConfig = {
@@ -570,6 +651,7 @@ const DEFAULT_APP_CONFIG: AppConfig = {
   ai_provider: null,
   ai_base_url: null,
   selected_versions: {},
+  preferred_editor: null,
 };
 
 export async function getAppConfig(): Promise<AppConfig> {
@@ -607,6 +689,15 @@ export async function pickFile(filters?: { name: string; extensions: string[] }[
 export async function writeTextFile(path: string, content: string): Promise<void> {
   if (!isTauri) { console.log("Mock write:", path); return; }
   return invoke<void>("write_text_file", { path, content });
+}
+
+export async function scanProjectFiles(
+  projectDir: string,
+  backendId: string,
+  topModule: string,
+): Promise<string[]> {
+  if (!isTauri) return [];
+  return invoke<string[]>("scan_project_files", { projectDir, backendId, topModule });
 }
 
 export async function pickSaveFile(filters?: { name: string; extensions: string[] }[]): Promise<string | null> {
@@ -1151,6 +1242,13 @@ export async function openInFileManager(path: string): Promise<void> {
     return;
   }
   return invoke<void>("open_in_file_manager", { path });
+}
+
+// ── Open in external editor ──
+
+export async function openInEditor(path: string): Promise<void> {
+  if (!isTauri) { console.log("Mock open in editor:", path); return; }
+  return invoke<void>("open_in_editor", { path });
 }
 
 // ── System stats (for Stats for Nerds) ──

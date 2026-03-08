@@ -391,26 +391,39 @@ impl QuartusBackend {
 
     /// Find the .qpf (Quartus Project File) in a directory.
     pub fn find_qpf_file(project_dir: &Path, top_module: &str) -> Option<PathBuf> {
-        // Try exact match first
+        Self::find_project_files(project_dir, top_module).into_iter().next()
+    }
+
+    /// Search for .qpf files in the directory and one level of subdirectories.
+    pub fn find_project_files(project_dir: &Path, top_module: &str) -> Vec<PathBuf> {
         let exact = project_dir.join(format!("{}.qpf", top_module));
-        if exact.exists() {
-            return Some(exact);
+        let mut dirs = vec![project_dir.to_path_buf()];
+        if let Ok(entries) = std::fs::read_dir(project_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with('.') && name != "db" && name != "incremental_db" && name != "output_files" {
+                        dirs.push(entry.path());
+                    }
+                }
+            }
         }
-        // Scan for any .qpf file
-        let qpfs: Vec<PathBuf> = std::fs::read_dir(project_dir)
-            .ok()?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().map(|ext| ext == "qpf").unwrap_or(false))
-            .collect();
-        match qpfs.len() {
-            0 => None,
-            1 => Some(qpfs.into_iter().next().unwrap()),
-            _ => qpfs.iter()
-                .find(|p| p.file_stem().and_then(|s| s.to_str()).map(|s| s.contains(top_module)).unwrap_or(false))
-                .cloned()
-                .or_else(|| qpfs.into_iter().next()),
+        let mut results = Vec::new();
+        for dir in &dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "qpf").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
         }
+        results.sort();
+        if let Some(pos) = results.iter().position(|p| p == &exact) {
+            results.swap(0, pos);
+        }
+        results
     }
 }
 
@@ -493,17 +506,42 @@ impl FpgaBackend for QuartusBackend {
             stages.is_empty() || stages.iter().any(|s| s == id)
         };
 
+        // Resolve project file: explicit option > auto-discover > convention
+        let project_open_tcl = if let Some(pf) = options.get("project_file") {
+            let p = if PathBuf::from(pf).is_absolute() {
+                PathBuf::from(pf)
+            } else {
+                project_dir.join(pf)
+            };
+            let qpf_tcl = super::to_tcl_path(&p);
+            // Strip .qpf extension for project_open
+            let stem = qpf_tcl.trim_end_matches(".qpf");
+            format!(
+                "project_open {stem}"
+            )
+        } else if let Some(qpf) = Self::find_qpf_file(project_dir, top_module) {
+            let qpf_tcl = super::to_tcl_path(&qpf);
+            let stem = qpf_tcl.trim_end_matches(".qpf");
+            format!(
+                "project_open {stem}"
+            )
+        } else {
+            format!(
+                "if {{[file exists {project_path_tcl}/{top_module}.qpf]}} {{\n\
+                 \tproject_open {project_path_tcl}/{top_module}\n\
+                 }} else {{\n\
+                 \tproject_new {project_path_tcl}/{top_module}\n\
+                 }}"
+            )
+        };
+
         let mut script = format!(
             r#"# CovertEDA — Quartus Prime Build Script
 # Device: {device}
 # Top: {top_module}
 
 # Open existing project or create new
-if {{[file exists {project_path_tcl}/{top_module}.qpf]}} {{
-    project_open {project_path_tcl}/{top_module}
-}} else {{
-    project_new {project_path_tcl}/{top_module}
-}}
+{project_open_tcl}
 
 # Set device and top-level
 set_global_assignment -name DEVICE {device}
@@ -677,7 +715,7 @@ if {{[llength $sdc_files] > 0}} {{
             "if {{[lsearch -exact [get_part_list] \"{}\"] >= 0}} {{ puts VALID }} else {{ puts INVALID }}",
             part,
         );
-        let output = std::process::Command::new(&sh)
+        let output = crate::process::no_window_cmd(sh.to_str().unwrap_or("quartus_sh"))
             .args(["--tcl_eval", &tcl])
             .output()
             .map_err(|e| BackendError::IoError(e))?;
@@ -710,7 +748,7 @@ foreach p $pins {{
         std::fs::write(&tcl_file, &tcl)
             .map_err(|e| BackendError::IoError(e))?;
 
-        let output = std::process::Command::new(&sh)
+        let output = crate::process::no_window_cmd(sh.to_str().unwrap_or("quartus_sh"))
             .args(["-t", &tcl_file.display().to_string()])
             .output()
             .map_err(|e| BackendError::IoError(e))?;

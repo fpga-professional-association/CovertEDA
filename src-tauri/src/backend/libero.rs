@@ -191,34 +191,35 @@ impl LiberoBackend {
 
     /// Find an existing Libero project file (.prjx) in the directory.
     fn find_project_file(project_dir: &Path) -> Option<PathBuf> {
-        let Ok(entries) = std::fs::read_dir(project_dir) else {
-            return None;
-        };
-        for entry in entries.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("prjx") {
-                return Some(path);
-            }
-        }
-        // Check one level deep (Libero creates a subdirectory with the project name)
-        let Ok(entries2) = std::fs::read_dir(project_dir) else {
-            return None;
-        };
-        for entry in entries2.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.is_dir() {
-                let Ok(sub) = std::fs::read_dir(&path) else {
-                    continue;
-                };
-                for sub_entry in sub.filter_map(|e| e.ok()) {
-                    let sub_path = sub_entry.path();
-                    if sub_path.extension().and_then(|e| e.to_str()) == Some("prjx") {
-                        return Some(sub_path);
+        Self::find_project_files(project_dir, "").into_iter().next()
+    }
+
+    /// Search for .prjx project files in the directory and one level of subdirectories.
+    pub fn find_project_files(project_dir: &Path, _top_module: &str) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        let mut dirs = vec![project_dir.to_path_buf()];
+        if let Ok(entries) = std::fs::read_dir(project_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with('.') && name != "impl" {
+                        dirs.push(entry.path());
                     }
                 }
             }
         }
-        None
+        for dir in &dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "prjx").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results.sort();
+        results
     }
 
     /// Return the single detected version (Libero rarely has multiple installs).
@@ -343,8 +344,19 @@ impl FpgaBackend for LiberoBackend {
              # Frequency target: {freq} MHz\n\n"
         );
 
-        // Open existing project or create from scratch
-        if let Some(prjx) = Self::find_project_file(project_dir) {
+        // Resolve project file: explicit option > auto-discover > create new
+        let resolved_prjx = if let Some(pf) = options.get("project_file") {
+            let p = if PathBuf::from(pf).is_absolute() {
+                PathBuf::from(pf)
+            } else {
+                project_dir.join(pf)
+            };
+            Some(p)
+        } else {
+            Self::find_project_file(project_dir)
+        };
+
+        if let Some(prjx) = resolved_prjx {
             let prjx_tcl = Self::to_tcl_path(&prjx);
             script.push_str(&format!("open_project -file {{{prjx_tcl}}}\n\n"));
         } else {

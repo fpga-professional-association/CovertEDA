@@ -22,6 +22,8 @@ vi.mock("../hooks/useTauri", () => ({
   saveAppConfig: vi.fn(() => Promise.resolve()),
   getAiApiKey: vi.fn(() => Promise.resolve(null)),
   setAiApiKey: vi.fn(() => Promise.resolve()),
+  getAiApiKeyForProvider: vi.fn(() => Promise.resolve(null)),
+  setAiApiKeyForProvider: vi.fn(() => Promise.resolve()),
   readFile: vi.fn(() => Promise.resolve({ path: "", content: "", sizeBytes: 0, isBinary: false, lineCount: 0 })),
   writeTextFile: vi.fn(() => Promise.resolve()),
 }));

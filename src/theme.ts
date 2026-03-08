@@ -1,6 +1,27 @@
 // ── Theme System ──
 // Defines color palettes for Dark, Light, and Colorblind (deuteranopia-safe) themes.
 
+/** Harmonious modular font-size scale (px) */
+export const FONT_SIZES = {
+  xs: 7,   // Tiny labels (nav icons, badge secondary)
+  sm: 9,   // Standard UI text (buttons, labels, table cells)
+  md: 11,  // Input text, body content
+  lg: 13,  // Section headings
+  xl: 15,  // Panel titles
+  xxl: 18, // Page-level headings
+} as const;
+
+/** 4px-based spacing scale (px) */
+export const SPACE = {
+  xs: 2,
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  xxl: 24,
+  xxxl: 32,
+} as const;
+
 export interface ThemeColors {
   bg: string;
   s1: string;
@@ -36,7 +57,7 @@ export const DARK: ThemeColors = {
   b2: "#2a4060",
   t1: "#e8f0fa",
   t2: "#9ab0cc",
-  t3: "#546880",
+  t3: "#6b8099",
   accent: "#3b9eff",
   accentDim: "#122a48",
   ok: "#2ecc71",
@@ -84,7 +105,7 @@ export const COLORBLIND: ThemeColors = {
   b2: "#2a4060",
   t1: "#e8f0fa",
   t2: "#9ab0cc",
-  t3: "#546880",
+  t3: "#6b8099",
   accent: "#3b9eff",
   accentDim: "#122a48",
   ok: "#56b4e9",       // Blue instead of green (deuteranopia-safe)

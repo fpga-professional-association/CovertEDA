@@ -36,6 +36,30 @@ import TimingAnalyzer from "./TimingAnalyzer";
  * - https://www.uxpin.com/studio/blog/dashboard-design-principles/
  */
 
+// ── EDA metric tooltip map (matches label text, case-insensitive) ──
+const METRIC_TIPS: [RegExp, string][] = [
+  [/^luts?$/i, "Look-Up Table \u2014 combinational logic element"],
+  [/^ffs?$/i, "Flip-Flop \u2014 sequential storage element"],
+  [/^registers?$/i, "Flip-Flop \u2014 sequential storage element"],
+  [/^bram$/i, "Block RAM \u2014 dedicated memory blocks"],
+  [/^ebr$/i, "Block RAM \u2014 dedicated memory blocks"],
+  [/^dsps?$/i, "Digital Signal Processing block \u2014 hardware multiplier/accumulator"],
+  [/^dsp\s*blocks?$/i, "Digital Signal Processing block \u2014 hardware multiplier/accumulator"],
+  [/^dsp48/i, "Digital Signal Processing block \u2014 hardware multiplier/accumulator"],
+  [/^pio$/i, "Programmable I\/O \u2014 physical pin resource"],
+  [/^i\/o\s*pins?$/i, "Programmable I\/O \u2014 physical pin resource"],
+  [/^logic\s*elements?$/i, "Look-Up Table \u2014 combinational logic element"],
+  [/^slice/i, "Logic slice \u2014 contains LUTs and flip-flops"],
+];
+
+/** Return a tooltip string for a known EDA resource name, or undefined */
+function metricTip(label: string): string | undefined {
+  for (const [re, tip] of METRIC_TIPS) {
+    if (re.test(label.trim())) return tip;
+  }
+  return undefined;
+}
+
 // ── Inline SVG Visualizations (no external chart libs) ──
 
 /** Arc gauge showing Fmax as % of target — green ≥100%, amber 80-100%, red <80% */
@@ -117,6 +141,19 @@ function PowerDonut({ breakdown, total, C }: {
   );
 }
 
+// ── Report-to-AI prompt mapping ──
+const REPORT_AI_PROMPTS: Record<string, string> = {
+  timing: "Analyze this timing report. Identify worst failing paths, explain causes, suggest fixes:",
+  util: "Explain this utilization report. Highlight over-utilized resources, recommend optimizations:",
+  power: "Analyze this power report. Suggest power optimization opportunities:",
+  drc: "Explain these DRC results. For each error/warning, explain root cause and provide a fix:",
+  io: "Analyze this I/O report. Check for bank conflicts and VCCIO issues:",
+  synth: "Analyze this synthesis report. Identify warnings, inferred latches, optimization issues:",
+  map: "Analyze this mapping report. Identify packing, resource, or warning issues:",
+  par: "Analyze this Place & Route report. Check routing congestion and timing issues:",
+  bitstream: "Analyze this bitstream report. Check for errors or warnings:",
+};
+
 // ── Props ──
 interface ReportViewerProps {
   rptTab: ReportTab;
@@ -131,6 +168,7 @@ interface ReportViewerProps {
   device: string;
   projectDir: string;
   building?: boolean;
+  onSendToAi?: (content: string) => void;
 }
 
 function NoData({ label }: { label: string }) {
@@ -286,7 +324,7 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
 }
 
 /** Stage log panel with filter buttons, counts, AI send, and fullscreen */
-function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportType: string }) {
+function StageLogPanel({ projectDir, reportType, onSendToAi }: { projectDir: string; reportType: string; onSendToAi?: (content: string) => void }) {
   const { C, MONO } = useTheme();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -394,12 +432,15 @@ function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportT
             <button
               onClick={() => {
                 if (content) {
-                  navigator.clipboard.writeText(
-                    `Please analyze this ${stageNames[reportType] ?? reportType} from an FPGA build:\n\n${content}`
-                  );
+                  const prompt = REPORT_AI_PROMPTS[reportType] ?? `Please analyze this ${stageNames[reportType] ?? reportType} from an FPGA build:`;
+                  if (onSendToAi) {
+                    onSendToAi(prompt + "\n\n" + content);
+                  } else {
+                    navigator.clipboard.writeText(prompt + "\n\n" + content);
+                  }
                 }
               }}
-              title="Copy report to clipboard for AI analysis"
+              title={onSendToAi ? "Send report to AI assistant for analysis" : "Copy report to clipboard for AI analysis"}
               style={{
                 padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
                 border: `1px solid ${C.pink}40`, background: `${C.pink}10`, color: C.pink,
@@ -436,7 +477,7 @@ function StageLogPanel({ projectDir, reportType }: { projectDir: string; reportT
 }
 
 /** Content viewer for a single report file with error/warning/info filtering */
-function ReportFileContentViewer({ filePath }: { filePath: string }) {
+function ReportFileContentViewer({ filePath, onSendToAi }: { filePath: string; onSendToAi?: (content: string) => void }) {
   const { C, MONO } = useTheme();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -536,9 +577,16 @@ function ReportFileContentViewer({ filePath }: { filePath: string }) {
             ))}
             <button
               onClick={() => {
-                if (content) navigator.clipboard.writeText(`Analyze this FPGA report (${fileName}):\n\n${content}`);
+                if (content) {
+                  const msg = `Analyze this FPGA report (${fileName}):\n\n${content}`;
+                  if (onSendToAi) {
+                    onSendToAi(msg);
+                  } else {
+                    navigator.clipboard.writeText(msg);
+                  }
+                }
               }}
-              title="Copy report to clipboard for AI analysis"
+              title={onSendToAi ? "Send report to AI assistant for analysis" : "Copy report to clipboard for AI analysis"}
               style={{
                 padding: "2px 8px", borderRadius: 3, fontSize: 8, fontFamily: MONO, fontWeight: 600,
                 border: `1px solid ${C.b1}`, background: "transparent", color: C.t3,
@@ -573,7 +621,7 @@ function ReportFileContentViewer({ filePath }: { filePath: string }) {
 }
 
 /** Report files browser — discovers vendor report files with metadata and filtering */
-function ReportFilesPanel({ projectDir, building }: { projectDir: string; building?: boolean }) {
+function ReportFilesPanel({ projectDir, building, onSendToAi }: { projectDir: string; building?: boolean; onSendToAi?: (content: string) => void }) {
   const { C, MONO } = useTheme();
   const [files, setFiles] = useState<ReportFileEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -648,7 +696,7 @@ function ReportFilesPanel({ projectDir, building }: { projectDir: string; buildi
             {files.find((f) => f.path === selectedFile)?.name ?? "Report"}
           </span>
         </div>
-        <ReportFileContentViewer filePath={selectedFile} />
+        <ReportFileContentViewer filePath={selectedFile} onSendToAi={onSendToAi} />
       </div>
     );
   }
@@ -744,16 +792,16 @@ function ReportFilesPanel({ projectDir, building }: { projectDir: string; buildi
 }
 
 // ── KPI Card — standalone metric card used in the summary row ──
-function KpiCard({ label, value, color, sub, C, MONO, wide }: {
+function KpiCard({ label, value, color, sub, C, MONO, wide, title }: {
   label: string; value: string; color: string; sub?: string;
-  C: ReturnType<typeof useTheme>["C"]; MONO: string; wide?: boolean;
+  C: ReturnType<typeof useTheme>["C"]; MONO: string; wide?: boolean; title?: string;
 }) {
   return (
     <div style={{
       padding: "10px 14px", background: C.bg, borderRadius: 6,
       border: `1px solid ${C.b1}`, borderTop: `3px solid ${color}`,
       flex: wide ? 2 : 1, minWidth: 0,
-    }}>
+    }} title={title}>
       <div style={{ fontSize: 8, fontFamily: MONO, fontWeight: 600, color: C.t3, letterSpacing: 0.8, marginBottom: 4 }}>
         {label}
       </div>
@@ -775,6 +823,7 @@ export default function ReportViewer({
   reports,
   projectDir,
   building,
+  onSendToAi,
 }: ReportViewerProps) {
   const { C, MONO } = useTheme();
   const REPORTS = reports;
@@ -878,16 +927,17 @@ export default function ReportViewer({
   const totalIssues = (hasTimingFailures ? REPORTS.timing!.summary.failingPaths : 0) + drcErrors + drcCritWarns;
 
   // ── Tab definitions: two rows ──
-  const analysisTabs: { id: ReportTab; l: string; icon: ReactNode; badge?: string; badgeColor?: string }[] = [
-    { id: "timing", l: "Timing", icon: <Clock /> },
-    { id: "util", l: "Utilization", icon: <Gauge /> },
-    { id: "power", l: "Power", icon: <Bolt /> },
+  const analysisTabs: { id: ReportTab; l: string; icon: ReactNode; badge?: string; badgeColor?: string; title?: string }[] = [
+    { id: "timing", l: "Timing", icon: <Clock />, title: "Timing Analysis — clock frequency, setup/hold slack, and critical path details" },
+    { id: "util", l: "Utilization", icon: <Gauge />, title: "Resource Utilization — LUT, FF, BRAM, DSP, and I/O usage on the target device" },
+    { id: "power", l: "Power", icon: <Bolt />, title: "Power Estimation — static and dynamic power consumption breakdown" },
     {
       id: "drc", l: "DRC", icon: <Warn />,
       badge: drcErrors > 0 ? String(drcErrors) : undefined,
       badgeColor: drcErrors > 0 ? C.err : undefined,
+      title: "Design Rule Check — errors, warnings, and constraint violations",
     },
-    { id: "io", l: "I/O", icon: <Pin /> },
+    { id: "io", l: "I/O", icon: <Pin />, title: "I/O Banking — physical pin assignments, banks, and voltage levels" },
   ];
 
   const stageTabs: { id: ReportTab; l: string }[] = [
@@ -907,10 +957,11 @@ export default function ReportViewer({
     (rptTab === "power" && !!REPORTS.power) ||
     (rptTab === "drc" && !!REPORTS.drc);
 
-  const tabBtn = (id: ReportTab, label: string, active: boolean, icon?: ReactNode, badge?: string, badgeColor?: string) => (
+  const tabBtn = (id: ReportTab, label: string, active: boolean, icon?: ReactNode, badge?: string, badgeColor?: string, title?: string) => (
     <button
       key={id}
       onClick={() => setRptTab(id)}
+      title={title}
       style={{
         flex: 1, padding: "6px 8px", minWidth: 0,
         background: active ? C.accentDim : "transparent",
@@ -950,7 +1001,7 @@ export default function ReportViewer({
       }}>
         {/* Row 1: Analysis tabs */}
         <div style={{ display: "flex", gap: 1 }}>
-          {analysisTabs.map((t) => tabBtn(t.id, t.l, rptTab === t.id, t.icon, t.badge, t.badgeColor))}
+          {analysisTabs.map((t) => tabBtn(t.id, t.l, rptTab === t.id, t.icon, t.badge, t.badgeColor, t.title))}
         </div>
         {/* Row 2: Build Logs + export (only when build data exists) */}
         {hasBuildData && (
@@ -1003,7 +1054,7 @@ export default function ReportViewer({
             )}
             {hasTimingFailures && (
               <div style={{ color: C.err, fontWeight: 700 }}>
-                {"\u2717"} Timing FAILED: {REPORTS.timing!.summary.failingPaths} path(s) with negative slack (WNS: {REPORTS.timing!.summary.wns})
+                {"\u2717"} Timing FAILED: {REPORTS.timing!.summary.failingPaths} path(s) with negative slack (<span title="Worst Negative Slack \u2014 smallest timing margin across all paths">WNS</span>: {REPORTS.timing!.summary.wns})
               </div>
             )}
             {drcErrors > 0 && rptTab !== "timing" && (
@@ -1050,7 +1101,7 @@ export default function ReportViewer({
                     </div>
                   </div>
                 </div>
-                <KpiCard label="FMAX ACHIEVED" value={t.summary.fmax} color={fmaxPct >= 100 ? C.ok : fmaxPct >= 80 ? C.warn : C.err} sub={`Target: ${t.summary.target}`} C={C} MONO={MONO} />
+                <KpiCard label="FMAX ACHIEVED" value={t.summary.fmax} color={fmaxPct >= 100 ? C.ok : fmaxPct >= 80 ? C.warn : C.err} sub={`Target: ${t.summary.target}`} C={C} MONO={MONO} title="Maximum achievable clock frequency" />
                 <KpiCard label="MARGIN" value={t.summary.margin} color={parseFloat(t.summary.margin) >= 0 ? C.ok : C.err} C={C} MONO={MONO} />
                 <KpiCard label="FAILING PATHS" value={`${t.summary.failingPaths}`} color={t.summary.failingPaths > 0 ? C.err : C.ok} sub={`of ${t.summary.totalPaths} total`} C={C} MONO={MONO} />
               </div>
@@ -1058,17 +1109,17 @@ export default function ReportViewer({
               {/* ── Level 2: Slack metrics ── */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                 {[
-                  { l: "WNS (Setup)", v: t.summary.wns },
-                  { l: "TNS", v: t.summary.tns },
-                  { l: "WHS (Hold)", v: t.summary.whs },
-                  { l: "THS", v: t.summary.ths },
+                  { l: "WNS (Setup)", v: t.summary.wns, tip: "Worst Negative Slack \u2014 smallest timing margin across all paths" },
+                  { l: "TNS", v: t.summary.tns, tip: "Total Negative Slack \u2014 sum of all negative slack values" },
+                  { l: "WHS (Hold)", v: t.summary.whs, tip: "Worst Hold Slack \u2014 smallest hold timing margin" },
+                  { l: "THS", v: t.summary.ths, tip: "Total Hold Slack \u2014 sum of all negative hold slack values" },
                 ].map((m, i) => (
                   <div key={i} style={{
                     padding: "8px 12px", background: C.s1, borderRadius: 5,
                     border: `1px solid ${C.b1}`, fontSize: 10, fontFamily: MONO,
                     display: "flex", justifyContent: "space-between", alignItems: "center",
                   }}>
-                    <span style={{ color: C.t3 }}>{m.l}</span>
+                    <span style={{ color: C.t3 }} title={m.tip}>{m.l}</span>
                     <span style={{ color: parseFloat(m.v) >= 0 ? C.ok : C.err, fontWeight: 700, fontSize: 12 }}>{m.v}</span>
                   </div>
                 ))}
@@ -1083,7 +1134,7 @@ export default function ReportViewer({
                     </div>
                     {t.summary.fmax && parseFloat(t.summary.fmax) > 0 && (
                       <div style={{ padding: "10px 12px", background: C.bg, borderRadius: 6, border: `1px solid ${C.b1}`, display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ color: C.t3 }}>Tool-inferred Fmax:</span>
+                        <span style={{ color: C.t3 }} title="Maximum achievable clock frequency">Tool-inferred Fmax:</span>
                         <span style={{ fontSize: 16, fontWeight: 700, color: C.ok }}>{t.summary.fmax}</span>
                         {t.summary.target && parseFloat(t.summary.target) > 0 && (
                           <span style={{ color: C.t3 }}>target: {t.summary.target}</span>
@@ -1094,7 +1145,7 @@ export default function ReportViewer({
                 ) : (
                   <>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 1fr 60px 60px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 0.8, borderBottom: `1px solid ${C.b1}` }}>
-                      <span>CLOCK</span><span>PERIOD</span><span>FREQUENCY</span><span>SOURCE</span><span>WNS</span><span>PATHS</span>
+                      <span>CLOCK</span><span>PERIOD</span><span>FREQUENCY</span><span>SOURCE</span><span title="Worst Negative Slack \u2014 smallest timing margin across all paths">WNS</span><span>PATHS</span>
                     </div>
                     {t.clocks.map((ck, i) => (
                       <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 1fr 60px 60px", gap: 6, padding: "7px 8px", fontSize: 10, fontFamily: MONO, borderBottom: `1px solid ${C.b1}` }}>
@@ -1185,14 +1236,14 @@ export default function ReportViewer({
               {/* ── Level 1: KPI Summary ── */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <KpiCard label="DEVICE" value={u.device} color={C.accent} C={C} MONO={MONO} />
-                <KpiCard label={`PEAK UTILIZATION (${topItem.r})`} value={`${topPct}%`} color={topPct > 85 ? C.err : topPct > 65 ? C.warn : C.ok} sub={`${topItem.used.toLocaleString()} / ${topItem.total.toLocaleString()}`} C={C} MONO={MONO} />
+                <KpiCard label={`PEAK UTILIZATION (${topItem.r})`} value={`${topPct}%`} color={topPct > 85 ? C.err : topPct > 65 ? C.warn : C.ok} sub={`${topItem.used.toLocaleString()} / ${topItem.total.toLocaleString()}`} C={C} MONO={MONO} title={metricTip(topItem.r)} />
                 {allItems.filter((it) => it.r.toLowerCase().includes("lut") || it.r.toLowerCase().includes("logic")).slice(0, 1).map((it, i) => {
                   const pct = it.total > 0 ? Math.round((it.used / it.total) * 100) : 0;
-                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} />;
+                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} title={metricTip(it.r) || "Look-Up Table \u2014 combinational logic element"} />;
                 })}
                 {allItems.filter((it) => it.r.toLowerCase().includes("ff") || it.r.toLowerCase().includes("register")).slice(0, 1).map((it, i) => {
                   const pct = it.total > 0 ? Math.round((it.used / it.total) * 100) : 0;
-                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} />;
+                  return <KpiCard key={i} label={it.r.toUpperCase()} value={`${pct}%`} color={pct > 85 ? C.err : pct > 65 ? C.warn : C.accent} sub={`${it.used.toLocaleString()} / ${it.total.toLocaleString()}`} C={C} MONO={MONO} title={metricTip(it.r) || "Flip-Flop \u2014 sequential storage element"} />;
                 })}
               </div>
 
@@ -1209,7 +1260,7 @@ export default function ReportViewer({
                       return (
                         <div key={ri} style={{ marginBottom: 8 }} title={`${r.r}: ${r.used.toLocaleString()} used of ${r.total.toLocaleString()} available (${pct}%). ${r.detail || ""}`}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, fontFamily: MONO, marginBottom: 3 }}>
-                            <span style={{ color: C.t1, fontWeight: 600 }}>{r.r}</span>
+                            <span style={{ color: C.t1, fontWeight: 600 }} title={metricTip(r.r)}>{r.r}</span>
                             <span style={{ color: col, fontWeight: 600 }}>{r.used.toLocaleString()} / {r.total.toLocaleString()} ({pct}%)</span>
                           </div>
                           <div style={{ height: 6, borderRadius: 3, background: C.b1, overflow: "hidden", marginBottom: 2 }}>
@@ -1226,7 +1277,7 @@ export default function ReportViewer({
               {/* ── Level 3: By Module ── */}
               <Collapsible title="Utilization by Module" defaultOpen={false}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 70px 60px 40px 50px", gap: 6, padding: "5px 8px", fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3, borderBottom: `1px solid ${C.b1}` }}>
-                  <span>MODULE</span><span>SHARE</span><span>LUT</span><span>FF</span><span>EBR</span><span>%</span>
+                  <span>MODULE</span><span>SHARE</span><span title="Look-Up Table \u2014 combinational logic element">LUT</span><span title="Flip-Flop \u2014 sequential storage element">FF</span><span title="Block RAM \u2014 dedicated memory blocks">EBR</span><span>%</span>
                 </div>
                 {u.byModule.map((m, i) => {
                   const pct = parseFloat(m.pct);
@@ -1421,8 +1472,8 @@ export default function ReportViewer({
               {/* ── Level 1: KPI Summary ── */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <KpiCard label="DEVICE" value={REPORTS.utilization!.device} color={C.accent} C={C} MONO={MONO} />
-                <KpiCard label="I/O BANKS" value={String(io.banks.length)} color={C.t1} C={C} MONO={MONO} />
-                <KpiCard label="TOTAL PINS USED" value={`${totalUsed} / ${totalPins}`} color={totalPct > 80 ? C.warn : C.ok} sub={`${totalPct}%`} C={C} MONO={MONO} wide />
+                <KpiCard label="I/O BANKS" value={String(io.banks.length)} color={C.t1} C={C} MONO={MONO} title="I/O bank groups on the target device" />
+                <KpiCard label="TOTAL PINS USED" value={`${totalUsed} / ${totalPins}`} color={totalPct > 80 ? C.warn : C.ok} sub={`${totalPct}%`} C={C} MONO={MONO} wide title="Programmable I/O \u2014 physical pin resource" />
               </div>
 
               {/* ── Level 2: Bank details ── */}
@@ -1431,7 +1482,7 @@ export default function ReportViewer({
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                   <Pin />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>I/O Pin Assignments</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }} title="Programmable I/O \u2014 physical pin resource">I/O Pin Assignments</span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
                   {io.banks.map((bk, i) => {
@@ -1468,12 +1519,12 @@ export default function ReportViewer({
 
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
-          <StageLogPanel projectDir={projectDir} reportType={rptTab} />
+          <StageLogPanel projectDir={projectDir} reportType={rptTab} onSendToAi={onSendToAi} />
         )}
 
         {/* ════════════════ REPORT FILES ════════════════ */}
         {rptTab === "files" && (
-          <ReportFilesPanel projectDir={projectDir} building={building} />
+          <ReportFilesPanel projectDir={projectDir} building={building} onSendToAi={onSendToAi} />
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, useEffect, memo } from "react";
 import { RuntimeBackend, PipelineStage, LogEntry } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Badge, Btn, Select } from "./shared";
@@ -477,11 +477,30 @@ const BACKEND_PRESETS: Record<string, StrategyPreset[]> = {
   vivado: VIVADO_PRESETS,
 };
 
+/** Tooltip descriptions for pipeline stage labels, keyed by stage id */
+const STAGE_TOOLTIPS: Record<string, string> = {
+  synth: "Synthesis \u2014 converts HDL source code into a gate-level netlist",
+  translate: "Translate \u2014 converts the netlist into the vendor's internal database format",
+  map: "Map \u2014 maps logical elements to physical device resources",
+  par: "Place & Route \u2014 assigns physical locations and routing paths",
+  pnr: "Place & Route \u2014 assigns physical locations and routing paths",
+  bitgen: "Bitstream \u2014 generates the binary file for FPGA programming",
+  pack: "Bitstream \u2014 generates the binary file for FPGA programming",
+  analysis: "Analysis & Elaboration \u2014 parses HDL and elaborates the design hierarchy",
+  fit: "Fitter \u2014 places and routes the design onto the target FPGA",
+  sta: "Static Timing Analysis \u2014 verifies that timing constraints are met",
+  asm: "Assembler \u2014 generates the programming file from the fitted design",
+  opt: "Optimization \u2014 applies logic optimization passes to the synthesized design",
+  impl: "Implementation \u2014 places and routes the design onto the target FPGA",
+  program: "Programming \u2014 downloads the bitstream to the FPGA device",
+};
+
 interface BuildPipelineProps {
   backend: RuntimeBackend;
   building: boolean;
   buildStep: number;
   buildFailed?: boolean;
+  buildElapsedSec?: number | null;
   logs: LogEntry[];
   activeStage: number | null;
   onStageClick: (idx: number) => void;
@@ -658,6 +677,7 @@ function PStep({
           checked={checked}
           onChange={onToggle}
           disabled={building}
+          title={checked ? `Deselect ${s.label} stage` : `Select ${s.label} stage`}
           style={{
             marginTop: 3,
             accentColor: C.accent,
@@ -674,6 +694,12 @@ function PStep({
             minWidth: 18,
             cursor: st !== "pending" ? "pointer" : "default",
           }}
+          title={
+            st === "done" ? `${s.label}: completed successfully`
+            : st === "run" ? `${s.label}: running`
+            : st === "failed" ? `${s.label}: failed`
+            : `${s.label}: pending`
+          }
         >
           <div
             style={{
@@ -724,6 +750,7 @@ function PStep({
                 cursor: st !== "pending" ? "pointer" : "default",
               }}
               onClick={st !== "pending" ? onClick : undefined}
+              title={STAGE_TOOLTIPS[s.id] ?? s.label}
             >
               {s.label}
             </div>
@@ -796,6 +823,7 @@ function PStep({
             <>
               <div
                 onClick={() => setShowAdvanced((p) => !p)}
+                title={showAdvanced ? "Hide advanced options" : "Show advanced options"}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -829,6 +857,7 @@ export default memo(function BuildPipeline({
   building,
   buildStep,
   buildFailed,
+  buildElapsedSec,
   logs,
   activeStage,
   onStageClick,
@@ -846,6 +875,21 @@ export default memo(function BuildPipeline({
   const { C, MONO } = useTheme();
   const B = backend;
   const allDone = !building && !buildFailed && buildStep >= B.pipeline.length && buildStep >= 0;
+
+  // Live elapsed timer during builds
+  const [liveElapsed, setLiveElapsed] = useState(0);
+  useEffect(() => {
+    if (!building) { setLiveElapsed(0); return; }
+    const t0 = Date.now();
+    const id = setInterval(() => setLiveElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [building]);
+
+  const fmtTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  };
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
 
   // Extract key error messages from build log for the failure banner
@@ -944,6 +988,43 @@ export default memo(function BuildPipeline({
     }
   }, [projectDir, deviceString, topModule, buildOptions, B.defaultDev]);
 
+  // ── Project file discovery (vendor project files) ──
+  const PROJECT_FILE_EXT: Record<string, string> = {
+    diamond: "ldf", quartus: "qpf", quartus_pro: "qpf", vivado: "xpr",
+    radiant: "rdf", ace: "acepro", libero: "prjx",
+  };
+  const needsProjectFile = B.id in PROJECT_FILE_EXT;
+  const projFileExt = PROJECT_FILE_EXT[B.id] ?? "prj";
+  const [discoveredProjectFiles, setDiscoveredProjectFiles] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!needsProjectFile || !projectDir || !topModule) return;
+    let cancelled = false;
+    import("../hooks/useTauri").then(({ scanProjectFiles }) =>
+      scanProjectFiles(projectDir, B.id, topModule).then((files) => {
+        if (!cancelled) setDiscoveredProjectFiles(files);
+      })
+    ).catch(() => {});
+    return () => { cancelled = true; };
+  }, [needsProjectFile, projectDir, B.id, topModule]);
+
+  const handleBrowseProjectFile = useCallback(async () => {
+    const { pickFile } = await import("../hooks/useTauri");
+    const path = await pickFile([{ name: "Project File", extensions: [projFileExt] }]);
+    if (!path) return;
+    // Store relative to project dir if possible
+    const rel = projectDir && path.startsWith(projectDir)
+      ? path.slice(projectDir.length + 1)
+      : path;
+    onOptionsChange({ ...buildOptions, project_file: rel });
+  }, [B.id, projectDir, buildOptions, onOptionsChange]);
+
+  const handleClearProjectFile = useCallback(() => {
+    const next = { ...buildOptions };
+    delete next.project_file;
+    onOptionsChange(next);
+  }, [buildOptions, onOptionsChange]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={panel}>
@@ -961,12 +1042,19 @@ export default memo(function BuildPipeline({
           <Zap />
           Build Pipeline <Badge color={B.color}>{B.short}</Badge>
           {selectedStages.length > 0 && selectedStages.length < B.pipeline.length && (
-            <Badge color={C.warn}>{selectedStages.length}/{B.pipeline.length} stages</Badge>
+            <span title={`${selectedStages.length} of ${B.pipeline.length} stages selected for build`}>
+              <Badge color={C.warn}>{selectedStages.length}/{B.pipeline.length} stages</Badge>
+            </span>
           )}
           <div style={{ flex: 1 }} />
           {/* Save status indicator */}
           {saveStatus && (
             <span
+              title={
+                saveStatus === "saved" ? "Build settings saved to project file"
+                : saveStatus === "saving" ? "Saving build settings..."
+                : "Build settings have unsaved changes"
+              }
               style={{
                 fontSize: 7,
                 fontFamily: MONO,
@@ -993,12 +1081,18 @@ export default memo(function BuildPipeline({
             <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>
               Strategy:
             </span>
-            {presets.map((p) => (
-              <Btn key={p.label} small onClick={() => applyPreset(p)} style={{ fontSize: 7 }}>
-                {p.label === "Timing" ? "\u26A1" : p.label === "Area" ? "\u25A3" : "\u2197"}{" "}
-                {p.label}
-              </Btn>
-            ))}
+            {presets.map((p) => {
+              const active = Object.entries(p.options).every(([k, v]) => buildOptions[k] === v);
+              return (
+                <Btn key={p.label} small onClick={() => applyPreset(p)} title={p.tooltip} style={{
+                  fontSize: 7,
+                  ...(active ? { background: `${C.accent}20`, borderColor: C.accent, color: C.accent } : {}),
+                }}>
+                  {p.label === "Timing" ? "\u26A1" : p.label === "Area" ? "\u25A3" : "\u2197"}{" "}
+                  {p.label}
+                </Btn>
+              );
+            })}
           </div>
         )}
         {/* Makefile Import/Export (OSS only) */}
@@ -1007,10 +1101,10 @@ export default memo(function BuildPipeline({
             <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600 }}>
               Makefile:
             </span>
-            <Btn small onClick={handleImportMakefile} style={{ fontSize: 7 }}>
+            <Btn small onClick={handleImportMakefile} title="Import build settings from an existing Makefile" style={{ fontSize: 7 }}>
               Import
             </Btn>
-            <Btn small onClick={handleExportMakefile} style={{ fontSize: 7 }}>
+            <Btn small onClick={handleExportMakefile} title="Export current build settings as a Makefile" style={{ fontSize: 7 }}>
               Export
             </Btn>
           </div>
@@ -1039,40 +1133,89 @@ export default memo(function BuildPipeline({
             ))}
           </div>
         )}
+        {/* Vendor project file selector (Diamond .ldf, etc.) */}
+        {needsProjectFile && !building && (
+          <div style={{
+            display: "flex", gap: 6, marginBottom: 8, alignItems: "center", flexWrap: "wrap",
+            padding: "6px 8px", borderRadius: 5, background: C.s2, border: `1px solid ${C.b1}`,
+          }}>
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 700, letterSpacing: 0.5, flexShrink: 0 }}>
+              PROJECT FILE
+            </span>
+            {buildOptions.project_file ? (
+              <>
+                <span style={{
+                  fontSize: 8, fontFamily: MONO, color: C.ok, fontWeight: 600,
+                  padding: "1px 6px", borderRadius: 3, background: `${C.ok}15`,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280,
+                }} title={buildOptions.project_file}>
+                  {buildOptions.project_file}
+                </span>
+                <Btn small onClick={handleClearProjectFile} title="Clear project file selection" style={{ fontSize: 7 }}>
+                  {"\u2715"}
+                </Btn>
+              </>
+            ) : discoveredProjectFiles.length > 0 ? (
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <Select
+                  compact
+                  value=""
+                  onChange={(v) => onOptionsChange({ ...buildOptions, project_file: v })}
+                  options={[
+                    { value: "", label: `Select .${projFileExt} file...` },
+                    ...discoveredProjectFiles.map((f) => ({ value: f, label: f })),
+                  ]}
+                  placeholder={`Select .${projFileExt} file...`}
+                />
+              </div>
+            ) : (
+              <span style={{ fontSize: 8, fontFamily: MONO, color: C.warn, fontWeight: 500 }}>
+                No .{projFileExt} found
+              </span>
+            )}
+            <Btn small onClick={handleBrowseProjectFile} title={`Browse for a .${projFileExt} project file`} style={{ fontSize: 7 }}>
+              Browse...
+            </Btn>
+          </div>
+        )}
         {/* Build in progress banner */}
         {building && (
           <div
             style={{
               marginBottom: 8,
-              padding: "8px 10px",
+              padding: "10px 12px",
               background: `${C.accent}12`,
               border: `1px solid ${C.accent}30`,
               borderRadius: 6,
-              fontSize: 10,
               fontFamily: MONO,
-              color: C.accent,
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              fontWeight: 600,
             }}
           >
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                border: `2px solid ${C.accent}`,
-                borderTopColor: "transparent",
-                animation: "spin 0.8s linear infinite",
-              }}
-            />
-            BUILD IN PROGRESS — Stage {buildStep + 1} of {B.pipeline.length}
-            {buildStep >= 0 && buildStep < B.pipeline.length && (
-              <span style={{ fontWeight: 400, color: C.t2 }}>
-                ({B.pipeline[buildStep].label})
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  border: `2px solid ${C.accent}`,
+                  borderTopColor: "transparent",
+                  animation: "spin 0.8s linear infinite",
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>
+                BUILDING
               </span>
-            )}
+              <span style={{ fontSize: 9, color: C.t2, fontWeight: 500 }}>
+                Stage {buildStep + 1} of {B.pipeline.length}
+                {buildStep >= 0 && buildStep < B.pipeline.length && (
+                  <> — {B.pipeline[buildStep].label}</>
+                )}
+              </span>
+              <div style={{ flex: 1 }} />
+              <span style={{ fontSize: 9, color: C.t3, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                {fmtTime(liveElapsed)}
+              </span>
+            </div>
           </div>
         )}
         {B.pipeline.map((s, i) => (
@@ -1101,18 +1244,28 @@ export default memo(function BuildPipeline({
           <div
             style={{
               marginTop: 10,
-              padding: "6px 8px",
+              padding: "10px 12px",
               background: C.okDim,
-              borderRadius: 4,
-              fontSize: 9,
+              border: `1px solid ${C.ok}30`,
+              borderRadius: 6,
               fontFamily: MONO,
-              color: C.ok,
-              display: "flex",
-              gap: 5,
-              alignItems: "center",
             }}
           >
-            <Check /> Build complete
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Check />
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.ok }}>
+                BUILD SUCCESSFUL
+              </span>
+              <span style={{ fontSize: 9, color: C.t2, fontWeight: 500 }}>
+                All {B.pipeline.length} stages completed
+              </span>
+              <div style={{ flex: 1 }} />
+              {buildElapsedSec != null && (
+                <span style={{ fontSize: 9, color: C.t3, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                  {fmtTime(buildElapsedSec)}
+                </span>
+              )}
+            </div>
           </div>
         )}
         {!building && buildFailed && (
@@ -1128,6 +1281,17 @@ export default memo(function BuildPipeline({
           >
             <div style={{ fontSize: 11, color: C.err, fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
               {"\u2717"} BUILD FAILED
+              {buildStep >= 0 && buildStep < B.pipeline.length && (
+                <span style={{ fontSize: 9, color: C.t2, fontWeight: 500 }}>
+                  at stage {buildStep + 1} of {B.pipeline.length} — {B.pipeline[buildStep].label}
+                </span>
+              )}
+              <div style={{ flex: 1 }} />
+              {buildElapsedSec != null && (
+                <span style={{ fontSize: 9, color: C.t3, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                  {fmtTime(buildElapsedSec)}
+                </span>
+              )}
             </div>
             {buildErrors.length > 0 ? (
               <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>

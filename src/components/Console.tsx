@@ -151,10 +151,10 @@ export default memo(function Console({
         )}
         <span style={{ flex: 1 }} />
         {logs.length} lines
-        <Btn small onClick={handleCopy}>
+        <Btn small onClick={handleCopy} title="Copy all log output to clipboard">
           {copied ? "Copied!" : "Copy"}
         </Btn>
-        <Btn small onClick={onClear}>
+        <Btn small onClick={onClear} title="Clear log output">
           Clear
         </Btn>
       </div>
@@ -170,7 +170,7 @@ export default memo(function Console({
           background: C.bg,
         }}
       >
-        <span style={{ fontSize: 10, color: C.t3 }}>{"\uD83D\uDD0D"}</span>
+        <span style={{ fontSize: 10, color: C.t3 }} title="Search build logs">{"\uD83D\uDD0D"}</span>
         <input
           type="text"
           value={search}
@@ -204,6 +204,7 @@ export default memo(function Console({
             <span
               onClick={() => setSearch("")}
               style={{ fontSize: 10, color: C.t3, cursor: "pointer" }}
+              title="Clear search"
             >
               {"\u2715"}
             </span>

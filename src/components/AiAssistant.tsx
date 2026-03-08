@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Input, HoverRow } from "./shared";
 import { Brain } from "./Icons";
-import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, AppConfig, readFile, writeTextFile } from "../hooks/useTauri";
+import { getAppConfig, saveAppConfig, getAiApiKey, setAiApiKey, getAiApiKeyForProvider, setAiApiKeyForProvider, AppConfig, readFile, writeTextFile } from "../hooks/useTauri";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -224,7 +224,7 @@ const AI_MD_TEMPLATE = `# AI Context for this project
 ## Style Preferences
 `;
 
-export default function AiAssistant({ projectContext, projectDir, onOpenFile }: { projectContext?: string; projectDir?: string; onOpenFile?: (name: string, path?: string) => void }) {
+export default function AiAssistant({ projectContext, projectDir, onOpenFile, initialMessage }: { projectContext?: string; projectDir?: string; onOpenFile?: (name: string, path?: string) => void; initialMessage?: string | null }) {
   const { C, MONO, SANS } = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -260,9 +260,20 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
   const provider = getProvider(providerId);
   const effectiveModel = providerId === "ollama" ? ollamaModel : model;
 
-  // Load config on mount — API key comes from OS keyring, rest from config
+  // Track processed initialMessage to avoid re-processing
+  const processedInitialMsg = useRef<string | null>(null);
+
+  // Populate input when initialMessage changes (e.g., from "Send to AI" in reports)
   useEffect(() => {
-    Promise.all([getAppConfig(), getAiApiKey()]).then(([cfg, key]) => {
+    if (initialMessage && initialMessage !== processedInitialMsg.current) {
+      processedInitialMsg.current = initialMessage;
+      setInput(initialMessage);
+    }
+  }, [initialMessage]);
+
+  // Load config on mount — API key comes from OS keyring (per-provider), rest from config
+  useEffect(() => {
+    getAppConfig().then(async (cfg) => {
       configRef.current = cfg;
       const pid = cfg.ai_provider ?? "anthropic";
       setProviderId(pid);
@@ -277,14 +288,18 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
 
       const prov = getProvider(pid);
       if (prov.keyRequired) {
+        // Try per-provider key first, fall back to legacy single key
+        let key = await getAiApiKeyForProvider(pid).catch(() => null);
+        if (!key) key = await getAiApiKey().catch(() => null);
         if (key) {
           setApiKey(key);
           setShowSetup(false);
+          // Migrate legacy key to per-provider storage
+          setAiApiKeyForProvider(pid, key).catch(() => {});
         } else {
           setShowSetup(true);
         }
       } else {
-        // Ollama — no key needed
         setApiKey("__local__");
         setShowSetup(false);
       }
@@ -337,10 +352,12 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
   const saveKey = useCallback((key: string) => {
     setApiKey(key);
     setShowSetup(false);
+    // Save to per-provider storage and legacy storage for backward compat
+    setAiApiKeyForProvider(providerId, key).catch(() => {});
     setAiApiKey(key).catch(() => {});
-  }, []);
+  }, [providerId]);
 
-  const selectProvider = useCallback((pid: string) => {
+  const selectProvider = useCallback(async (pid: string) => {
     setProviderId(pid);
     const prov = getProvider(pid);
     // Pick first model as default when switching
@@ -352,6 +369,18 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
     }
     if (!prov.keyRequired) {
       setApiKey("__local__");
+      setKeyDraft("");
+    } else {
+      // Load provider-specific key
+      const key = await getAiApiKeyForProvider(pid).catch(() => null);
+      if (key) {
+        setApiKey(key);
+        setKeyDraft(key);
+      } else {
+        // Don't null out apiKey if we already have one from another provider —
+        // this keeps the Close button visible on the setup screen
+        setKeyDraft("");
+      }
     }
   }, [persistConfig, ollamaModel]);
 
@@ -619,6 +648,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
                   <div
                     key={p.id}
                     onClick={() => selectProvider(p.id)}
+                    title={`Select ${p.name} as AI provider`}
                     style={{
                       padding: "6px 8px",
                       borderRadius: 5,
@@ -687,6 +717,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
                     key={m.id}
                     onClick={() => selectModel(m.id)}
                     style={chipStyle(model === m.id)}
+                    title={`Select AI model: ${m.label}`}
                   >
                     {m.label}
                   </div>
@@ -716,14 +747,21 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
                 }
               }}
               disabled={provider.keyRequired && !keyDraft.trim()}
+              title="Connect to the selected AI provider"
             >
               Connect
             </Btn>
-            {apiKey && (
-              <Btn small onClick={() => setShowSetup(false)}>
-                Close
-              </Btn>
-            )}
+            <Btn small onClick={() => {
+              // If we have a key (from any previous provider), just close setup
+              if (apiKey) {
+                setShowSetup(false);
+              } else {
+                // No key at all — switch back to a provider that has one, or just close
+                setShowSetup(false);
+              }
+            }}>
+              Close
+            </Btn>
           </div>
         </div>
       </div>
@@ -760,11 +798,12 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
         <div
           onClick={() => setPromptsOpen((p) => !p)}
           style={{ ...headerLinkStyle, color: promptsOpen ? C.accent : C.t3 }}
+          title="Open prompt library and skills panel"
         >
           Prompts
         </div>
         {projectDir && (
-          <div onClick={handleAiMd} style={headerLinkStyle}>
+          <div onClick={handleAiMd} style={headerLinkStyle} title="Open or create project AI context file (.coverteda_ai)">
             .coverteda_ai
             {hasAiMdInContext && (
               <span style={{
@@ -798,14 +837,20 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
           </div>
         )}
         <div
-          onClick={() => setShowSetup(true)}
+          onClick={() => {
+            // Pre-fill key draft with current key so user can see/edit it
+            if (apiKey && apiKey !== "__local__") setKeyDraft(apiKey);
+            setShowSetup(true);
+          }}
           style={headerLinkStyle}
+          title="Open AI provider and model settings"
         >
           Settings
         </div>
         <div
           onClick={() => setMessages([])}
           style={headerLinkStyle}
+          title="Clear conversation history"
         >
           Clear
         </div>
@@ -834,6 +879,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
                     <div
                       key={q}
                       onClick={() => { setInput(q); }}
+                      title={q}
                       style={{
                         padding: "4px 8px",
                         borderRadius: 4,
@@ -902,6 +948,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
               placeholder="Ask about your FPGA design..."
+              title="Type a message and press Enter to send"
               style={{
                 flex: 1,
                 padding: "6px 10px",
@@ -914,7 +961,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
                 outline: "none",
               }}
             />
-            <Btn primary small onClick={sendMessage} disabled={loading || !input.trim()}>
+            <Btn primary small onClick={sendMessage} disabled={loading || !input.trim()} title="Send message to AI assistant">
               Send
             </Btn>
           </div>
@@ -958,7 +1005,7 @@ export default function AiAssistant({ projectContext, projectDir, onOpenFile }: 
               {/* Built-in Prompts */}
               <div style={sectionLabel}>Built-in</div>
               {BUILTIN_PROMPTS.map((p) => (
-                <HoverRow key={p.id} onClick={() => handlePromptClick(p.content)} style={{ padding: "4px 8px" }}>
+                <HoverRow key={p.id} onClick={() => handlePromptClick(p.content)} style={{ padding: "4px 8px" }} title={p.content}>
                   <div style={{ fontSize: 8, fontFamily: MONO, color: C.t2, lineHeight: 1.4 }}>{p.title}</div>
                 </HoverRow>
               ))}

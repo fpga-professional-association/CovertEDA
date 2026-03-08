@@ -136,26 +136,27 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-        <div style={panelP}>
+        <div style={panelP} title="Total number of builds recorded in this project">
           <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>TOTAL BUILDS</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>{history.length}</div>
         </div>
-        <div style={panelP}>
+        <div style={panelP} title="Percentage of builds that completed successfully">
           <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>SUCCESS RATE</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.ok }}>
             {Math.round((history.filter((h) => h.status === "success").length / history.length) * 100)}%
           </div>
         </div>
-        <div style={panelP}>
+        <div style={panelP} title="Highest maximum clock frequency (Fmax) achieved across all successful builds">
           <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>BEST FMAX</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.accent }}>
             {successfulBuilds.length > 0 ? `${Math.max(...successfulBuilds.map((b) => b.fmaxMhz!)).toFixed(1)}` : "N/A"}
             <span style={{ fontSize: 9, fontWeight: 400, color: C.t3 }}> MHz</span>
           </div>
         </div>
-        <div style={panelP}>
+        <div style={panelP} title="Change in Fmax between the first and most recent successful builds">
           <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 4 }}>FMAX TREND</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: fmaxTrend && fmaxTrend > 0 ? C.ok : fmaxTrend && fmaxTrend < 0 ? C.err : C.t3 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: fmaxTrend && fmaxTrend > 0 ? C.ok : fmaxTrend && fmaxTrend < 0 ? C.err : C.t3 }}
+            title={fmaxTrend ? `Fmax ${fmaxTrend > 0 ? "increased" : "decreased"} by ${Math.abs(fmaxTrend).toFixed(1)} MHz from first to latest build` : "Not enough successful builds to compute a trend"}>
             {fmaxTrend ? `${fmaxTrend > 0 ? "+" : ""}${fmaxTrend.toFixed(1)}` : "N/A"}
             <span style={{ fontSize: 9, fontWeight: 400, color: C.t3 }}> MHz</span>
           </div>
@@ -165,13 +166,16 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
       {/* Fmax Chart (ASCII bar chart) */}
       {successfulBuilds.length > 0 && (
         <div style={panelP}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 10 }}>Fmax History</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 10 }} title="Maximum clock frequency trend across successful builds">Fmax History</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80, paddingBottom: 4 }}>
             {successfulBuilds.map((b, i) => {
               const maxFmax = Math.max(...successfulBuilds.map((x) => x.fmaxMhz!));
               const pct = (b.fmaxMhz! / maxFmax) * 100;
+              const prevFmax = i > 0 ? successfulBuilds[i - 1].fmaxMhz! : null;
+              const fmaxDelta = prevFmax !== null ? b.fmaxMhz! - prevFmax : null;
+              const barTitle = `Build #${i + 1}: ${b.fmaxMhz!.toFixed(1)} MHz${fmaxDelta !== null ? ` (${fmaxDelta >= 0 ? "+" : ""}${fmaxDelta.toFixed(1)} MHz from previous)` : ""}`;
               return (
-                <div key={b.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                <div key={b.id} title={barTitle} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                   <span style={{ fontSize: 7, fontFamily: MONO, color: C.t1 }}>{b.fmaxMhz!.toFixed(0)}</span>
                   <div
                     style={{
@@ -195,7 +199,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
         <div style={{ fontSize: 10, fontWeight: 700, color: C.t1, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
           <Zap />
           Build History
-          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginLeft: "auto" }}>
+          <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, marginLeft: "auto" }} title="Build history is stored in this file in your project directory">
             .coverteda_history.json
           </span>
         </div>
@@ -203,12 +207,24 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.b1}` }}>
-                {["", "Time", "Branch", "Commit", "Duration", "Status", "Fmax", "LUT", "FF", "W", "E"].map((h) => (
-                  <th key={h} style={{
+                {([
+                  { label: "", tip: "" },
+                  { label: "Time", tip: "Date and time when the build was started" },
+                  { label: "Branch", tip: "Git branch active at time of build" },
+                  { label: "Commit", tip: "Git commit hash and message at time of build" },
+                  { label: "Duration", tip: "Total wall-clock time for the build" },
+                  { label: "Status", tip: "Build result: success, failed, or cancelled" },
+                  { label: "Fmax", tip: "Maximum clock frequency (Fmax) in MHz achieved by the design" },
+                  { label: "LUT", tip: "Look-Up Tables used / total available on the target device" },
+                  { label: "FF", tip: "Flip-Flops used / total available on the target device" },
+                  { label: "W", tip: "Number of warnings generated during the build" },
+                  { label: "E", tip: "Number of errors generated during the build" },
+                ] as { label: string; tip: string }[]).map((h) => (
+                  <th key={h.label} title={h.tip || undefined} style={{
                     fontSize: 8, fontFamily: MONO, fontWeight: 700, color: C.t3,
                     padding: "4px 6px", textAlign: "left",
                   }}>
-                    {h}
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -224,7 +240,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
                     background: selectedId === b.id ? `${C.accent}08` : undefined,
                   }}
                 >
-                  <td style={{ padding: "4px 6px" }}>
+                  <td style={{ padding: "4px 6px" }} title={`Build ${b.status}`}>
                     {b.status === "success" ? <Check /> :
                       <span style={{ color: C.err, fontSize: 10 }}>{"\u2717"}</span>}
                   </td>
@@ -233,7 +249,9 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
                   </td>
                   <td style={{ fontSize: 8, fontFamily: MONO, padding: "4px 6px" }}>
                     {b.branch ? (
-                      <Badge color={C.accent} style={{ fontSize: 7 }}>{b.branch}</Badge>
+                      <span title={`Git branch: ${b.branch}`}>
+                        <Badge color={C.accent} style={{ fontSize: 7 }}>{b.branch}</Badge>
+                      </span>
                     ) : (
                       <span style={{ color: C.t3, fontStyle: "italic" }}>-</span>
                     )}
@@ -242,6 +260,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
                     {b.commitHash ? (
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <span
+                          title={`Git commit: ${b.commitHash}${b.commitMsg ? ` — ${b.commitMsg}` : ""}`}
                           style={{
                             color: C.cyan,
                             padding: "1px 4px",
@@ -269,27 +288,35 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
                       <span style={{ color: C.t3, fontStyle: "italic" }}>none</span>
                     )}
                   </td>
-                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}
+                    title={`Build duration: ${b.duration} seconds`}>
                     {formatDuration(b.duration)}
                   </td>
                   <td style={{ padding: "4px 6px" }}>
-                    <Badge color={b.status === "success" ? C.ok : b.status === "failed" ? C.err : C.warn}>
-                      {b.status}
-                    </Badge>
+                    <span title={`Build ${b.status}`}>
+                      <Badge color={b.status === "success" ? C.ok : b.status === "failed" ? C.err : C.warn}>
+                        {b.status}
+                      </Badge>
+                    </span>
                   </td>
-                  <td style={{ fontSize: 9, fontFamily: MONO, color: b.fmaxMhz ? C.t1 : C.t3, fontWeight: 600, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 9, fontFamily: MONO, color: b.fmaxMhz ? C.t1 : C.t3, fontWeight: 600, padding: "4px 6px" }}
+                    title={b.fmaxMhz ? `Maximum clock frequency: ${b.fmaxMhz.toFixed(2)} MHz` : "Fmax not available for this build"}>
                     {b.fmaxMhz ? `${b.fmaxMhz.toFixed(1)}` : "-"}
                   </td>
-                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}
+                    title={b.lutUsed !== undefined ? `Look-Up Tables: ${b.lutUsed} used of ${b.lutTotal} (${((b.lutUsed / b.lutTotal!) * 100).toFixed(1)}%)` : "LUT utilization not available"}>
                     {b.lutUsed !== undefined ? `${b.lutUsed}/${b.lutTotal}` : "-"}
                   </td>
-                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 8, fontFamily: MONO, color: C.t2, padding: "4px 6px" }}
+                    title={b.ffUsed !== undefined ? `Flip-Flops: ${b.ffUsed} used of ${b.ffTotal} (${((b.ffUsed / b.ffTotal!) * 100).toFixed(1)}%)` : "FF utilization not available"}>
                     {b.ffUsed !== undefined ? `${b.ffUsed}/${b.ffTotal}` : "-"}
                   </td>
-                  <td style={{ fontSize: 8, fontFamily: MONO, color: b.warnings > 0 ? C.warn : C.t3, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 8, fontFamily: MONO, color: b.warnings > 0 ? C.warn : C.t3, padding: "4px 6px" }}
+                    title={`${b.warnings} warning${b.warnings !== 1 ? "s" : ""} during build`}>
                     {b.warnings}
                   </td>
-                  <td style={{ fontSize: 8, fontFamily: MONO, color: b.errors > 0 ? C.err : C.t3, padding: "4px 6px" }}>
+                  <td style={{ fontSize: 8, fontFamily: MONO, color: b.errors > 0 ? C.err : C.t3, padding: "4px 6px" }}
+                    title={`${b.errors} error${b.errors !== 1 ? "s" : ""} during build`}>
                     {b.errors}
                   </td>
                 </tr>
@@ -307,6 +334,7 @@ export default function BuildHistory({ projectDir, onViewReport }: BuildHistoryP
             {onViewReport && selected.status === "success" && (
               <button
                 onClick={() => onViewReport(selected.id)}
+                title="Open the full timing and utilization report for this build"
                 style={{
                   marginLeft: "auto",
                   fontSize: 8,

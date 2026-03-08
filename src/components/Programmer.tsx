@@ -169,6 +169,13 @@ export default function Programmer({ device }: ProgrammerProps) {
     { value: "ERASE", label: "Erase" },
   ];
 
+  const operationTooltips: Record<string, string> = {
+    PROGRAM: "Program bitstream into FPGA volatile SRAM (lost on power cycle)",
+    PROGRAM_FLASH: "Program bitstream into non-volatile flash memory (persists across power cycles)",
+    VERIFY: "Verify programmed bitstream matches source file",
+    ERASE: "Erase FPGA configuration memory",
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
       {/* Header */}
@@ -191,9 +198,10 @@ export default function Programmer({ device }: ProgrammerProps) {
                 onChange={setSelectedCable}
                 options={cableOptions}
                 placeholder="No cables detected"
+                title="Select programmer cable for device programming"
                 style={{ flex: 1 }}
               />
-              <Btn small onClick={handleScan} disabled={scanning}>
+              <Btn small onClick={handleScan} disabled={scanning} title="Scan for connected USB programming cables">
                 <Refresh /> {scanning ? "Scanning..." : "Scan"}
               </Btn>
             </div>
@@ -213,9 +221,10 @@ export default function Programmer({ device }: ProgrammerProps) {
                 onChange={setSelectedBitstream}
                 options={bitstreamOptions}
                 placeholder="No bitstreams found"
+                title="Select bitstream file to program onto the device"
                 style={{ flex: 1 }}
               />
-              <Btn small onClick={handleRefreshBitstreams}>
+              <Btn small onClick={handleRefreshBitstreams} title="Refresh list of available bitstream files">
                 <Refresh />
               </Btn>
             </div>
@@ -235,6 +244,7 @@ export default function Programmer({ device }: ProgrammerProps) {
               value={operation}
               onChange={setOperation}
               options={operationOptions}
+              title={operationTooltips[operation] ?? "Select programming operation"}
             />
           </div>
           <div style={{ flex: 1 }} />
@@ -242,6 +252,7 @@ export default function Programmer({ device }: ProgrammerProps) {
             primary
             onClick={handleProgram}
             disabled={programming || !selectedBitstream || !selectedCable}
+            title="Program FPGA device with selected bitstream"
             style={{ padding: "8px 20px" }}
           >
             {programming ? <><Stop /> Programming...</> : <><Play /> Program Device</>}
@@ -255,7 +266,7 @@ export default function Programmer({ device }: ProgrammerProps) {
           <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Output</span>
           <Badge color={C.t3}>{logs.length} lines</Badge>
           <div style={{ flex: 1 }} />
-          <Btn small onClick={() => setLogs([])}>Clear</Btn>
+          <Btn small onClick={() => setLogs([])} title="Clear programmer output log">Clear</Btn>
         </div>
         <div style={{
           background: C.bg, borderRadius: 4, border: `1px solid ${C.b1}`,

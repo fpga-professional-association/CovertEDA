@@ -24,6 +24,7 @@ vi.mock("../data/deviceParts", () => ({
     // oss has no entries → triggers plain input fallback
   } as Record<string, { family: string; parts: string[]; editions?: string[] }[]>,
   validatePart: (backendId: string, part: string) => ({ valid: part.length > 0, reason: "" }),
+  parsePartInfo: () => ({ pins: "400", logic: "40K LUTs", speed: "-7", package: "BG400", grade: "Industrial" }),
 }));
 
 describe("DevicePicker", () => {
@@ -36,48 +37,54 @@ describe("DevicePicker", () => {
     expect(input).toHaveValue("ice40-hx1k-tq144");
   });
 
-  it("renders a search input for backends with device database", () => {
+  it("renders a trigger button showing the current device value", () => {
     renderWithTheme(
       <DevicePicker backendId="radiant" value="LIFCL-40-7BG400I" onChange={vi.fn()} />
     );
-    const input = screen.getByPlaceholderText("Search devices...");
-    expect(input).toBeInTheDocument();
-    // When not focused/open, shows the current value
-    expect(input).toHaveValue("LIFCL-40-7BG400I");
+    // The trigger shows the current value
+    expect(screen.getByText("LIFCL-40-7BG400I")).toBeInTheDocument();
   });
 
-  it("opens dropdown and shows device families on focus", () => {
+  it("opens modal with device families on click", () => {
     renderWithTheme(
       <DevicePicker backendId="radiant" value="" onChange={vi.fn()} />
     );
-    const input = screen.getByPlaceholderText("Search devices...");
-    fireEvent.focus(input);
+    // Click the trigger to open the modal
+    const trigger = screen.getByText("Select device...");
+    fireEvent.click(trigger);
     // Family headers should appear (uppercased in the component)
     expect(screen.getByText("CERTUSNX")).toBeInTheDocument();
     expect(screen.getByText("CERTUSPRO-NX")).toBeInTheDocument();
+    // Modal title
+    expect(screen.getByText("Select Target Device")).toBeInTheDocument();
   });
 
-  it("filters devices when typing in search", () => {
+  it("families start collapsed and expand on click", () => {
     renderWithTheme(
       <DevicePicker backendId="radiant" value="" onChange={vi.fn()} />
     );
-    const input = screen.getByPlaceholderText("Search devices...");
-    fireEvent.focus(input);
-    fireEvent.change(input, { target: { value: "LFCPNX" } });
-    // Should find CertusNX device
+    fireEvent.click(screen.getByText("Select device..."));
+    // Parts should not be visible initially (families collapsed)
+    expect(screen.queryByText("LFCPNX-100-9ASG256C")).not.toBeInTheDocument();
+    // Click family header to expand
+    fireEvent.click(screen.getByText("CERTUSNX"));
     expect(screen.getByText("LFCPNX-100-9ASG256C")).toBeInTheDocument();
-    // CertusPro-NX devices should be filtered out
-    expect(screen.queryByText("LIFCL-40-7BG400I")).not.toBeInTheDocument();
   });
 
-  it("calls onChange with selected device part number", () => {
+  it("selecting a part and clicking OK calls onChange", () => {
     const onChange = vi.fn();
     renderWithTheme(
       <DevicePicker backendId="radiant" value="" onChange={onChange} />
     );
-    const input = screen.getByPlaceholderText("Search devices...");
-    fireEvent.focus(input);
+    fireEvent.click(screen.getByText("Select device..."));
+    // Expand family
+    fireEvent.click(screen.getByText("CERTUSPRO-NX"));
+    // Click the part name to select it
     fireEvent.click(screen.getByText("LIFCL-40-7BG400I"));
+    // Should NOT have called onChange yet (no auto-close)
+    expect(onChange).not.toHaveBeenCalled();
+    // Click OK to confirm
+    fireEvent.click(screen.getByText("OK"));
     expect(onChange).toHaveBeenCalledWith("LIFCL-40-7BG400I");
   });
 });

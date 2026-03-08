@@ -3,7 +3,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Btn, Select } from "./shared";
 import { Box } from "./Icons";
 import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, IP_CATEGORIES, IpCore } from "../data/ipCatalog";
-import { listen, executeIpGenerate } from "../hooks/useTauri";
+import { listen, executeIpGenerate, pickDirectory } from "../hooks/useTauri";
 
 interface IpCatalogSectionProps {
   backendId: string;
@@ -11,9 +11,11 @@ interface IpCatalogSectionProps {
   device: string;
   onRefreshFiles?: () => void;
   onAddToSynth?: (instanceName: string) => void;
+  customIps?: IpCore[];
+  onCustomIpsChange?: (ips: IpCore[]) => void;
 }
 
-export default function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAddToSynth }: IpCatalogSectionProps) {
+export default function IpCatalogSection({ backendId, projectDir, device, onRefreshFiles, onAddToSynth, customIps, onCustomIpsChange }: IpCatalogSectionProps) {
   const { C, MONO } = useTheme();
   const [ipSearch, setIpSearch] = useState("");
   const [configuring, setConfiguring] = useState<IpCore | null>(null);
@@ -23,17 +25,28 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
   const [tclVisible, setTclVisible] = useState(false);
   const [genState, setGenState] = useState<"idle" | "preview" | "running" | "done" | "error">("idle");
   const [genOutput, setGenOutput] = useState<string[]>([]);
+  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customPath, setCustomPath] = useState("");
+  const [customCategory, setCustomCategory] = useState<IpCore["category"]>("Misc");
+  const [customDesc, setCustomDesc] = useState("");
+
+  const builtinCatalog = useMemo(() => {
+    let base: IpCore[];
+    let sourceName: string;
+    if (backendId === "quartus") { base = QUARTUS_IP_CATALOG; sourceName = "Quartus IP Library"; }
+    else if (backendId === "opensource") {
+      const d = device.toUpperCase();
+      if (d.startsWith("ICE40")) { base = ICE40_IP_CATALOG; sourceName = "iCE40 IP Library"; }
+      else if (d.startsWith("GW")) { base = GOWIN_IP_CATALOG; sourceName = "Gowin IP Library"; }
+      else { base = OSS_IP_CATALOG; sourceName = "OSS CAD Suite"; }
+    } else { base = RADIANT_IP_CATALOG; sourceName = "Radiant IP Library"; }
+    return base.map((ip) => ({ ...ip, source: ip.source ?? `Built-in: ${sourceName}` }));
+  }, [backendId, device]);
 
   const catalog = useMemo(() => {
-    if (backendId === "quartus") return QUARTUS_IP_CATALOG;
-    if (backendId === "opensource") {
-      const d = device.toUpperCase();
-      if (d.startsWith("ICE40")) return ICE40_IP_CATALOG;
-      if (d.startsWith("GW")) return GOWIN_IP_CATALOG;
-      return OSS_IP_CATALOG;
-    }
-    return RADIANT_IP_CATALOG;
-  }, [backendId, device]);
+    return [...builtinCatalog, ...(customIps ?? [])];
+  }, [builtinCatalog, customIps]);
 
   const filtered = useMemo(() => {
     if (!ipSearch) return catalog;
@@ -135,7 +148,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
       <div style={{ ...panelP, display: "flex", flexDirection: "column", overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <Btn small onClick={() => { setConfiguring(null); setGenState("idle"); setTclVisible(false); setGenOutput([]); }}
-            icon={<span style={{ fontSize: 10 }}>{"\u2190"}</span>}>
+            icon={<span style={{ fontSize: 10 }}>{"\u2190"}</span>} title="Back to IP catalog list">
             IP Catalog
           </Btn>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, flex: 1 }}>
@@ -159,6 +172,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
               <input
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
+                title="Instance name for the generated IP core"
                 style={{
                   width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
                   background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
@@ -178,6 +192,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                     onChange={(v) => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
                     options={(p.choices ?? []).map((c) => ({ value: c, label: c }))}
                     style={{ width: "100%" }}
+                    title={`${p.label}${p.unit ? ` (${p.unit})` : ""}${p.choices ? ` — options: ${p.choices.join(", ")}` : ""}`}
                   />
                 ) : p.type === "boolean" ? (
                   <div style={{ display: "flex", gap: 8 }}>
@@ -185,6 +200,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                       <span
                         key={v}
                         onClick={() => setIpParams((prev) => ({ ...prev, [p.key]: v }))}
+                        title={`Set ${p.label} to ${v === "true" ? "Yes" : "No"}`}
                         style={{
                           padding: "3px 8px", borderRadius: 3, cursor: "pointer",
                           fontSize: 8, fontFamily: MONO, fontWeight: 600,
@@ -204,6 +220,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                     onChange={(e) => setIpParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
                     min={p.min}
                     max={p.max}
+                    title={`${p.label}${p.unit ? ` (${p.unit})` : ""}${p.min != null || p.max != null ? ` — range: ${p.min ?? ""}..${p.max ?? ""}` : ""}`}
                     style={{
                       width: "100%", padding: "4px 8px", fontSize: 9, fontFamily: MONO,
                       background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 3,
@@ -224,6 +241,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                   </div>
                   <span
                     onClick={copyTemplate}
+                    title="Copy instantiation template to clipboard"
                     style={{
                       fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
                       background: copiedTemplate ? `${C.ok}15` : `${C.accent}15`,
@@ -253,11 +271,11 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                  <Btn small onClick={() => { setTclVisible((v) => !v); setGenState((p) => p === "done" ? "done" : tclVisible ? "idle" : "preview"); }} disabled={genState === "running"}>
+                  <Btn small onClick={() => { setTclVisible((v) => !v); setGenState((p) => p === "done" ? "done" : tclVisible ? "idle" : "preview"); }} disabled={genState === "running"} title="Preview the TCL script that will generate this IP">
                     {tclVisible ? "Hide TCL" : "Preview TCL"}
                   </Btn>
                   {genTcl && genState !== "running" && (
-                    <Btn small primary onClick={handleRunGenerate}>
+                    <Btn small primary onClick={handleRunGenerate} title="Generate IP core with current configuration">
                       {genState === "done" ? "Re-Generate" : "Generate IP"}
                     </Btn>
                   )}
@@ -270,13 +288,13 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                         onRefreshFiles?.();
                         onAddToSynth?.(instanceName);
                         setGenOutput([`IP "${instanceName}" added to project and synthesis flow.`]);
-                      }} style={{ color: C.ok, borderColor: `${C.ok}44` }}>
+                      }} style={{ color: C.ok, borderColor: `${C.ok}44` }} title="Add generated IP to project and include in synthesis flow">
                         Add to Synthesis
                       </Btn>
                       <Btn small onClick={() => {
                         onRefreshFiles?.();
                         setGenOutput([`IP files added to project (not in synthesis).`]);
-                      }}>
+                      }} title="Add generated IP files to project without including in synthesis">
                         Add to Project Only
                       </Btn>
                       <Btn small onClick={() => {
@@ -284,7 +302,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                         setGenState("idle");
                         setTclVisible(false);
                         setGenOutput([]);
-                      }} style={{ color: C.err, borderColor: `${C.err}44` }}>
+                      }} style={{ color: C.err, borderColor: `${C.err}44` }} title="Discard generated IP and return to catalog">
                         Discard
                       </Btn>
                     </>
@@ -334,12 +352,92 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
           <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 400 }}>
             {filtered.length} cores
           </span>
+          <div style={{ flex: 1 }} />
+          {onCustomIpsChange && (
+            <Btn small onClick={() => setShowAddCustom(true)} title="Add a custom IP core location">
+              + Add Custom IP
+            </Btn>
+          )}
         </div>
+        {/* Add Custom IP form (at top) */}
+        {onCustomIpsChange && showAddCustom && (
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 8,
+            marginBottom: 12, padding: 10, background: C.bg, borderRadius: 5, border: `1px solid ${C.b1}`,
+          }}>
+            <div style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t3, letterSpacing: 1 }}>
+              ADD CUSTOM IP
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="IP name"
+                style={{
+                  flex: 1, background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 4,
+                  padding: "4px 8px", fontSize: 9, fontFamily: MONO, color: C.t1, outline: "none",
+                }}
+              />
+              <Select
+                value={customCategory}
+                onChange={(v) => setCustomCategory(v as IpCore["category"])}
+                options={IP_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                style={{ minWidth: 80 }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={customPath}
+                onChange={(e) => setCustomPath(e.target.value)}
+                placeholder="IP source path"
+                style={{
+                  flex: 1, background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 4,
+                  padding: "4px 8px", fontSize: 9, fontFamily: MONO, color: C.t1, outline: "none",
+                }}
+              />
+              <Btn small onClick={async () => {
+                const dir = await pickDirectory();
+                if (dir) setCustomPath(dir);
+              }} title="Browse for IP directory">
+                Browse
+              </Btn>
+            </div>
+            <input
+              value={customDesc}
+              onChange={(e) => setCustomDesc(e.target.value)}
+              placeholder="Description (optional)"
+              style={{
+                background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 4,
+                padding: "4px 8px", fontSize: 9, fontFamily: MONO, color: C.t1, outline: "none",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn primary small disabled={!customName.trim() || !customPath.trim()} onClick={() => {
+                const newIp: IpCore = {
+                  name: customName.trim(),
+                  category: customCategory,
+                  description: customDesc.trim() || "Custom IP core",
+                  families: [],
+                  source: customPath.trim(),
+                  isCustom: true,
+                };
+                onCustomIpsChange([...(customIps ?? []), newIp]);
+                setCustomName(""); setCustomPath(""); setCustomDesc(""); setShowAddCustom(false);
+              }} title="Add this custom IP to the catalog">
+                Add IP
+              </Btn>
+              <Btn small onClick={() => { setShowAddCustom(false); setCustomName(""); setCustomPath(""); setCustomDesc(""); }}>
+                Cancel
+              </Btn>
+            </div>
+          </div>
+        )}
         <input
           type="text"
           value={ipSearch}
           onChange={(e) => setIpSearch(e.target.value)}
           placeholder="Search IP cores..."
+          title="Search IP cores by name or category"
           style={{
             width: "100%", padding: "5px 8px", fontSize: 9, fontFamily: MONO,
             background: C.bg, color: C.t1, border: `1px solid ${C.b1}`, borderRadius: 4,
@@ -347,7 +445,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
           }}
         />
         <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginBottom: 8 }}>
-          Click "Configure" on any IP to set parameters and generate instantiation code.
+          Click &quot;Configure&quot; on any IP to set parameters and generate instantiation code.
         </div>
       </div>
       {grouped.map(([cat, items]) => (
@@ -373,6 +471,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                   {ip.params && (
                     <span
                       onClick={(e) => { e.stopPropagation(); openConfigurator(ip); }}
+                      title={`Configure ${ip.name} parameters`}
                       style={{
                         fontSize: 7, fontFamily: MONO, padding: "2px 6px", borderRadius: 3,
                         background: `${C.accent}15`, color: C.accent, fontWeight: 600, cursor: "pointer",
@@ -385,7 +484,7 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                 <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 2, lineHeight: 1.4 }}>
                   {ip.description}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4, alignItems: "center" }}>
                   {ip.families.map((f) => (
                     <span key={f} style={{
                       fontSize: 6, fontFamily: MONO, padding: "1px 4px", borderRadius: 2,
@@ -394,12 +493,43 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
                       {f}
                     </span>
                   ))}
+                  {ip.isCustom && onCustomIpsChange && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCustomIpsChange((customIps ?? []).filter((c) => c.name !== ip.name));
+                      }}
+                      title="Remove custom IP"
+                      style={{
+                        fontSize: 7, fontFamily: MONO, padding: "1px 5px", borderRadius: 2,
+                        background: `${C.err}15`, color: C.err, cursor: "pointer", fontWeight: 600,
+                      }}
+                    >
+                      {"\u2715"} Remove
+                    </span>
+                  )}
                 </div>
+                {/* Source location */}
+                {ip.source && (
+                  <div
+                    style={{
+                      fontSize: 7, fontFamily: MONO, color: ip.isCustom ? C.accent : C.t3,
+                      marginTop: 4, padding: "2px 5px", borderRadius: 3,
+                      background: ip.isCustom ? `${C.accent}08` : `${C.t3}08`,
+                      border: `1px solid ${ip.isCustom ? `${C.accent}20` : `${C.t3}15`}`,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                    title={ip.source}
+                  >
+                    {ip.source}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       ))}
+
     </div>
   );
 }

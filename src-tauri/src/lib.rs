@@ -22,7 +22,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(commands::AppState::default())
         .setup(|app| {
-            let _window = app.get_webview_window("main").unwrap();
+            let window = app.get_webview_window("main").unwrap();
+            // Set window icon so WSLg/Linux WMs show our icon instead of a penguin
+            match tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png")) {
+                Ok(icon) => {
+                    let _ = window.set_icon(icon);
+                }
+                Err(e) => log::warn!("Failed to set window icon: {}", e),
+            }
             log::info!("CovertEDA starting up");
             Ok(())
         })
@@ -69,6 +76,9 @@ pub fn run() {
             commands::save_app_config,
             commands::get_ai_api_key,
             commands::set_ai_api_key,
+            commands::get_ai_api_key_for_provider,
+            commands::set_ai_api_key_for_provider,
+            commands::list_ai_providers_with_keys,
             commands::check_sources_stale,
             commands::get_raw_report,
             commands::generate_ip_script,
@@ -80,7 +90,13 @@ pub fn run() {
             commands::import_makefile,
             commands::export_makefile,
             commands::git_init,
+            commands::git_list_branches,
+            commands::git_list_tags,
+            commands::git_pull,
+            commands::git_push,
+            commands::git_checkout,
             commands::open_in_file_manager,
+            commands::open_in_editor,
             commands::get_system_stats,
             commands::list_report_files,
             commands::scan_source_directories,
@@ -90,6 +106,7 @@ pub fn run() {
             commands::get_pad_report,
             commands::detect_tool_edition,
             commands::verify_device_part,
+            commands::scan_project_files,
             commands::open_url,
         ])
         .run(tauri::generate_context!())

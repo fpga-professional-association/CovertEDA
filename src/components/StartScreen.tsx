@@ -211,7 +211,7 @@ export default function StartScreen({
         <span
           onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")}
           className="ceda-ss-icon"
-          title="GitHub Repository"
+          title="Open GitHub in browser"
           style={{
             ["--ceda-hover-color" as string]: C.t1,
             cursor: "pointer",
@@ -232,7 +232,7 @@ export default function StartScreen({
         <span
           onClick={() => openUrl("https://www.linkedin.com/company/fpga-professional-association/")}
           className="ceda-ss-icon"
-          title="FPGA Professional Association on LinkedIn"
+          title="Open LinkedIn in browser"
           style={{
             ["--ceda-hover-color" as string]: C.t1,
             cursor: "pointer",
@@ -254,6 +254,7 @@ export default function StartScreen({
           <span
             onClick={onOpenSettings}
             className="ceda-ss-icon"
+            title="Open application settings"
             style={{
               ["--ceda-hover-color" as string]: C.t1,
               cursor: "pointer",
@@ -294,6 +295,7 @@ export default function StartScreen({
             onClick={() => { setWizardDir(undefined); setWizardOpen(true); }}
             onMouseEnter={() => setHover("create")}
             onMouseLeave={() => setHover(null)}
+            title="Create a new FPGA project with backend selection and device targeting"
             style={{
               ...card,
               borderColor: hover === "create" ? C.accent : C.b1,
@@ -314,6 +316,7 @@ export default function StartScreen({
             onClick={handleOpenDir}
             onMouseEnter={() => setHover("open")}
             onMouseLeave={() => setHover(null)}
+            title="Browse for an existing FPGA project directory"
             style={{
               ...card,
               borderColor: hover === "open" ? C.accent : C.b1,
@@ -351,6 +354,7 @@ export default function StartScreen({
             onClick={() => exitApp()}
             onMouseEnter={() => setHover("exit")}
             onMouseLeave={() => setHover(null)}
+            title="Exit CovertEDA"
             style={{
               display: "flex",
               alignItems: "center",
@@ -437,6 +441,13 @@ export default function StartScreen({
                         } : undefined}
                         onMouseEnter={() => setHover(`tool-${t.backendId}`)}
                         onMouseLeave={() => setHover(null)}
+                        title={
+                          isPlaceholder
+                            ? `${t.name} — in development`
+                            : t.available
+                              ? `Available — ${t.name} ${t.version || ""}${t.installPath ? ` (${t.installPath})` : ""}`
+                              : `Not found — ${t.name} is not installed or not on PATH`
+                        }
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -501,6 +512,7 @@ export default function StartScreen({
                                     return (
                                       <span
                                         key={v.version}
+                                        title={isActive ? `${v.version} — active (${v.installPath})` : `Switch to ${v.version} (${v.installPath})`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (isActive || isSelecting) return;
@@ -558,6 +570,7 @@ export default function StartScreen({
                               {!wi.whichPath && wi.detectedBinDir && wi.status !== "added" && (
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
                                   <span
+                                    title={`Add ${t.name} to system PATH`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setWhichInfo((prev) => ({
@@ -654,7 +667,7 @@ export default function StartScreen({
                     {licenseResult.features.length} feature{licenseResult.features.length !== 1 ? "s" : ""} licensed
                   </div>
                   {licenseResult.features.map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <div key={i} title={`${f.feature} — ${f.status}, expires ${f.expires}`} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                       <span
                         style={{
                           width: 5,
@@ -688,6 +701,7 @@ export default function StartScreen({
         {/* Drag handle */}
         <div
           onMouseDown={onDragStart}
+          title="Drag to resize panels"
           style={{
             width: 6,
             cursor: "col-resize",
@@ -704,6 +718,7 @@ export default function StartScreen({
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, paddingLeft: 16 }}>
           <div
             onClick={() => setShowRecents((p) => !p)}
+            title={showRecents ? "Collapse recent projects" : "Expand recent projects"}
             style={{
               fontSize: 11, fontWeight: 600, color: C.t3, fontFamily: MONO,
               marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
@@ -745,6 +760,7 @@ export default function StartScreen({
                     onClick={() => handleRecentClick(r)}
                     onMouseEnter={() => setHover(r.path)}
                     onMouseLeave={() => setHover(null)}
+                    title={r.path}
                     style={{
                       display: "flex",
                       alignItems: "center",

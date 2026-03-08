@@ -120,17 +120,17 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
   const memColor = stats.memPct <= 60 ? C.ok : stats.memPct <= 85 ? C.warn : C.err;
   const diskColor = stats.diskWritePct <= 50 ? C.ok : stats.diskWritePct <= 80 ? C.warn : C.err;
 
-  const rows: [string, string, string?][] = [
-    ["FPS", `${stats.fps}`, fpsColor],
-    ["CPU", `${stats.cpuPct}%`, cpuColor],
-    ["Memory", `${stats.memUsedMb} / ${stats.memTotalMb} MB (${stats.memPct}%)`, memColor],
-    ["Disk I/O", `${stats.diskWritePct}%`, diskColor],
-    ["App Memory", `${stats.jsHeapMB} / ${stats.jsHeapLimitMB} MB (${stats.jsHeapPct}%)`],
-    ["UI Elements", `${stats.domNodes}`],
-    ["Uptime", `${upMin}m ${upSec}s`],
+  const rows: [string, string, string?, string?][] = [
+    ["FPS", `${stats.fps}`, fpsColor, "Frames per second — UI render performance"],
+    ["CPU", `${stats.cpuPct}%`, cpuColor, "System CPU utilization"],
+    ["Memory", `${stats.memUsedMb} / ${stats.memTotalMb} MB (${stats.memPct}%)`, memColor, `System memory: ${stats.memUsedMb} MB used of ${stats.memTotalMb} MB total (${stats.memPct}%)`],
+    ["Disk I/O", `${stats.diskWritePct}%`, diskColor, "Disk write activity as percentage of capacity"],
+    ["App Memory", `${stats.jsHeapMB} / ${stats.jsHeapLimitMB} MB (${stats.jsHeapPct}%)`, undefined, `JS heap: ${stats.jsHeapMB} MB used of ${stats.jsHeapLimitMB} MB limit (${stats.jsHeapPct}%)`],
+    ["UI Elements", `${stats.domNodes}`, undefined, "Total DOM nodes in the UI"],
+    ["Uptime", `${upMin}m ${upSec}s`, undefined, "Time since application started"],
   ];
   if (stats.startupMs !== null) {
-    rows.splice(1, 0, ["Startup", `${(stats.startupMs / 1000).toFixed(3)} s`]);
+    rows.splice(1, 0, ["Startup", `${(stats.startupMs / 1000).toFixed(3)} s`, undefined, "Time from bundle evaluation to app ready"]);
   }
 
   // Mini bar helper for CPU / Memory / Disk
@@ -163,12 +163,12 @@ export default function PerfOverlay({ visible }: { visible: boolean }) {
       <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: 1, color: C.t3, marginBottom: 4 }}>
         STATS FOR NERDS
       </div>
-      {rows.map(([label, value, color]) => {
+      {rows.map(([label, value, color, tooltip]) => {
         const showBar = label === "CPU" || label === "Memory" || label === "Disk I/O";
         const barPct = label === "CPU" ? stats.cpuPct : label === "Memory" ? stats.memPct : stats.diskWritePct;
         const barColor = color ?? C.t1;
         return (
-          <div key={label} style={{ marginBottom: showBar ? 3 : 0 }}>
+          <div key={label} title={tooltip} style={{ marginBottom: showBar ? 3 : 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
               <span style={{ color: C.t3 }}>{label}</span>
               <span style={{ color: color ?? C.t1, fontWeight: 600 }}>{value}</span>

@@ -6,7 +6,7 @@ if (typeof document !== "undefined" && !document.getElementById("ceda-shared-hov
   const style = document.createElement("style");
   style.id = "ceda-shared-hover";
   style.textContent = `
-    .ceda-btn:not(:disabled):hover { background: var(--ceda-hover-bg) !important; }
+    .ceda-btn:not(:disabled):hover { background: var(--ceda-hover-bg) !important; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
     .ceda-hover-row:hover { background: var(--ceda-hover-bg) !important; }
     .ceda-nav-btn:not(.ceda-nav-active):hover { background: var(--ceda-hover-bg) !important; color: var(--ceda-hover-color) !important; }
   `;
@@ -18,15 +18,18 @@ export function Badge({
   children,
   color,
   style,
+  title,
 }: {
   children: ReactNode;
   color?: string;
   style?: React.CSSProperties;
+  title?: string;
 }) {
   const { C, MONO } = useTheme();
   const c = color ?? C.accent;
   return (
     <span
+      title={title}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -38,6 +41,7 @@ export function Badge({
         color: c,
         background: `${c}18`,
         letterSpacing: 0.3,
+        transition: "opacity 100ms ease-out",
         ...style,
       }}
     >
@@ -55,6 +59,7 @@ export function Btn({
   disabled,
   style: sx,
   icon,
+  title,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -63,6 +68,7 @@ export function Btn({
   disabled?: boolean;
   style?: React.CSSProperties;
   icon?: ReactNode;
+  title?: string;
 }) {
   const { C, MONO } = useTheme();
   return (
@@ -70,21 +76,24 @@ export function Btn({
       className="ceda-btn"
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
+      title={title}
       style={{
         ["--ceda-hover-bg" as string]: primary ? "#4da6ff" : C.s3,
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        padding: small ? "2px 8px" : "6px 12px",
+        padding: small ? "3px 7px" : "5px 10px",
         borderRadius: 4,
         border: primary ? "none" : `1px solid ${C.b1}`,
         fontFamily: MONO,
-        fontSize: small ? 9 : 10,
+        fontSize: small ? 9 : 9,
         fontWeight: 600,
         background: primary ? C.accent : "transparent",
         color: primary ? "#fff" : C.t2,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
+        transition: "background-color 100ms ease-out, border-color 100ms ease-out, color 100ms ease-out, opacity 100ms ease-out, box-shadow 100ms ease-out",
+        minHeight: small ? 24 : undefined,
         ...sx,
       }}
     >
@@ -99,20 +108,24 @@ export function HoverRow({
   children,
   style: sx,
   onClick,
+  title,
 }: {
   children: ReactNode;
   style?: React.CSSProperties;
   onClick?: () => void;
+  title?: string;
 }) {
   const { C } = useTheme();
   return (
     <div
       className="ceda-hover-row"
       onClick={onClick}
+      title={title}
       style={{
         ["--ceda-hover-bg" as string]: C.s3,
         background: "transparent",
         cursor: onClick ? "pointer" : "default",
+        transition: "background-color 100ms ease-out",
         ...sx,
       }}
     >
@@ -152,7 +165,7 @@ export function NavBtn({
         flexDirection: "column",
         alignItems: "center",
         gap: 2,
-        padding: "8px 4px",
+        padding: "6px 4px",
         cursor: "pointer",
         borderRadius: 5,
         position: "relative",
@@ -161,7 +174,8 @@ export function NavBtn({
         borderLeft: active
           ? `2px solid ${accent || C.accent}`
           : "2px solid transparent",
-        minWidth: 52,
+        minWidth: 48,
+        transition: "background-color 100ms ease-out, color 100ms ease-out, border-color 100ms ease-out",
       }}
     >
       <span style={{ display: "flex" }}>{icon}</span>
@@ -199,12 +213,14 @@ export function Input({
   placeholder,
   style: sx,
   readOnly,
+  title,
 }: {
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
   style?: React.CSSProperties;
   readOnly?: boolean;
+  title?: string;
 }) {
   const { C, MONO } = useTheme();
   return (
@@ -213,9 +229,10 @@ export function Input({
       onChange={onChange ? (e) => onChange(e.target.value) : undefined}
       placeholder={placeholder}
       readOnly={readOnly}
+      title={title}
       style={{
         width: "100%",
-        padding: "6px 10px",
+        padding: "5px 8px",
         borderRadius: 4,
         border: `1px solid ${C.b1}`,
         background: C.bg,
@@ -223,6 +240,7 @@ export function Input({
         fontFamily: MONO,
         fontSize: 11,
         outline: "none",
+        transition: "border-color 100ms ease-out",
         ...sx,
       }}
     />
@@ -237,6 +255,7 @@ export function Select({
   placeholder,
   style: sx,
   compact,
+  title,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -244,6 +263,7 @@ export function Select({
   placeholder?: string;
   style?: React.CSSProperties;
   compact?: boolean;
+  title?: string;
 }) {
   const { C, MONO } = useTheme();
   const [open, setOpen] = useState(false);
@@ -261,14 +281,50 @@ export function Select({
     return () => document.removeEventListener("mousedown", h);
   }, [open, close]);
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpen((p) => !p);
+    } else if (e.key === "Escape") {
+      close();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) { setOpen(true); setHIdx(0); return; }
+      setHIdx((p) => Math.min(p + 1, options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) { setOpen(true); setHIdx(options.length - 1); return; }
+      setHIdx((p) => Math.max(p - 1, 0));
+    } else if ((e.key === "Enter" || e.key === " ") && open && hIdx >= 0) {
+      e.preventDefault();
+      onChange(options[hIdx].value);
+      close();
+    }
+  }, [open, hIdx, options, onChange, close]);
+
+  // Select highlighted option on Enter when dropdown is open
+  const handleKeyDownInner = useCallback((e: React.KeyboardEvent) => {
+    if (open && hIdx >= 0 && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onChange(options[hIdx].value);
+      close();
+    }
+  }, [open, hIdx, options, onChange, close]);
+
   const selected = options.find((o) => o.value === value);
   const fontSize = compact ? 8 : 9;
-  const pad = compact ? "2px 6px" : "3px 8px";
+  const pad = compact ? "2px 6px" : "3px 7px";
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", ...sx }}>
       <div
+        tabIndex={0}
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        title={title}
         onClick={(e) => { e.stopPropagation(); setOpen((p) => !p); }}
+        onKeyDown={(e) => { handleKeyDown(e); handleKeyDownInner(e); }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -285,6 +341,7 @@ export function Select({
           cursor: "pointer",
           minWidth: compact ? 80 : 100,
           whiteSpace: "nowrap",
+          transition: "border-color 100ms ease-out",
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -294,6 +351,7 @@ export function Select({
       </div>
       {open && (
         <div
+          role="listbox"
           style={{
             position: "absolute",
             top: "100%",
@@ -314,6 +372,8 @@ export function Select({
           {options.map((o, i) => (
             <div
               key={o.value}
+              role="option"
+              aria-selected={o.value === value}
               onMouseEnter={() => setHIdx(i)}
               onMouseLeave={() => setHIdx(-1)}
               onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange(o.value); close(); }}
@@ -326,6 +386,7 @@ export function Select({
                 background: hIdx === i ? C.s3 : "transparent",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
+                transition: "background-color 100ms ease-out",
               }}
             >
               {o.label}
@@ -342,16 +403,18 @@ export function ResourceBar({
   label,
   used,
   total,
+  title,
 }: {
   label: string;
   used: number;
   total: number;
+  title?: string;
 }) {
   const { C, MONO } = useTheme();
   const p = Math.round((used / total) * 100);
   const col = p > 85 ? C.err : p > 65 ? C.warn : C.accent;
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 12 }} title={title}>
       <div
         style={{
           display: "flex",
@@ -380,6 +443,7 @@ export function ResourceBar({
             borderRadius: 2,
             width: `${p}%`,
             background: `linear-gradient(90deg, ${col}88, ${col})`,
+            transition: "width 300ms ease-out",
           }}
         />
       </div>

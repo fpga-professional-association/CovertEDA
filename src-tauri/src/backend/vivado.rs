@@ -286,6 +286,38 @@ impl VivadoBackend {
         results.sort_by(|a, b| a.version.cmp(&b.version));
         results
     }
+
+    /// Search for .xpr project files in the directory and one level of subdirectories.
+    pub fn find_project_files(project_dir: &Path, top_module: &str) -> Vec<PathBuf> {
+        let exact = project_dir.join(format!("{}.xpr", top_module));
+        let mut dirs = vec![project_dir.to_path_buf()];
+        if let Ok(entries) = std::fs::read_dir(project_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with('.') && name != "runs" && name != ".Xil" {
+                        dirs.push(entry.path());
+                    }
+                }
+            }
+        }
+        let mut results = Vec::new();
+        for dir in &dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "xpr").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results.sort();
+        if let Some(pos) = results.iter().position(|p| p == &exact) {
+            results.swap(0, pos);
+        }
+        results
+    }
 }
 
 impl FpgaBackend for VivadoBackend {
@@ -358,15 +390,31 @@ impl FpgaBackend for VivadoBackend {
         device: &str,
         top_module: &str,
         _stages: &[String],
-        _options: &HashMap<String, String>,
+        options: &HashMap<String, String>,
     ) -> BackendResult<String> {
         let project_dir_tcl = super::to_tcl_path(project_dir);
+
+        // Resolve project file: explicit option > auto-discover > convention
+        let xpr_path = if let Some(pf) = options.get("project_file") {
+            let p = if PathBuf::from(pf).is_absolute() {
+                PathBuf::from(pf)
+            } else {
+                project_dir.join(pf)
+            };
+            super::to_tcl_path(&p)
+        } else {
+            let discovered = Self::find_project_files(project_dir, top_module);
+            discovered.into_iter().next()
+                .map(|p| super::to_tcl_path(&p))
+                .unwrap_or_else(|| format!("{project_dir_tcl}/{top_module}.xpr"))
+        };
+
         Ok(format!(
             r#"# CovertEDA — Vivado Build Script
 # Device: {device}
 # Top: {top_module}
 
-open_project {project_dir_tcl}/{top_module}.xpr
+open_project {xpr_path}
 
 synth_design -top {top_module}
 opt_design -directive Explore
@@ -417,7 +465,7 @@ close_project
         );
         std::fs::write(&tmp_path, &tcl_content)?;
 
-        let output = std::process::Command::new(&vivado_bin)
+        let output = crate::process::no_window_cmd(vivado_bin.to_str().unwrap_or("vivado"))
             .args(["-mode", "batch", "-source"])
             .arg(&tmp_path)
             .output()
@@ -458,7 +506,7 @@ exit
         let tmp_path = std::env::temp_dir().join(".coverteda_pins.tcl");
         std::fs::write(&tmp_path, &tcl).map_err(|e| BackendError::IoError(e))?;
 
-        let output = std::process::Command::new(&vivado_bin)
+        let output = crate::process::no_window_cmd(vivado_bin.to_str().unwrap_or("vivado"))
             .args(["-mode", "batch", "-source"])
             .arg(&tmp_path)
             .output()

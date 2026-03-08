@@ -340,7 +340,7 @@ impl OssBackend {
         // Fall back to yosys --version
         let yosys = root.join("bin").join("yosys");
         if yosys.exists() {
-            if let Ok(output) = std::process::Command::new(&yosys).arg("--version").output() {
+            if let Ok(output) = crate::process::no_window_cmd(yosys.to_str().unwrap_or("yosys")).arg("--version").output() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let trimmed = stdout.trim();
                 if !trimmed.is_empty() {
@@ -354,7 +354,7 @@ impl OssBackend {
     /// Try to get version string from yosys on PATH (no install dir known).
     fn detect_version_from_path() -> String {
         if let Ok(yosys) = which::which("yosys") {
-            if let Ok(output) = std::process::Command::new(&yosys).arg("--version").output() {
+            if let Ok(output) = crate::process::no_window_cmd(yosys.to_str().unwrap_or("yosys")).arg("--version").output() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let trimmed = stdout.trim();
                 if !trimmed.is_empty() {

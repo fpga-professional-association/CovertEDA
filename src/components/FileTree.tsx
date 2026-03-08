@@ -402,6 +402,125 @@ const FileTreeRow = memo(function FileTreeRow({
   );
 });
 
+// ── Source Patterns Chip Editor ──
+
+function SourcePatternsSection({ label, patterns, onChange, placeholder }: {
+  label: string;
+  patterns: string[];
+  onChange: (patterns: string[]) => void;
+  placeholder: string;
+}) {
+  const { C, MONO } = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [newPattern, setNewPattern] = useState("");
+
+  const addPattern = useCallback(() => {
+    const trimmed = newPattern.trim();
+    if (trimmed && !patterns.includes(trimmed)) {
+      onChange([...patterns, trimmed]);
+      setNewPattern("");
+    }
+  }, [newPattern, patterns, onChange]);
+
+  const removePattern = useCallback((idx: number) => {
+    onChange(patterns.filter((_, i) => i !== idx));
+  }, [patterns, onChange]);
+
+  return (
+    <div style={{ borderBottom: `1px solid ${C.b1}` }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          padding: "3px 10px",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ fontSize: 6, color: C.t3 }}>{expanded ? "\u25BC" : "\u25B6"}</span>
+        <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, fontWeight: 600, letterSpacing: 0.3 }}>
+          {label}
+        </span>
+        <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3 }}>
+          ({patterns.length})
+        </span>
+      </div>
+      {expanded && (
+        <div style={{ padding: "2px 10px 6px" }}>
+          {/* Pattern chips */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: patterns.length > 0 ? 4 : 0 }}>
+            {patterns.map((p, i) => (
+              <span
+                key={`${p}-${i}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  padding: "1px 6px",
+                  borderRadius: 3,
+                  background: `${C.accent}12`,
+                  border: `1px solid ${C.accent}30`,
+                  fontSize: 7,
+                  fontFamily: MONO,
+                  color: C.t2,
+                }}
+              >
+                {p}
+                <span
+                  onClick={() => removePattern(i)}
+                  title={`Remove ${p}`}
+                  style={{ cursor: "pointer", color: C.t3, fontSize: 8, lineHeight: 1 }}
+                >
+                  {"\u2715"}
+                </span>
+              </span>
+            ))}
+          </div>
+          {/* Add new pattern */}
+          <div style={{ display: "flex", gap: 3 }}>
+            <input
+              value={newPattern}
+              onChange={(e) => setNewPattern(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addPattern(); }}
+              placeholder={placeholder}
+              style={{
+                flex: 1,
+                background: C.bg,
+                border: `1px solid ${C.b1}`,
+                borderRadius: 3,
+                padding: "1px 6px",
+                fontSize: 7,
+                fontFamily: MONO,
+                color: C.t1,
+                outline: "none",
+              }}
+            />
+            <button
+              onClick={addPattern}
+              disabled={!newPattern.trim()}
+              title="Add pattern"
+              style={{
+                padding: "1px 6px",
+                borderRadius: 3,
+                fontSize: 7,
+                fontFamily: MONO,
+                fontWeight: 600,
+                border: `1px solid ${newPattern.trim() ? C.accent : C.b1}`,
+                background: newPattern.trim() ? `${C.accent}18` : "transparent",
+                color: newPattern.trim() ? C.accent : C.t3,
+                cursor: newPattern.trim() ? "pointer" : "default",
+              }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── FileTree ──
 
 interface FileTreeProps {
@@ -420,9 +539,13 @@ interface FileTreeProps {
   toolEdition?: string | null;
   topModule?: string;
   onSetTopModule?: (file: ProjectFile) => void;
+  sourcePatterns?: string[];
+  constraintFiles?: string[];
+  onSourcePatternsChange?: (patterns: string[]) => void;
+  onConstraintFilesChange?: (files: string[]) => void;
 }
 
-function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, backendId, onDeviceChange, toolEdition, topModule, onSetTopModule }: FileTreeProps) {
+function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefresh, onToggleSynth, width, onWidthChange, projectDir, device, backendId, onDeviceChange, toolEdition, topModule, onSetTopModule, sourcePatterns, constraintFiles, onSourcePatternsChange, onConstraintFilesChange }: FileTreeProps) {
   const { C, MONO } = useTheme();
 
   // File type colors for the detail panel
@@ -707,6 +830,24 @@ function FileTree({ files, activeFile, setActiveFile, onFileContextMenu, onRefre
             </span>
           )}
         </div>
+      )}
+
+      {/* Source Patterns section */}
+      {onSourcePatternsChange && (
+        <SourcePatternsSection
+          label="SOURCES"
+          patterns={sourcePatterns ?? []}
+          onChange={onSourcePatternsChange}
+          placeholder="e.g., rtl/**/*.sv"
+        />
+      )}
+      {onConstraintFilesChange && (
+        <SourcePatternsSection
+          label="CONSTRAINTS"
+          patterns={constraintFiles ?? []}
+          onChange={onConstraintFilesChange}
+          placeholder="e.g., constraints/*.lpf"
+        />
       )}
 
       {/* Legend row */}

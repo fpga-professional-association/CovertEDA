@@ -207,36 +207,39 @@ impl RadiantBackend {
     /// Find the .rdf project file in a directory.
     /// Radiant project files may not match the top module name (e.g., "8_bit_counter.rdf").
     pub fn find_rdf_file(project_dir: &Path, top_module: &str) -> Option<PathBuf> {
-        // First try exact match: <top_module>.rdf
+        Self::find_project_files(project_dir, top_module).into_iter().next()
+    }
+
+    /// Search for .rdf project files in the directory and one level of subdirectories.
+    pub fn find_project_files(project_dir: &Path, top_module: &str) -> Vec<PathBuf> {
         let exact = project_dir.join(format!("{}.rdf", top_module));
-        if exact.exists() {
-            return Some(exact);
-        }
-
-        // Scan for any .rdf files
-        let rdfs: Vec<PathBuf> = std::fs::read_dir(project_dir)
-            .ok()?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().map(|ext| ext == "rdf").unwrap_or(false))
-            .collect();
-
-        match rdfs.len() {
-            0 => None,
-            1 => Some(rdfs.into_iter().next().unwrap()),
-            _ => {
-                // Multiple .rdf files — prefer one containing the top module name
-                rdfs.iter()
-                    .find(|p| {
-                        p.file_stem()
-                            .and_then(|s| s.to_str())
-                            .map(|s| s.contains(top_module))
-                            .unwrap_or(false)
-                    })
-                    .cloned()
-                    .or_else(|| rdfs.into_iter().next())
+        let mut dirs = vec![project_dir.to_path_buf()];
+        if let Ok(entries) = std::fs::read_dir(project_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with('.') && name != "impl1" && name != "impl" {
+                        dirs.push(entry.path());
+                    }
+                }
             }
         }
+        let mut results = Vec::new();
+        for dir in &dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "rdf").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results.sort();
+        if let Some(pos) = results.iter().position(|p| p == &exact) {
+            results.swap(0, pos);
+        }
+        results
     }
 
     /// Check if a license file is found and contains LSC_RADIANT feature.
@@ -438,8 +441,19 @@ impl FpgaBackend for RadiantBackend {
             "# CovertEDA \u{2014} Radiant Build Script\n# Device: {device}\n# Top: {top_module}\n\n",
         );
 
-        // Open existing .rdf or create a new project from sources
-        if let Some(rdf) = Self::find_rdf_file(project_dir, top_module) {
+        // Resolve project file: explicit option > auto-discover > create new
+        let resolved_rdf = if let Some(pf) = options.get("project_file") {
+            let p = if PathBuf::from(pf).is_absolute() {
+                PathBuf::from(pf)
+            } else {
+                project_dir.join(pf)
+            };
+            Some(p)
+        } else {
+            Self::find_rdf_file(project_dir, top_module)
+        };
+
+        if let Some(rdf) = resolved_rdf {
             let rdf_display = super::to_tcl_path(&rdf);
             script.push_str(&format!("prj_open \"{}\"\n", rdf_display));
         } else {
@@ -590,7 +604,7 @@ impl FpgaBackend for RadiantBackend {
         std::fs::write(&tmp_path, &tcl)?;
 
         // Set license env if available
-        let mut cmd = std::process::Command::new(&radiantc);
+        let mut cmd = crate::process::no_window_cmd(radiantc.to_str().unwrap_or("radiantc"));
         cmd.arg(&tmp_path);
         if let Some(install) = &self.install_dir {
             let lic_dir = install.join("license");

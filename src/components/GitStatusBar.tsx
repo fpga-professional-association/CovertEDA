@@ -73,7 +73,7 @@ export default function GitStatusBar({
           No git repository detected
         </span>
         {onInit && projectDir && (
-          <Btn small onClick={onInit} style={{ padding: "1px 6px", fontSize: 8 }}>
+          <Btn small onClick={onInit} style={{ padding: "1px 6px", fontSize: 8 }} title="Initialize a new git repository">
             Init
           </Btn>
         )}
@@ -98,22 +98,23 @@ export default function GitStatusBar({
           flexShrink: 0,
         }}
       >
-        <span style={{ display: "flex", color: C.t3 }}>
+        <span style={{ display: "flex", color: C.t3 }} title="Git branch">
           <Branch />
         </span>
         <span
           style={{ color: C.accent, fontWeight: 700, cursor: "pointer" }}
           onClick={() => setGitExpanded((p: boolean) => !p)}
+          title="Current git branch"
         >
           {git.branch}
         </span>
         {git.tags.length > 0 && (
-          <Badge color={C.cyan} style={{ fontSize: 8 }}>
+          <Badge color={C.cyan} style={{ fontSize: 8 }} title={`Tag: ${git.tags[0]}`}>
             {git.tags[0]}
           </Badge>
         )}
         <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
-        <span style={{ color: C.t3 }}>{git.commit}</span>
+        <span style={{ color: C.t3 }} title={`Commit hash: ${git.commit}`}>{git.commit}</span>
         <span
           style={{
             color: C.t2,
@@ -122,40 +123,41 @@ export default function GitStatusBar({
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}
+          title={git.commitMsg}
         >
           &quot;{git.commitMsg}&quot;
         </span>
-        <span style={{ color: C.t3 }}>{"\u2014"} {git.time}</span>
+        <span style={{ color: C.t3 }} title={`Commit time: ${git.time}`}>{"\u2014"} {git.time}</span>
         <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
-        {git.ahead > 0 && <span style={{ color: C.ok }}>{"\u2191"}{git.ahead}</span>}
+        {git.ahead > 0 && <span style={{ color: C.ok }} title={`${git.ahead} commit${git.ahead === 1 ? "" : "s"} ahead of remote`}>{"\u2191"}{git.ahead}</span>}
         {git.behind > 0 && (
-          <span style={{ color: C.warn }}>{"\u2193"}{git.behind}</span>
+          <span style={{ color: C.warn }} title={`${git.behind} commit${git.behind === 1 ? "" : "s"} behind remote`}>{"\u2193"}{git.behind}</span>
         )}
         {git.ahead === 0 && git.behind === 0 && (
-          <span style={{ color: C.t3 }}>in sync</span>
+          <span style={{ color: C.t3 }} title="Up to date with remote">in sync</span>
         )}
         <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
         {git.dirty ? (
           <>
             {git.staged > 0 && (
-              <span style={{ color: C.ok }}>+{git.staged} staged</span>
+              <span style={{ color: C.ok }} title={`${git.staged} staged file${git.staged === 1 ? "" : "s"}`}>+{git.staged} staged</span>
             )}
             {git.unstaged > 0 && (
-              <span style={{ color: C.warn }}>~{git.unstaged} modified</span>
+              <span style={{ color: C.warn }} title={`${git.unstaged} modified file${git.unstaged === 1 ? "" : "s"}`}>~{git.unstaged} modified</span>
             )}
             {git.untracked > 0 && (
-              <span style={{ color: C.orange }}>
+              <span style={{ color: C.orange }} title={`${git.untracked} untracked file${git.untracked === 1 ? "" : "s"}`}>
                 ?{git.untracked} untracked
               </span>
             )}
           </>
         ) : (
-          <span style={{ color: C.ok }}>{"\u2713"} clean</span>
+          <span style={{ color: C.ok }} title="Working tree is clean">{"\u2713"} clean</span>
         )}
         {git.stashes > 0 && (
           <>
             <span style={{ color: C.t3, opacity: 0.4 }}>{"\u2502"}</span>
-            <span style={{ color: C.purple }}>{git.stashes} stash</span>
+            <span style={{ color: C.purple }} title={`${git.stashes} stash entr${git.stashes === 1 ? "y" : "ies"}`}>{git.stashes} stash</span>
           </>
         )}
         <div style={{ flex: 1 }} />
@@ -170,17 +172,17 @@ export default function GitStatusBar({
           </span>
         )}
         {onCommit && git.dirty && (
-          <Btn small onClick={onCommit} disabled={committing} style={{ padding: "1px 6px", fontSize: 8, color: C.ok, borderColor: `${C.ok}44` }}>
+          <Btn small onClick={onCommit} disabled={committing} style={{ padding: "1px 6px", fontSize: 8, color: C.ok, borderColor: `${C.ok}44` }} title="Commit staged changes">
             {committing ? "Committing\u2026" : "Commit"}
           </Btn>
         )}
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
+        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title="Pull changes from remote">
           Pull
         </Btn>
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
+        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title={`Push ${git.ahead} commit${git.ahead === 1 ? "" : "s"} to remote`}>
           Push {"\u2191"}{git.ahead}
         </Btn>
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }}>
+        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title="Stash uncommitted changes">
           Stash
         </Btn>
       </div>

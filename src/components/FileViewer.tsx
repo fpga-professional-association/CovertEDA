@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { FileContent } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import type { ThemeColors } from "../theme";
+import { openInEditor } from "../hooks/useTauri";
 
 interface FileViewerProps {
   file: FileContent;
@@ -72,16 +73,22 @@ function FileViewer({ file, onClose }: FileViewerProps) {
           >
             {fileName}
           </span>
-          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+          <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }} title="File size on disk">
             {formatSize(file.sizeBytes)}
           </span>
           <span
             onClick={onClose}
+            title="Close file viewer"
             style={{
               cursor: "pointer",
               color: C.t3,
               fontSize: 12,
               padding: "0 4px",
+              minWidth: 24,
+              minHeight: 24,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             {"\u2715"}
@@ -153,7 +160,7 @@ function FileViewer({ file, onClose }: FileViewerProps) {
         >
           {fileName}
         </span>
-        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }} title="File size on disk">
           {formatSize(file.sizeBytes)}
         </span>
         <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
@@ -161,7 +168,24 @@ function FileViewer({ file, onClose }: FileViewerProps) {
         </span>
         <div style={{ flex: 1 }} />
         <span
+          onClick={() => openInEditor(file.path)}
+          title="Open in external editor"
+          style={{
+            cursor: "pointer",
+            fontSize: 8,
+            fontFamily: SANS,
+            fontWeight: 600,
+            color: C.accent,
+            padding: "2px 8px",
+            border: `1px solid ${C.b1}`,
+            borderRadius: 3,
+          }}
+        >
+          Edit
+        </span>
+        <span
           onClick={handleCopy}
+          title="Copy file contents to clipboard"
           style={{
             cursor: "pointer",
             fontSize: 8,
@@ -177,11 +201,17 @@ function FileViewer({ file, onClose }: FileViewerProps) {
         </span>
         <span
           onClick={onClose}
+          title="Close file viewer"
           style={{
             cursor: "pointer",
             color: C.t3,
             fontSize: 12,
             padding: "0 4px",
+            minWidth: 24,
+            minHeight: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           {"\u2715"}

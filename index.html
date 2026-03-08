@@ -17,6 +17,44 @@
       />
     </noscript>
     <title>CovertEDA</title>
+    <style>
+      /* Smooth all interactive state changes */
+      button, [role="button"], [role="combobox"], a, input, select, textarea {
+        transition: background-color 100ms ease-out,
+                    border-color 100ms ease-out,
+                    color 100ms ease-out,
+                    opacity 100ms ease-out,
+                    box-shadow 100ms ease-out;
+      }
+
+      /* Focus indicators for keyboard nav (WCAG 2.4.7) */
+      button:focus-visible, [role="button"]:focus-visible,
+      [role="combobox"]:focus-visible,
+      input:focus-visible, select:focus-visible, a:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--accent, #3b9eff);
+        outline-offset: 2px;
+      }
+
+      /* Active/pressed state for buttons */
+      button:active:not(:disabled), [role="button"]:active {
+        transform: scale(0.97);
+      }
+
+      /* Dark-themed scrollbars */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #1c2840; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #2a4060; }
+
+      /* Respect reduced-motion preference */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
   </head>
   <body class="bg-eda-bg overflow-hidden">
     <div id="root"></div>

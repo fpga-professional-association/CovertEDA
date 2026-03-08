@@ -1122,6 +1122,7 @@ const DocSidebar = memo(function DocSidebar({
               key={sec.id}
               className={`doc-sidebar-item${isActive ? " doc-sidebar-active" : ""}`}
               onClick={() => onSelect(sec.id)}
+              title={sec.title}
               style={{
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "6px 10px", borderRadius: 5, cursor: "pointer",

@@ -71,17 +71,20 @@ pub fn get_status(project_dir: &Path) -> Result<GitStatus, String> {
 
     let dirty = staged > 0 || unstaged > 0 || untracked > 0;
 
+    let (ahead, behind) = compute_ahead_behind(&repo);
+
     Ok(GitStatus {
         branch,
         commit_hash,
         commit_message,
         author,
         time_ago,
-        ahead: 0,  // TODO: compute via revwalk
-        behind: 0,
+        ahead,
+        behind,
         staged,
         unstaged,
         untracked,
+        stashes: count_stashes(&repo),
         dirty,
     })
 }
@@ -370,6 +373,223 @@ fn ensure_gitignore_has_vendor_dirs(project_dir: &Path) {
         }
         let _ = std::fs::write(&gitignore_path, content);
     }
+}
+
+/// Branch info returned to the frontend
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_current: bool,
+    pub is_remote: bool,
+    pub ahead: u32,
+    pub behind: u32,
+    pub last_commit_hash: String,
+    pub last_commit_msg: String,
+    pub last_commit_time: String,
+}
+
+/// Tag info returned to the frontend
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TagInfo {
+    pub name: String,
+    pub target_hash: String,
+    pub message: Option<String>,
+    pub tagger: Option<String>,
+    pub time_ago: Option<String>,
+}
+
+fn compute_ahead_behind(repo: &Repository) -> (u32, u32) {
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(_) => return (0, 0),
+    };
+    let local_oid = match head.target() {
+        Some(o) => o,
+        None => return (0, 0),
+    };
+    let branch_name = match head.shorthand() {
+        Some(n) => n.to_string(),
+        None => return (0, 0),
+    };
+    let upstream_ref = format!("refs/remotes/origin/{}", branch_name);
+    let upstream_oid = match repo.refname_to_id(&upstream_ref) {
+        Ok(o) => o,
+        Err(_) => return (0, 0),
+    };
+    match repo.graph_ahead_behind(local_oid, upstream_oid) {
+        Ok((ahead, behind)) => (ahead as u32, behind as u32),
+        Err(_) => (0, 0),
+    }
+}
+
+fn count_stashes(repo: &Repository) -> u32 {
+    let mut count = 0u32;
+    // git2 stash_foreach requires &mut Repository
+    // but we only have &Repository, so we'll read refs directly
+    let mut revwalk = match repo.revwalk() {
+        Ok(rw) => rw,
+        Err(_) => return 0,
+    };
+    match repo.refname_to_id("refs/stash") {
+        Ok(oid) => {
+            let _ = revwalk.push(oid);
+            for _ in revwalk {
+                count += 1;
+            }
+        }
+        Err(_) => {} // No stash ref = 0 stashes
+    }
+    count
+}
+
+pub fn list_branches(project_dir: &Path) -> Result<Vec<BranchInfo>, String> {
+    let repo = Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
+    let head = repo.head().ok();
+    let head_oid = head.as_ref().and_then(|h| h.target());
+    let current_branch = head.as_ref().and_then(|h| h.shorthand().map(|s| s.to_string()));
+
+    let mut branches = Vec::new();
+    for branch_result in repo.branches(None).map_err(|e| format!("Branch list error: {}", e))? {
+        let (branch, branch_type) = branch_result.map_err(|e| format!("Branch error: {}", e))?;
+        let name = branch.name().map_err(|e| format!("Branch name error: {}", e))?
+            .unwrap_or("(unnamed)")
+            .to_string();
+        let is_remote = branch_type == git2::BranchType::Remote;
+        let is_current = !is_remote && current_branch.as_deref() == Some(&name);
+
+        let (commit_hash, commit_msg, commit_time) = match branch.get().peel_to_commit() {
+            Ok(c) => {
+                let hash = format!("{}", c.id())[..7].to_string();
+                let msg = c.message().unwrap_or("").lines().next().unwrap_or("").to_string();
+                let time = format_time_ago(c.time().seconds());
+                (hash, msg, time)
+            }
+            Err(_) => ("".to_string(), "".to_string(), "".to_string()),
+        };
+
+        let (ahead, behind) = if !is_remote {
+            if let (Some(local_oid), Some(_)) = (branch.get().target(), head_oid) {
+                let upstream_ref = format!("refs/remotes/origin/{}", name);
+                match repo.refname_to_id(&upstream_ref) {
+                    Ok(upstream_oid) => {
+                        repo.graph_ahead_behind(local_oid, upstream_oid)
+                            .map(|(a, b)| (a as u32, b as u32))
+                            .unwrap_or((0, 0))
+                    }
+                    Err(_) => (0, 0),
+                }
+            } else {
+                (0, 0)
+            }
+        } else {
+            (0, 0)
+        };
+
+        branches.push(BranchInfo {
+            name,
+            is_current,
+            is_remote,
+            ahead,
+            behind,
+            last_commit_hash: commit_hash,
+            last_commit_msg: commit_msg,
+            last_commit_time: commit_time,
+        });
+    }
+    // Sort: current first, then local, then remote
+    branches.sort_by(|a, b| {
+        b.is_current.cmp(&a.is_current)
+            .then(a.is_remote.cmp(&b.is_remote))
+            .then(a.name.cmp(&b.name))
+    });
+    Ok(branches)
+}
+
+pub fn list_tags(project_dir: &Path) -> Result<Vec<TagInfo>, String> {
+    let repo = Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
+    let mut tags = Vec::new();
+    repo.tag_foreach(|oid, name| {
+        let name_str = String::from_utf8_lossy(name)
+            .trim_start_matches("refs/tags/")
+            .to_string();
+        let (target_hash, message, tagger, time_ago) = match repo.find_tag(oid) {
+            Ok(tag) => {
+                let hash = format!("{}", tag.target_id())[..7].to_string();
+                let msg = tag.message().map(|m| m.lines().next().unwrap_or("").to_string());
+                let tagger_name = tag.tagger().and_then(|t| t.name().map(|n| n.to_string()));
+                let time = tag.tagger().map(|t| format_time_ago(t.when().seconds()));
+                (hash, msg, tagger_name, time)
+            }
+            Err(_) => {
+                // Lightweight tag — resolve to commit
+                let hash = format!("{}", oid)[..7].to_string();
+                (hash, None, None, None)
+            }
+        };
+        tags.push(TagInfo { name: name_str, target_hash, message, tagger, time_ago });
+        true
+    }).map_err(|e| format!("Tag list error: {}", e))?;
+    tags.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(tags)
+}
+
+pub fn git_pull(project_dir: &Path) -> Result<String, String> {
+    let output = std::process::Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(project_dir)
+        .output()
+        .map_err(|e| format!("Failed to run git pull: {}", e))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+pub fn git_push(project_dir: &Path) -> Result<String, String> {
+    let output = std::process::Command::new("git")
+        .args(["push"])
+        .current_dir(project_dir)
+        .output()
+        .map_err(|e| format!("Failed to run git push: {}", e))?;
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Ok(format!("{}{}", stdout, stderr))
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+pub fn git_checkout(project_dir: &Path, branch: &str) -> Result<(), String> {
+    let repo = Repository::discover(project_dir).map_err(|e| format!("Not a git repo: {}", e))?;
+
+    // Check for uncommitted changes
+    if is_dirty(project_dir)? {
+        return Err("Cannot checkout: working directory has uncommitted changes".to_string());
+    }
+
+    // Find the branch reference
+    let (obj, reference) = repo.revparse_ext(branch)
+        .map_err(|e| format!("Branch '{}' not found: {}", branch, e))?;
+
+    repo.checkout_tree(&obj, None)
+        .map_err(|e| format!("Checkout failed: {}", e))?;
+
+    match reference {
+        Some(gref) => {
+            let refname = gref.name().ok_or("Invalid ref name")?;
+            repo.set_head(refname)
+                .map_err(|e| format!("Set HEAD failed: {}", e))?;
+        }
+        None => {
+            repo.set_head_detached(obj.id())
+                .map_err(|e| format!("Set HEAD failed: {}", e))?;
+        }
+    }
+    Ok(())
 }
 
 fn format_time_ago(epoch_secs: i64) -> String {

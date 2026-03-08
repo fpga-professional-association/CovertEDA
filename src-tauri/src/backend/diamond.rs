@@ -165,6 +165,45 @@ impl DiamondBackend {
         self.install_dir.as_deref()
     }
 
+    /// Search for .ldf project files in the given directory and one level of subdirectories.
+    /// Returns paths sorted alphabetically, with exact top_module match first if found.
+    pub fn find_project_files(project_dir: &Path, top_module: &str) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        let exact = project_dir.join(format!("{}.ldf", top_module));
+        // Scan project dir and immediate subdirectories for .ldf files
+        let dirs_to_scan: Vec<PathBuf> = {
+            let mut dirs = vec![project_dir.to_path_buf()];
+            if let Ok(entries) = std::fs::read_dir(project_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        // Skip hidden dirs and build output dirs
+                        if !name.starts_with('.') && name != "impl1" && name != "build" {
+                            dirs.push(entry.path());
+                        }
+                    }
+                }
+            }
+            dirs
+        };
+        for dir in &dirs_to_scan {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "ldf").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results.sort();
+        // Move exact match to front if present
+        if let Some(pos) = results.iter().position(|p| p == &exact) {
+            results.swap(0, pos);
+        }
+        results
+    }
+
     /// Scan all candidate directories and return every verified version found.
     pub fn scan_all_versions() -> Vec<DetectedVersion> {
         let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
@@ -283,9 +322,24 @@ impl FpgaBackend for DiamondBackend {
         device: &str,
         top_module: &str,
         _stages: &[String],
-        _options: &HashMap<String, String>,
+        options: &HashMap<String, String>,
     ) -> BackendResult<String> {
-        let ldf = project_dir.join(format!("{}.ldf", top_module));
+        // Resolve the .ldf project file:
+        // 1. Explicit path from options (user-selected via UI)
+        // 2. Auto-discover in project dir and subdirectories
+        // 3. Fall back to convention: {project_dir}/{top_module}.ldf
+        let ldf = if let Some(pf) = options.get("project_file") {
+            let p = PathBuf::from(pf);
+            if p.is_absolute() {
+                p
+            } else {
+                project_dir.join(p)
+            }
+        } else {
+            let discovered = Self::find_project_files(project_dir, top_module);
+            discovered.into_iter().next()
+                .unwrap_or_else(|| project_dir.join(format!("{}.ldf", top_module)))
+        };
         let ldf_tcl = super::to_tcl_path(&ldf);
         Ok(format!(
             r#"# CovertEDA — Diamond Build Script
@@ -435,5 +489,43 @@ mod tests {
         assert!(!open_line.contains('\\'),
             "TCL script must not contain backslashes in paths (causes escape issues): {}",
             open_line);
+    }
+
+    #[test]
+    fn test_find_project_files_discovers_ldf_in_subdir() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Create an .ldf in a subdirectory (e.g., proj/)
+        let proj_dir = tmp.path().join("proj");
+        std::fs::create_dir(&proj_dir).unwrap();
+        std::fs::write(proj_dir.join("design.ldf"), "").unwrap();
+        // Also create one in root
+        std::fs::write(tmp.path().join("top.ldf"), "").unwrap();
+
+        let files = DiamondBackend::find_project_files(tmp.path(), "top");
+        assert!(files.len() >= 2, "Should find .ldf files in root and subdirs");
+        // top.ldf should be first (exact match on top_module)
+        assert_eq!(files[0], tmp.path().join("top.ldf"));
+        assert!(files.iter().any(|p| p.ends_with("design.ldf")));
+    }
+
+    #[test]
+    fn test_find_project_files_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let files = DiamondBackend::find_project_files(tmp.path(), "top");
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn test_build_script_uses_project_file_option() {
+        let b = DiamondBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = std::collections::HashMap::new();
+        opts.insert("project_file".to_string(), "proj/design.ldf".to_string());
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &opts,
+        ).unwrap();
+        let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
+        assert!(open_line.contains("proj/design.ldf"),
+            "Build script should use the project_file option: {}", open_line);
     }
 }

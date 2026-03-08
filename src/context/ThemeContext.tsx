@@ -33,13 +33,13 @@ const ThemeContext = createContext<ThemeContextValue>({
   SANS,
   themeId: "dark",
   setThemeId: () => {},
-  scaleFactor: 1.2,
+  scaleFactor: 1.0,
   setScaleFactor: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeId, setThemeIdState] = useState<ThemeId>("dark");
-  const [scaleFactor, setScaleFactorState] = useState(1.2);
+  const [scaleFactor, setScaleFactorState] = useState(1.0);
 
   const setThemeId = useCallback((id: ThemeId) => {
     setThemeIdState(id);

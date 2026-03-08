@@ -83,6 +83,7 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Commands: build, switch, reports, git..."
+            title="Search commands by name or category"
             style={{
               flex: 1,
               background: "transparent",
@@ -94,6 +95,7 @@ export default function CommandPalette({
             }}
           />
           <span
+            title="Press Escape to close"
             style={{
               fontSize: 8,
               fontFamily: MONO,
@@ -111,6 +113,7 @@ export default function CommandPalette({
             <HoverRow
               key={i}
               onClick={() => handleSelect(cmd)}
+              title={cmd.desc ?? cmd.label}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -119,6 +122,7 @@ export default function CommandPalette({
               }}
             >
               <span
+                title={cmd.category}
                 style={{
                   fontSize: 8,
                   fontFamily: MONO,

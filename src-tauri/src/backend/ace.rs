@@ -192,24 +192,39 @@ impl AceBackend {
 
     /// Look for the ACE project file (.acepro) in the project directory.
     fn find_project_file(dir: &Path, top_module: &str) -> Option<PathBuf> {
-        // Try exact match first
-        let exact = dir.join(format!("{}.acepro", top_module));
-        if exact.exists() {
-            return Some(exact);
-        }
-        // Scan for any .acepro file
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            let mut matches: Vec<PathBuf> = entries
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| p.extension().map(|ext| ext == "acepro").unwrap_or(false))
-                .collect();
-            matches.sort();
-            if !matches.is_empty() {
-                return Some(matches.into_iter().next().unwrap());
+        Self::find_project_files(dir, top_module).into_iter().next()
+    }
+
+    /// Search for .acepro project files in the directory and one level of subdirectories.
+    pub fn find_project_files(project_dir: &Path, top_module: &str) -> Vec<PathBuf> {
+        let exact = project_dir.join(format!("{}.acepro", top_module));
+        let mut dirs = vec![project_dir.to_path_buf()];
+        if let Ok(entries) = std::fs::read_dir(project_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with('.') && name != "output" && name != "impl1" {
+                        dirs.push(entry.path());
+                    }
+                }
             }
         }
-        None
+        let mut results = Vec::new();
+        for dir in &dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "acepro").unwrap_or(false) {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results.sort();
+        if let Some(pos) = results.iter().position(|p| p == &exact) {
+            results.swap(0, pos);
+        }
+        results
     }
 }
 
@@ -290,8 +305,19 @@ impl FpgaBackend for AceBackend {
              # Top:    {top_module}\n\n"
         );
 
-        // Open an existing .acepro or create a new project from sources
-        if let Some(proj_file) = Self::find_project_file(project_dir, top_module) {
+        // Resolve project file: explicit option > auto-discover > create new
+        let resolved_proj = if let Some(pf) = options.get("project_file") {
+            let p = if PathBuf::from(pf).is_absolute() {
+                PathBuf::from(pf)
+            } else {
+                project_dir.join(pf)
+            };
+            Some(p)
+        } else {
+            Self::find_project_file(project_dir, top_module)
+        };
+
+        if let Some(proj_file) = resolved_proj {
             let proj_path = super::to_tcl_path(&proj_file);
             script.push_str(&format!("open_project \"{proj_path}\"\n"));
         } else {

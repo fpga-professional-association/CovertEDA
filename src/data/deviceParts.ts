@@ -581,6 +581,109 @@ export function getAllParts(backendId: string): string[] {
 }
 
 // Validate a part number against known parts (case-insensitive partial match)
+// ── Device Info Parser ──
+// Extracts pin count, logic size, speed grade, package, etc. from FPGA part numbers.
+
+export interface DeviceInfo {
+  pins: string;       // e.g. "400" or "—"
+  logic: string;      // e.g. "40K LUTs" or "—"
+  speed: string;      // e.g. "-9" or "C7"
+  package: string;    // e.g. "CABGA400" or "F23"
+  grade: string;      // e.g. "Industrial" or "Commercial"
+}
+
+// Package pin counts — common BGA/QFP package suffixes
+const PKG_PINS: Record<string, string> = {
+  "QFN72": "72", "WLCSP72": "72", "WLCSP84": "84", "FCCSP104": "104",
+  "ASG256": "256", "BSG256": "256", "BBG256": "256", "BFG256": "256", "CBG256": "256",
+  "CSG256": "256", "TSG100": "100", "TSG144": "144", "BSG132": "132",
+  "UUG36": "36", "UUG49": "49", "UUG81": "81", "SFBGA121": "121", "CSFBGA121": "121",
+  "MG121": "121",
+  "SBGA289": "289", "CSBGA289": "289",
+  "ASG410": "410", "ASGA410": "410",
+  "BBG400": "400", "BFG400": "400", "CABGA400": "400", "CBG484": "484",
+  "BBG484": "484", "BFG484": "484",
+  "LFG672": "672", "LFG676": "676", "CSG841": "841", "LFG1156": "1156",
+  // Quartus
+  "F17": "256", "F23": "484", "F27": "672", "F29": "780", "F31": "896",
+  "F34": "1152", "F35": "1152", "M15": "484", "U15": "324", "U19": "484",
+  "U23": "672", "F40": "1517",
+  // Vivado
+  "CLG225": "225", "CLG484": "484", "FFG676": "676", "FFG900": "900",
+  "FFG1156": "1156", "FBG484": "484", "FBG676": "676", "FBG900": "900",
+  "SBG484": "484", "FFG1761": "1761", "FLG1155": "1155", "FLG1926": "1926",
+  "VSVA1365": "1365", "VVAP1596": "1596",
+};
+
+// Logic size keywords by family prefix
+const LOGIC_SIZE: Record<string, Record<string, string>> = {
+  "LIFCL": { "40": "40K LUTs", "17": "17K LUTs" },
+  "LFCPNX": { "100": "100K LUTs", "50": "50K LUTs" },
+  "LFMXO5": { "15": "15K LUTs", "25": "25K LUTs", "35": "35K LUTs", "55": "55K LUTs", "65": "65K LUTs", "100": "100K LUTs" },
+  "LFMXO4": { "010": "10K LUTs", "015": "15K LUTs", "025": "25K LUTs", "050": "50K LUTs", "080": "80K LUTs", "110": "110K LUTs" },
+  "LAV-AT-E": { "30": "30K LUTs", "70": "70K LUTs" },
+  "LAV-AT-G": { "70": "70K LUTs" },
+  "LAV-AT-X": { "70": "70K LUTs" },
+  // Cyclone V
+  "5CE": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },
+  "5CS": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A6": "110K LEs", "A7": "150K LEs", "A9": "301K LEs" },
+  "5CG": { "A3": "36K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },
+  // Xilinx / AMD
+  "XC7A": { "35": "33K LCs", "50": "52K LCs", "75": "76K LCs", "100": "101K LCs", "200": "215K LCs" },
+  "XC7K": { "70": "65K LCs", "160": "162K LCs", "325": "326K LCs", "410": "407K LCs", "480": "478K LCs" },
+  "XCZU": { "2": "—", "3": "—", "4": "—", "5": "—", "7": "—", "9": "—", "11": "—", "15": "—" },
+  "XC7Z": { "010": "28K LCs", "015": "46K LCs", "020": "85K LCs", "030": "125K LCs", "045": "218K LCs", "100": "444K LCs" },
+  "XCKU": { "3P": "—", "5P": "—", "9P": "—", "11P": "—", "13P": "—", "15P": "—" },
+  "XCVU": { "3P": "—", "5P": "—", "7P": "—", "9P": "—", "11P": "—", "13P": "—" },
+};
+
+export function parsePartInfo(part: string): DeviceInfo {
+  const result: DeviceInfo = { pins: "—", logic: "—", speed: "—", package: "—", grade: "—" };
+
+  // Grade (last character)
+  const lastChar = part.charAt(part.length - 1).toUpperCase();
+  if (lastChar === "I") result.grade = "Industrial";
+  else if (lastChar === "C") result.grade = "Commercial";
+  else if (lastChar === "A") result.grade = "Automotive";
+  else if (lastChar === "M") result.grade = "Military";
+
+  // Find package and pin count
+  for (const [pkg, pins] of Object.entries(PKG_PINS)) {
+    if (part.toUpperCase().includes(pkg.toUpperCase())) {
+      result.package = pkg;
+      result.pins = pins;
+      break;
+    }
+  }
+
+  // Extract speed grade — look for -N pattern (Lattice) or CN pattern (Intel)
+  const speedMatch = part.match(/-(\d+)[A-Z]/);
+  if (speedMatch) {
+    result.speed = `-${speedMatch[1]}`;
+  } else {
+    const intelSpeed = part.match(/([CIMA]\d+)$/);
+    if (intelSpeed) result.speed = intelSpeed[1];
+  }
+
+  // Logic size — match by family prefix
+  const upper = part.toUpperCase();
+  for (const [prefix, sizes] of Object.entries(LOGIC_SIZE)) {
+    if (upper.startsWith(prefix.toUpperCase())) {
+      // Extract the size number after the prefix
+      const afterPrefix = part.slice(prefix.length).replace(/^[-_]/, "");
+      for (const [sizeKey, sizeLabel] of Object.entries(sizes)) {
+        if (afterPrefix.startsWith(sizeKey)) {
+          result.logic = sizeLabel;
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  return result;
+}
+
 export function validatePart(backendId: string, part: string): { valid: boolean; match?: string; family?: string } {
   const families = DEVICE_MAP[backendId] ?? [];
   const lower = part.toLowerCase();

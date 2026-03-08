@@ -18,6 +18,10 @@ export interface IpCore {
   params?: IpParam[];
   /** Verilog instantiation template (with {PARAM} placeholders) */
   template?: string;
+  /** Where this IP comes from — "Built-in" or filesystem path */
+  source?: string;
+  /** Whether this is a user-added custom IP */
+  isCustom?: boolean;
 }
 
 /** Static lookup table of common Lattice Radiant IP cores with configuration parameters. */

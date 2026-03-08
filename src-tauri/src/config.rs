@@ -32,10 +32,13 @@ pub struct AppConfig {
     /// User-selected tool versions keyed by backend id (e.g. "quartus" -> "25.3")
     #[serde(default)]
     pub selected_versions: HashMap<String, String>,
+    /// User-preferred external editor path (e.g. "/usr/bin/code", "notepad++.exe")
+    #[serde(default)]
+    pub preferred_editor: Option<String>,
 }
 
 fn default_scale() -> f64 {
-    1.2
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +77,7 @@ impl Default for AppConfig {
             license_servers: vec![],
             default_backend: "diamond".to_string(),
             theme: "dark".to_string(),
-            scale_factor: 1.2,
+            scale_factor: 1.0,
             license_file: None,
             license_files: HashMap::new(),
             ai_api_key: None,
@@ -82,6 +85,7 @@ impl Default for AppConfig {
             ai_provider: None,
             ai_base_url: None,
             selected_versions: HashMap::new(),
+            preferred_editor: None,
         }
     }
 }
@@ -149,7 +153,7 @@ mod tests {
         let config = AppConfig::default();
         assert_eq!(config.theme, "dark");
         assert_eq!(config.default_backend, "diamond");
-        assert_eq!(config.scale_factor, 1.2);
+        assert_eq!(config.scale_factor, 1.0);
         assert!(config.license_file.is_none());
         assert!(config.ai_api_key.is_none());
     }

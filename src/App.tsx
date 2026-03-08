@@ -4,7 +4,7 @@ import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Term, Key, Settings,
-  Play, Stop, Search, Clock, Download, GitHub, LinkedIn,
+  Play, Stop, Search, Clock, Download, Git,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
@@ -27,6 +27,7 @@ const BuildHistory = lazy(() => import("./components/BuildHistory"));
 const Documentation = lazy(() => import("./components/Documentation"));
 const KeyboardShortcuts = lazy(() => import("./components/KeyboardShortcuts"));
 const IpCatalogSection = lazy(() => import("./components/IpCatalogSection"));
+const GitPanel = lazy(() => import("./components/GitPanel"));
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -52,7 +53,7 @@ import {
   saveBuildRecord,
   getProjectConfigAtHead,
   detectToolEdition,
-  openUrl,
+  openInEditor,
 } from "./hooks/useTauri";
 import type { RustGitStatus, GitLogEntry } from "./hooks/useTauri";
 
@@ -71,7 +72,7 @@ function mapGitStatus(r: RustGitStatus, logEntries?: GitLogEntry[]): GitState {
     staged: r.staged,
     unstaged: r.unstaged,
     untracked: r.untracked,
-    stashes: 0,
+    stashes: r.stashes ?? 0,
     tags: [],
     recentCommits: (logEntries ?? []).map((e) => ({
       hash: e.hash,
@@ -174,6 +175,7 @@ export default function App() {
   const [realIoReport, setRealIoReport] = useState<{ title: string; generated: string; banks: IoBankData[] } | null>(null);
   const [_buildDone, setBuildDone] = useState(false);
   const [buildFailed, setBuildFailed] = useState(false);
+  const [buildElapsedSec, setBuildElapsedSec] = useState<number | null>(null);
   const [activeStage, setActiveStage] = useState<number | null>(null);
   const [licenseResult, setLicenseResult] = useState<LicenseCheckResult | null>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
@@ -187,6 +189,7 @@ export default function App() {
   const [perfOverlay, setPerfOverlay] = useState(false);
   const [sourceContents, setSourceContents] = useState<Record<string, string>>({});
   const [aiMdContent, setAiMdContent] = useState<string | null>(null);
+  const [pendingAiMessage, setPendingAiMessage] = useState<string | null>(null);
 
   // ── Build config auto-save state ──
   const [buildSaveStatus, setBuildSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
@@ -596,6 +599,7 @@ export default function App() {
         const secs = elapsed % 60;
         setBuilding(false);
         setBuildDone(true);
+        setBuildElapsedSec(elapsed);
         setLogs((p) => [...p, { t: "ok", m: `\u2550\u2550\u2550 BUILD COMPLETE \u2550\u2550\u2550 ${mins}m ${secs}s` }]);
         // Set mock reports
         setRealTimingReport({
@@ -725,6 +729,7 @@ export default function App() {
 
     setBuilding(true);
     buildStartTime.current = Date.now();
+    setBuildElapsedSec(null);
     setBStep(0);
     setLogs([]);
     logsRef.current = [];
@@ -794,6 +799,8 @@ export default function App() {
           commitMsg: gitState?.commitMsg,
         };
 
+        const elapsed = buildStartTime.current > 0 ? Math.round((Date.now() - buildStartTime.current) / 1000) : null;
+        setBuildElapsedSec(elapsed);
         if (data.status === "success") {
           setBuildDone(true);
         } else {
@@ -1187,6 +1194,7 @@ export default function App() {
     { label: "Build History", category: "View", desc: "Previous builds, trends, Fmax tracking", action: () => navClick("history") },
     { label: "License Status", category: "View", desc: "FlexLM license info", action: () => navClick("license") },
     { label: "AI Assistant", category: "View", desc: "FPGA design help", action: () => navClick("ai") },
+    { label: "Git", category: "View", desc: "Branches, tags, commit log, push/pull", action: () => navClick("git") },
     // Zoom
     { label: "Zoom In", category: "Zoom", desc: `Current: ${Math.round(scaleFactor * 100)}%`, action: () => {
       const next = Math.min(3.0, scaleFactor + 0.1);
@@ -1336,7 +1344,7 @@ export default function App() {
         {/* ══════ LEFT NAV ══════ */}
         <div
           style={{
-            width: 56,
+            width: 50,
             flexShrink: 0,
             background: C.s1,
             borderRight: `1px solid ${C.b1}`,
@@ -1344,7 +1352,7 @@ export default function App() {
             flexDirection: "column",
             alignItems: "center",
             paddingTop: 6,
-            gap: 1,
+            gap: 2,
           }}
         >
           <div
@@ -1376,22 +1384,19 @@ export default function App() {
           </div>
           <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minHeight: 0 }}>
             <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
+            <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
             <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
             <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
             <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
             <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
-            <NavBtn icon={<Link />} label="Interc" active={sec === "interconnect"} onClick={() => navClick("interconnect")} accent={C.cyan} tooltip="Interconnect — block-level routing visualization" />
             <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
-            <NavBtn icon={<MapIcon />} label="Regs" active={sec === "regmap"} onClick={() => navClick("regmap")} accent={C.orange} tooltip="Register Map — view and edit register definitions" />
-            <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
+            <NavBtn icon={<Git />} label="Git" active={sec === "git"} onClick={() => navClick("git")} accent={C.ok} tooltip="Git — branches, tags, commit log, push/pull" badge={gitState?.behind ? true : undefined} />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
             <NavBtn icon={<Key />} label="Lic" accent={C.warn} active={sec === "license"} onClick={() => navClick("license")} tooltip="License — FlexLM license status and feature listing" />
             <NavBtn icon={<Settings />} label="Cfg" onClick={() => setSettingsOpen(true)} tooltip="Settings — tool paths, theme, zoom configuration" />
-            <NavBtn icon={<GitHub size={12} />} label="Git" onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")} tooltip="GitHub — source code, issues, and contributions" />
-            <NavBtn icon={<LinkedIn size={12} />} label="FPGA" onClick={() => openUrl("https://www.linkedin.com/company/fpga-professional-association/")} tooltip="FPGA Professional Association on LinkedIn" />
           </div>
           <div
             onClick={handleCloseProject}
@@ -1437,6 +1442,24 @@ export default function App() {
               setProject(updated);
               saveProject(projectDir, updated).catch(() => {});
             }}
+            sourcePatterns={project?.sourcePatterns}
+            constraintFiles={project?.constraintFiles}
+            onSourcePatternsChange={(patterns) => {
+              if (!project || !projectDir) return;
+              const updated = { ...project, sourcePatterns: patterns };
+              setProject(updated);
+              saveProject(projectDir, updated).then(() => {
+                getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+              }).catch(() => {});
+            }}
+            onConstraintFilesChange={(files) => {
+              if (!project || !projectDir) return;
+              const updated = { ...project, constraintFiles: files };
+              setProject(updated);
+              saveProject(projectDir, updated).then(() => {
+                getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
+              }).catch(() => {});
+            }}
             topModule={project?.topModule}
             onSetTopModule={(file) => {
               if (!project || !projectDir) return;
@@ -1468,6 +1491,7 @@ export default function App() {
                   ]
                 : [
                     { label: "Open in Viewer", icon: "\u25A3", onClick: () => handleFileClick(file.n, file.path) },
+                    { label: "Open in Editor", icon: "\u270E", onClick: () => { if (file.path) openInEditor(file.path); } },
                     { label: "Copy Path", icon: "\u2398", onClick: () => { if (file.path) navigator.clipboard.writeText(file.path); } },
                     { label: "Copy Name", icon: "\u2399", onClick: () => navigator.clipboard.writeText(file.n) },
                     ...(isSynthable ? [
@@ -1617,6 +1641,7 @@ export default function App() {
                   building={building}
                   buildStep={bStep}
                   buildFailed={buildFailed}
+                  buildElapsedSec={buildElapsedSec}
                   logs={logs}
                   activeStage={activeStage}
                   onStageClick={setActiveStage}
@@ -1657,6 +1682,7 @@ export default function App() {
                   device={project?.device ?? B.defaultDev}
                   projectDir={projectDir}
                   building={building}
+                  onSendToAi={(content) => { setPendingAiMessage(content); navClick("ai"); }}
                 />
               </div>
             )}
@@ -1807,6 +1833,13 @@ export default function App() {
             {visitedSecs.has("ip") && (
               <div style={{ display: sec === "ip" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
                 <IpCatalogSection backendId={bid} projectDir={projectDir} device={project?.device ?? B.defaultDev}
+                  customIps={project?.customIps}
+                  onCustomIpsChange={(ips) => {
+                    if (!project || !projectDir) return;
+                    const updated = { ...project, customIps: ips };
+                    setProject(updated);
+                    saveProject(projectDir, updated).catch(() => {});
+                  }}
                   onRefreshFiles={() => { if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}); }}
                   onAddToSynth={(ipInstanceName) => {
                     if (!projectDir) return;
@@ -1848,6 +1881,7 @@ export default function App() {
                   projectContext={aiProjectContext}
                   projectDir={projectDir}
                   onOpenFile={handleFileClick}
+                  initialMessage={pendingAiMessage}
                 />
               </div>
               </div>
@@ -1857,6 +1891,21 @@ export default function App() {
             {visitedSecs.has("history") && (
               <div style={{ display: sec === "history" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
                 <BuildHistory projectDir={projectDir} onViewReport={() => { setSec("reports"); }} />
+              </div>
+            )}
+
+            {/* Git Panel */}
+            {visitedSecs.has("git") && (
+              <div style={{ display: sec === "git" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <GitPanel
+                  git={gitState}
+                  projectDir={projectDir}
+                  onRefresh={refreshAll}
+                  onLog={(msg, type) => {
+                    const t = type === "ok" ? "ok" : type === "err" ? "err" : type === "warn" ? "warn" : "info";
+                    setLogs((p) => [...p, { t, m: msg }]);
+                  }}
+                />
               </div>
             )}
 

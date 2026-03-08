@@ -274,7 +274,8 @@ export type Section =
   | "license"
   | "history"
   | "programmer"
-  | "docs";
+  | "docs"
+  | "git";
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream" | "files";
 
@@ -301,6 +302,7 @@ export interface ProjectConfig {
   buildOptions: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+  customIps?: import("../data/ipCatalog").IpCore[];
 }
 
 export interface RecentProject {
