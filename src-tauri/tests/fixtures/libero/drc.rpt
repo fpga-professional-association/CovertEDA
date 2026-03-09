@@ -1,0 +1,19 @@
+================================================================================
+                    Microsemi Libero Software
+                   Design Rule Check Report
+                   Design: counter_top
+                   Family: PolarFire
+                   Die: MPF300T
+================================================================================
+
+DRC Summary
+================================================================================
+
+Errors: 0
+Warnings: 2
+
+Warning: Unconstrained output port 'debug_out[0]'
+Warning: Unconstrained output port 'debug_out[1]'
+
+================================================================================
+End of DRC Report

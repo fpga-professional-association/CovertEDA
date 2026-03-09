@@ -594,6 +594,7 @@ export interface DeviceInfo {
 
 // Package pin counts — common BGA/QFP package suffixes
 const PKG_PINS: Record<string, string> = {
+  // ── Lattice Radiant / Diamond ──
   "QFN72": "72", "WLCSP72": "72", "WLCSP84": "84", "FCCSP104": "104",
   "ASG256": "256", "BSG256": "256", "BBG256": "256", "BFG256": "256", "CBG256": "256",
   "CSG256": "256", "TSG100": "100", "TSG144": "144", "BSG132": "132",
@@ -604,81 +605,237 @@ const PKG_PINS: Record<string, string> = {
   "BBG400": "400", "BFG400": "400", "CABGA400": "400", "CBG484": "484",
   "BBG484": "484", "BFG484": "484",
   "LFG672": "672", "LFG676": "676", "CSG841": "841", "LFG1156": "1156",
-  // Quartus
+  "CABGA196": "196", "QFN48": "48",
+  // Diamond ECP5 / ECP3 / MachXO / XP2
+  "BG381": "381", "BG554": "554", "BG756": "756", "BG285": "285",
+  "FN672": "672", "FN484": "484", "FN256": "256",
+  "TG144": "144", "TG100": "100", "SG72": "72",
+  "TQFP144": "144",
+  // ── Quartus (Intel / Altera) ──
   "F17": "256", "F23": "484", "F27": "672", "F29": "780", "F31": "896",
   "F34": "1152", "F35": "1152", "M15": "484", "U15": "324", "U19": "484",
   "U23": "672", "F40": "1517",
-  // Vivado
-  "CLG225": "225", "CLG484": "484", "FFG676": "676", "FFG900": "900",
-  "FFG1156": "1156", "FBG484": "484", "FBG676": "676", "FBG900": "900",
-  "SBG484": "484", "FFG1761": "1761", "FLG1155": "1155", "FLG1926": "1926",
-  "VSVA1365": "1365", "VVAP1596": "1596",
+  // Cyclone IV / 10 LP / MAX
+  "E22": "144", "BF14": "169", "CF19": "324", "CF23": "484", "DF27": "672", "DF31": "896",
+  "YU256": "256", "YF256": "256", "YU484": "484", "YF484": "484", "YF672": "672", "YF780": "780",
+  "YU169": "169",
+  "DAF484": "484", "SAE144": "144", "SAU169": "169",
+  "ZE64": "64", "ZT100": "100", "ZT144": "144", "ZF256": "256",
+  "T100": "100", "F324": "324",
+  // Agilex / Stratix 10
+  "BF54": "2304", "R24": "924", "R29": "1290", "R31": "1517", "BB32": "739",
+  "AB17": "420",
+  "F50": "2397", "F53": "2397", "F55": "2397", "F45": "1932",
+  // ── Vivado (AMD / Xilinx) ──
+  "CLG225": "225", "CLG400": "400", "CLG484": "484",
+  "CSG324": "324", "CSG225": "225", "CSGA225": "225", "CSGA324": "324",
+  "CPG236": "236", "CPGA196": "196",
+  "FGG484": "484", "FBG484": "484", "FBG676": "676", "FBG900": "900",
+  "FFG676": "676", "FFG900": "900", "FFG901": "901",
+  "FFG1156": "1156", "FFG1157": "1157", "FFG1761": "1761",
+  "FLG1155": "1155", "FLG1925": "1925", "FLG1926": "1926",
+  "FFVB676": "676", "FFVA676": "676", "FFVE1517": "1517",
+  "FFVC1517": "1517", "FLVB2104": "2104", "FLGA2104": "2104", "FHGA2104": "2104",
+  "SBVA484": "484", "FFVC1156": "1156", "FFVB1156": "1156",
+  "SBG484": "484", "SBG485": "485",
+  "FTG196": "196", "FTGB196": "196", "FGGA484": "484",
+  // Versal
+  "VSVA2197": "2197", "VSVA2785": "2785", "VSVA3697": "3697",
+  "VFVB1760": "1760", "VSVH1760": "1760",
+  // ── OSS (iCE40 / Gowin / GateMate) ──
+  "SG48": "48", "UWG30": "30",
+  "CM81": "81", "CM121": "121", "CM225": "225", "CM36": "36", "CM49": "49",
+  "CB132": "132", "VQ100": "100",
+  "QFN88": "88", "PBGA484": "484",
+  "BGA324": "324",
+  // ── Achronix ACE ──
+  "IC80": "80", "IC120": "120",
 };
 
 // Logic size keywords by family prefix
 const LOGIC_SIZE: Record<string, Record<string, string>> = {
-  "LIFCL": { "40": "40K LUTs", "17": "17K LUTs" },
-  "LFCPNX": { "100": "100K LUTs", "50": "50K LUTs" },
+  // ── Lattice Radiant ──
+  "LIFCL": { "40": "40K LUTs", "17": "17K LUTs", "33": "33K LUTs" },  // Certus-NX + CrossLink-NX
+  "LFCPNX": { "100": "100K LUTs", "50": "50K LUTs" },  // CertusPro-NX
   "LFMXO5": { "15": "15K LUTs", "25": "25K LUTs", "35": "35K LUTs", "55": "55K LUTs", "65": "65K LUTs", "100": "100K LUTs" },
   "LFMXO4": { "010": "10K LUTs", "015": "15K LUTs", "025": "25K LUTs", "050": "50K LUTs", "080": "80K LUTs", "110": "110K LUTs" },
-  "LAV-AT-E": { "30": "30K LUTs", "70": "70K LUTs" },
-  "LAV-AT-G": { "70": "70K LUTs" },
-  "LAV-AT-X": { "70": "70K LUTs" },
-  // Cyclone V
-  "5CE": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },
-  "5CS": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A6": "110K LEs", "A7": "150K LEs", "A9": "301K LEs" },
-  "5CG": { "A3": "36K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },
-  // Xilinx / AMD
-  "XC7A": { "35": "33K LCs", "50": "52K LCs", "75": "76K LCs", "100": "101K LCs", "200": "215K LCs" },
-  "XC7K": { "70": "65K LCs", "160": "162K LCs", "325": "326K LCs", "410": "407K LCs", "480": "478K LCs" },
-  "XCZU": { "2": "—", "3": "—", "4": "—", "5": "—", "7": "—", "9": "—", "11": "—", "15": "—" },
-  "XC7Z": { "010": "28K LCs", "015": "46K LCs", "020": "85K LCs", "030": "125K LCs", "045": "218K LCs", "100": "444K LCs" },
-  "XCKU": { "3P": "—", "5P": "—", "9P": "—", "11P": "—", "13P": "—", "15P": "—" },
-  "XCVU": { "3P": "—", "5P": "—", "7P": "—", "9P": "—", "11P": "—", "13P": "—" },
+  "LAV-AT-E": { "30": "30K LUTs", "70": "70K LUTs" },  // Avant-E
+  "LAV-AT-G": { "70": "70K LUTs" },  // Avant-G
+  "LAV-AT-X": { "70": "70K LUTs" },  // Avant-X
+  "LFD2NX": { "9": "9K LUTs", "17": "17K LUTs", "15": "15K LUTs", "25": "25K LUTs", "28": "28K LUTs", "35": "35K LUTs", "40": "40K LUTs", "65": "65K LUTs" },  // Certus-N2
+  "LN2-CT": { "16": "16K LUTs", "20": "20K LUTs" },  // Nexus2 CT
+  "LN2-MH": { "16": "16K LUTs", "20": "20K LUTs" },  // Nexus2 MH
+  "ICE40UP": { "5K": "5K LUTs", "3K": "3K LUTs" },  // iCE40 UltraPlus (Radiant)
+  // ── Lattice Diamond ──
+  "LFE5U": { "85": "85K LUTs", "45": "45K LUTs", "25": "25K LUTs", "12": "12K LUTs" },  // ECP5
+  "LFE5UM5G": { "85": "85K LUTs", "45": "45K LUTs", "25": "25K LUTs" },  // ECP5-5G (must be before LFE5UM)
+  "LFE5UM": { "85": "85K LUTs", "45": "45K LUTs", "25": "25K LUTs" },  // ECP5-5G
+  "LFE3": { "150": "150K LUTs", "95": "95K LUTs", "70": "70K LUTs", "35": "35K LUTs", "17": "17K LUTs" },  // ECP3
+  "LCMXO3D": { "9400": "9.4K LUTs", "4300": "4.3K LUTs" },  // MachXO3D (must be before LCMXO3L)
+  "LCMXO3LF": { "9400": "9.4K LUTs", "6900": "6.9K LUTs", "4300": "4.3K LUTs", "2100": "2.1K LUTs" },  // MachXO3LF
+  "LCMXO3L": { "9400": "9.4K LUTs", "6900": "6.9K LUTs", "4300": "4.3K LUTs", "2100": "2.1K LUTs" },  // MachXO3L
+  "LCMXO2": { "7000": "7K LUTs", "4000": "4K LUTs", "2000": "2K LUTs", "1200": "1.2K LUTs", "640": "640 LUTs" },  // MachXO2
+  "LFXP2": { "40": "40K LUTs", "30": "30K LUTs", "17": "17K LUTs", "8": "8K LUTs", "5": "5K LUTs" },  // LatticeXP2
+  // ── Intel Quartus (Standard/Lite) ──
+  "5CE": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },  // Cyclone V E
+  "5CS": { "A2": "25K LEs", "A4": "49K LEs", "A5": "77K LEs", "A6": "110K LEs", "A7": "150K LEs", "A9": "301K LEs" },  // Cyclone V SX
+  "5CG": { "A3": "36K LEs", "A5": "77K LEs", "A7": "150K LEs", "A9": "301K LEs" },  // Cyclone V GX
+  "EP4CE": { "6": "6K LEs", "10": "10K LEs", "15": "15K LEs", "22": "22K LEs", "30": "30K LEs", "40": "40K LEs", "55": "55K LEs", "75": "75K LEs", "115": "115K LEs" },  // Cyclone IV E
+  "EP4CGX": { "15": "15K LEs", "22": "22K LEs", "30": "30K LEs", "50": "50K LEs", "75": "75K LEs", "110": "110K LEs", "150": "150K LEs" },  // Cyclone IV GX
+  "10CL": { "006": "6K LEs", "016": "16K LEs", "025": "25K LEs", "040": "40K LEs" },  // Cyclone 10 LP
+  "10CX": { "085": "85K LEs", "150": "150K LEs", "220": "220K LEs" },  // Cyclone 10 GX
+  "10M": { "02": "2K LEs", "04": "4K LEs", "08": "8K LEs", "16": "16K LEs", "25": "25K LEs", "50": "50K LEs" },  // MAX 10
+  "5M": { "40": "40 LEs", "80": "80 LEs", "160": "160 LEs", "240": "240 LEs", "570": "570 LEs", "1270": "1.3K LEs", "2210": "2.2K LEs" },  // MAX V
+  "EPM": { "240": "240 LEs", "570": "570 LEs", "1270": "1.3K LEs", "2210": "2.2K LEs" },  // MAX II
+  "5AG": { "FB": "—", "TF": "—", "XM": "—", "ZM": "—" },  // Arria V (complex numbering)
+  "10A": { "X115": "1.15M LEs", "X090": "900K LEs", "X066": "660K LEs", "X048": "480K LEs", "S066": "660K LEs", "S048": "480K LEs" },  // Arria 10
+  // ── Intel Quartus Pro ──
+  "A9PD": { "120": "120K LEs" },  // Agilex 9
+  "AGF": { "B014": "1.4M LEs", "B022": "2.2M LEs" },  // Agilex 7 F-series
+  "AGI": { "B027": "2.7M LEs" },  // Agilex 7 I-series
+  "A5ED": { "065": "650K LEs" },  // Agilex 5 D-series
+  "A5EC": { "030": "300K LEs", "020": "200K LEs" },  // Agilex 5 C-series
+  "1SG": { "280": "2.8M LEs" },  // Stratix 10 GX
+  "1SX": { "280": "2.8M LEs" },  // Stratix 10 SX
+  "1SD": { "280": "2.8M LEs", "110": "1.1M LEs" },  // Stratix 10 DX
+  "1SM": { "21": "2.1M LEs" },  // Stratix 10 MX
+  "1ST": { "280": "2.8M LEs", "110": "1.1M LEs" },  // Stratix 10 TX
+  // ── AMD Vivado (Xilinx) ──
+  "XC7A": { "35": "33K LCs", "50": "52K LCs", "75": "76K LCs", "100": "101K LCs", "200": "215K LCs" },  // Artix-7
+  "XC7K": { "70": "65K LCs", "160": "162K LCs", "325": "326K LCs", "410": "407K LCs", "480": "478K LCs" },  // Kintex-7
+  "XC7V": { "585": "585K LCs", "2000": "2M LCs", "X330": "330K LCs", "X485": "485K LCs" },  // Virtex-7
+  "XC7S": { "6": "6K LCs", "15": "13K LCs", "25": "23K LCs", "50": "52K LCs", "75": "76K LCs", "100": "102K LCs" },  // Spartan-7
+  "XC7Z": { "010": "28K LCs", "015": "46K LCs", "020": "85K LCs", "030": "125K LCs", "045": "218K LCs", "100": "444K LCs" },  // Zynq-7000
+  "XCAU": { "10P": "10K LUTs", "15P": "15K LUTs", "20P": "20K LUTs", "25P": "25K LUTs" },  // Artix UltraScale+
+  "XCKU": { "3P": "163K LUTs", "5P": "256K LUTs", "9P": "520K LUTs", "11P": "663K LUTs", "13P": "864K LUTs", "15P": "1.045M LUTs" },  // Kintex UltraScale+
+  "XCVU": { "3P": "394K LUTs", "5P": "671K LUTs", "7P": "864K LUTs", "9P": "1.18M LUTs", "11P": "1.31M LUTs", "13P": "1.73M LUTs" },  // Virtex UltraScale+
+  "XCZU": { "3EG": "71K LUTs", "7EV": "230K LUTs", "9EG": "600K LUTs", "11EG": "600K LUTs", "15EG": "747K LUTs" },  // Zynq UltraScale+ (with suffix variants)
+  "XCVC": { "1502": "899K LUTs", "1702": "1.3M LUTs", "1902": "1.97M LUTs" },  // Versal AI Core
+  "XCVM": { "1802": "1.97M LUTs", "2302": "2.49M LUTs", "2502": "2.97M LUTs" },  // Versal Prime
+  "XCVH": { "1522": "899K LUTs", "1742": "1.3M LUTs" },  // Versal HBM
+  "XCVE": { "2802": "2.97M LUTs" },  // Versal Engineering
+  "XCVP": { "1202": "899K LUTs" },  // Versal Premium
+  // ── OSS (iCE40 / Gowin / GateMate) ── (ICE40UP already in Radiant section)
+  "ICE40LP": { "8K": "8K LUTs", "4K": "4K LUTs", "1K": "1K LUTs", "384": "384 LUTs" },  // iCE40 LP
+  "ICE40HX": { "8K": "8K LUTs", "4K": "4K LUTs", "1K": "1K LUTs" },  // iCE40 HX
+  "GW1N": { "1": "1K LUTs", "4": "4K LUTs", "9": "9K LUTs" },  // Gowin GW1N
+  "GW1NR": { "9": "9K LUTs" },  // Gowin GW1NR (must be before GW1N in matching)
+  "GW2A": { "18": "18K LUTs", "55": "55K LUTs" },  // Gowin GW2A
+  "CCGM1A": { "1": "20K LUTs", "2": "40K LUTs", "4": "80K LUTs", "8": "160K LUTs", "16": "320K LUTs" },  // GateMate
+  // ── Achronix ACE ──
+  "AC7T": { "1500": "1.5M LUTs", "800": "800K LUTs", "850": "850K LUTs" },  // Speedster7t
+  // ── Microchip Libero ──
+  "MPF": { "100": "100K LEs", "200": "200K LEs", "300": "300K LEs", "500": "500K LEs" },  // PolarFire
+  "MPFS": { "025": "25K LEs", "095": "95K LEs", "160": "160K LEs", "250": "250K LEs", "460": "460K LEs" },  // PolarFire SoC
+  "M2S": { "010": "12K LEs", "025": "27K LEs", "050": "56K LEs", "090": "92K LEs" },  // SmartFusion2
+  "M2GL": { "010": "12K LEs", "025": "27K LEs", "050": "56K LEs", "090": "92K LEs" },  // IGLOO2
+  "RT4G": { "150": "150K LEs" },  // RTG4
 };
 
 export function parsePartInfo(part: string): DeviceInfo {
   const result: DeviceInfo = { pins: "—", logic: "—", speed: "—", package: "—", grade: "—" };
+  const upper = part.toUpperCase();
 
-  // Grade (last character)
-  const lastChar = part.charAt(part.length - 1).toUpperCase();
+  // ── Grade ──
+  // Lattice/Xilinx: last char I/C/A/M
+  // Intel: trailing letter before G suffix (e.g., 5CEBA4F23C7 → C=commercial, I=industrial)
+  // Some Intel parts end with ...I1SG, ...E2VG — parse deeper
+  const lastChar = upper.charAt(upper.length - 1);
   if (lastChar === "I") result.grade = "Industrial";
   else if (lastChar === "C") result.grade = "Commercial";
   else if (lastChar === "A") result.grade = "Automotive";
   else if (lastChar === "M") result.grade = "Military";
+  else if (lastChar === "L") result.grade = "Low-power";
+  else if (lastChar === "G") {
+    // Intel/Altera — look for I or C before the trailing speed+G
+    const m = upper.match(/([ICE])[\dSL]+[VG]*$/);
+    if (m) {
+      if (m[1] === "I") result.grade = "Industrial";
+      else if (m[1] === "C") result.grade = "Commercial";
+      else if (m[1] === "E") result.grade = "Extended";
+    }
+  } else if (lastChar === "S") {
+    // Versal parts end with -S
+    result.grade = "Standard";
+  } else if (lastChar === "V") {
+    // Agilex/Stratix often end with V
+    const m2 = upper.match(/([IE])\d+V[GR]*\d*$/);
+    if (m2) {
+      if (m2[1] === "I") result.grade = "Industrial";
+      else if (m2[1] === "E") result.grade = "Extended";
+    }
+  }
+  // Xilinx lowercase with -e suffix
+  if (part.endsWith("-e") || part.endsWith("-i")) {
+    result.grade = part.endsWith("-e") ? "Extended" : "Industrial";
+  }
 
-  // Find package and pin count
-  for (const [pkg, pins] of Object.entries(PKG_PINS)) {
-    if (part.toUpperCase().includes(pkg.toUpperCase())) {
+  // ── Package & Pin Count ──
+  // Sort PKG_PINS keys longest-first for greedy matching
+  const sortedPkgs = Object.entries(PKG_PINS).sort((a, b) => b[0].length - a[0].length);
+  for (const [pkg, pins] of sortedPkgs) {
+    if (upper.includes(pkg.toUpperCase())) {
       result.package = pkg;
       result.pins = pins;
       break;
     }
   }
 
-  // Extract speed grade — look for -N pattern (Lattice) or CN pattern (Intel)
-  const speedMatch = part.match(/-(\d+)[A-Z]/);
-  if (speedMatch) {
-    result.speed = `-${speedMatch[1]}`;
+  // ── Speed Grade ──
+  // Lattice: -N{letter} pattern (e.g., -9CABGA400I → speed -9)
+  const latticeSpeed = part.match(/-(\d+)[A-Z]/);
+  if (latticeSpeed) {
+    result.speed = `-${latticeSpeed[1]}`;
   } else {
-    const intelSpeed = part.match(/([CIMA]\d+)$/);
-    if (intelSpeed) result.speed = intelSpeed[1];
+    // Intel Cyclone V / MAX V: trailing C/I digit (e.g., ...C7, ...C5)
+    const intelSpeed = upper.match(/([CI])(\d)$/);
+    if (intelSpeed) {
+      result.speed = `${intelSpeed[1]}${intelSpeed[2]}`;
+    } else {
+      // Intel with G suffix: ...C7G, ...I5G
+      const intelSpeedG = upper.match(/([CI])(\d)[GL]$/);
+      if (intelSpeedG) {
+        result.speed = `${intelSpeedG[1]}${intelSpeedG[2]}`;
+      } else {
+        // Xilinx: trailing -1, -2, -1L, -2-e etc.
+        const xilinxSpeed = part.match(/-(\d+[L]?)(?:-[eig])?$/);
+        if (xilinxSpeed) {
+          result.speed = `-${xilinxSpeed[1]}`;
+        } else {
+          // Xilinx Versal: -2MP
+          const versalSpeed = part.match(/-(\d+MP)(?:-[eig])?/);
+          if (versalSpeed) result.speed = `-${versalSpeed[1]}`;
+        }
+      }
+    }
   }
 
-  // Logic size — match by family prefix
-  const upper = part.toUpperCase();
-  for (const [prefix, sizes] of Object.entries(LOGIC_SIZE)) {
+  // ── Logic Size ──
+  // Sort prefixes longest-first so e.g. LFE5UM5G matches before LFE5UM
+  const sortedPrefixes = Object.entries(LOGIC_SIZE).sort((a, b) => b[0].length - a[0].length);
+  for (const [prefix, sizes] of sortedPrefixes) {
     if (upper.startsWith(prefix.toUpperCase())) {
-      // Extract the size number after the prefix
-      const afterPrefix = part.slice(prefix.length).replace(/^[-_]/, "");
-      for (const [sizeKey, sizeLabel] of Object.entries(sizes)) {
-        if (afterPrefix.startsWith(sizeKey)) {
+      const afterPrefix = upper.slice(prefix.length).replace(/^[-_]/, "");
+      // Sort size keys longest-first
+      const sortedSizes = Object.entries(sizes).sort((a, b) => b[0].length - a[0].length);
+      for (const [sizeKey, sizeLabel] of sortedSizes) {
+        if (afterPrefix.startsWith(sizeKey.toUpperCase())) {
           result.logic = sizeLabel;
           break;
         }
       }
       break;
     }
+  }
+
+  // ── Special: Microchip Libero (no package in name) ──
+  if (upper.startsWith("MPF") || upper.startsWith("M2S") || upper.startsWith("M2GL") || upper.startsWith("RT4G")) {
+    result.package = "—";
+    result.pins = "—";
+    result.speed = "—";
+    // Grade from T suffix: T = standard, TS = secure
+    if (upper.endsWith("T")) result.grade = "Standard";
+    else if (upper.endsWith("TS")) result.grade = "Secure";
   }
 
   return result;

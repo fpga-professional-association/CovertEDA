@@ -699,4 +699,235 @@ mod tests {
         let content = std::fs::read_to_string(project_dir.join(".gitignore")).unwrap();
         assert_eq!(content, custom_gitignore);
     }
+
+    /// Helper: create a temp dir, init a git repo, write a file, and make an initial commit.
+    /// Returns (TempDir, path) — keep TempDir alive so the directory isn't deleted.
+    fn make_temp_repo() -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        std::fs::write(dir.join("top.v"), "module top; endmodule\n").unwrap();
+        init_repo(&dir).expect("init_repo should succeed");
+        (tmp, dir)
+    }
+
+    // ── get_status() tests ──
+
+    #[test]
+    fn test_get_status_clean_repo() {
+        let (_tmp, dir) = make_temp_repo();
+        let status = get_status(&dir).unwrap();
+        // Default branch may be "main" or "master" depending on git config
+        assert!(
+            status.branch == "main" || status.branch == "master",
+            "unexpected branch name: {}",
+            status.branch
+        );
+        assert_eq!(status.commit_hash.len(), 7);
+        assert_eq!(status.staged, 0);
+        assert_eq!(status.unstaged, 0);
+        assert_eq!(status.untracked, 0);
+        assert!(!status.dirty);
+    }
+
+    #[test]
+    fn test_get_status_with_untracked_file() {
+        let (_tmp, dir) = make_temp_repo();
+        // Add an untracked file
+        std::fs::write(dir.join("new_file.v"), "module new; endmodule\n").unwrap();
+        let status = get_status(&dir).unwrap();
+        assert!(status.untracked >= 1);
+        assert!(status.dirty);
+    }
+
+    #[test]
+    fn test_get_status_with_modified_file() {
+        let (_tmp, dir) = make_temp_repo();
+        // Modify a tracked file
+        std::fs::write(dir.join("top.v"), "module top_modified; endmodule\n").unwrap();
+        let status = get_status(&dir).unwrap();
+        assert!(status.unstaged >= 1);
+        assert!(status.dirty);
+    }
+
+    #[test]
+    fn test_get_status_with_staged_file() {
+        let (_tmp, dir) = make_temp_repo();
+        // Create a new file and stage it
+        std::fs::write(dir.join("staged.v"), "module staged; endmodule\n").unwrap();
+        let repo = Repository::open(&dir).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("staged.v")).unwrap();
+        index.write().unwrap();
+
+        let status = get_status(&dir).unwrap();
+        assert!(status.staged >= 1);
+        assert!(status.dirty);
+    }
+
+    // ── get_log() tests ──
+
+    #[test]
+    fn test_get_log_single_commit() {
+        let (_tmp, dir) = make_temp_repo();
+        let log = get_log(&dir, 10).unwrap();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].message, "Initial commit");
+        assert_eq!(log[0].hash.len(), 7);
+    }
+
+    #[test]
+    fn test_get_log_multiple_commits() {
+        let (_tmp, dir) = make_temp_repo();
+        // Make a second commit
+        std::fs::write(dir.join("second.v"), "module second; endmodule\n").unwrap();
+        commit_all(&dir, "Add second module").unwrap();
+
+        let log = get_log(&dir, 10).unwrap();
+        assert_eq!(log.len(), 2);
+        // Most recent commit first
+        assert_eq!(log[0].message, "Add second module");
+        assert_eq!(log[1].message, "Initial commit");
+    }
+
+    #[test]
+    fn test_get_log_max_count_limits_results() {
+        let (_tmp, dir) = make_temp_repo();
+        // Make several more commits
+        for i in 1..=5 {
+            std::fs::write(dir.join(format!("file{}.v", i)), format!("module f{}; endmodule\n", i)).unwrap();
+            commit_all(&dir, &format!("Commit {}", i)).unwrap();
+        }
+
+        let log = get_log(&dir, 3).unwrap();
+        assert_eq!(log.len(), 3);
+    }
+
+    // ── is_dirty() tests ──
+
+    #[test]
+    fn test_is_dirty_clean_repo() {
+        let (_tmp, dir) = make_temp_repo();
+        assert!(!is_dirty(&dir).unwrap());
+    }
+
+    #[test]
+    fn test_is_dirty_with_modified_file() {
+        let (_tmp, dir) = make_temp_repo();
+        std::fs::write(dir.join("top.v"), "module modified; endmodule\n").unwrap();
+        assert!(is_dirty(&dir).unwrap());
+    }
+
+    #[test]
+    fn test_is_dirty_with_untracked_file() {
+        let (_tmp, dir) = make_temp_repo();
+        std::fs::write(dir.join("untracked.v"), "module untracked; endmodule\n").unwrap();
+        assert!(is_dirty(&dir).unwrap());
+    }
+
+    #[test]
+    fn test_is_dirty_with_deleted_file() {
+        let (_tmp, dir) = make_temp_repo();
+        std::fs::remove_file(dir.join("top.v")).unwrap();
+        assert!(is_dirty(&dir).unwrap());
+    }
+
+    // ── count_stashes() tests ──
+
+    #[test]
+    fn test_count_stashes_fresh_repo() {
+        let (_tmp, dir) = make_temp_repo();
+        let repo = Repository::open(&dir).unwrap();
+        assert_eq!(count_stashes(&repo), 0);
+    }
+
+    // ── compute_ahead_behind() tests ──
+
+    #[test]
+    fn test_compute_ahead_behind_no_remote() {
+        let (_tmp, dir) = make_temp_repo();
+        let repo = Repository::open(&dir).unwrap();
+        let (ahead, behind) = compute_ahead_behind(&repo);
+        // No remote configured, should return (0, 0)
+        assert_eq!(ahead, 0);
+        assert_eq!(behind, 0);
+    }
+
+    // ── head_hash() tests ──
+
+    #[test]
+    fn test_head_hash_matches_status() {
+        let (_tmp, dir) = make_temp_repo();
+        let hash = head_hash(&dir).unwrap();
+        let status = get_status(&dir).unwrap();
+        assert_eq!(hash, status.commit_hash);
+        assert_eq!(hash.len(), 7);
+    }
+
+    // ── commit_all() tests ──
+
+    #[test]
+    fn test_commit_all_creates_commit() {
+        let (_tmp, dir) = make_temp_repo();
+        std::fs::write(dir.join("new.v"), "module new; endmodule\n").unwrap();
+        let hash = commit_all(&dir, "Add new module").unwrap();
+        assert_eq!(hash.len(), 7);
+
+        // Repo should be clean after commit
+        assert!(!is_dirty(&dir).unwrap());
+
+        // Log should show the new commit
+        let log = get_log(&dir, 1).unwrap();
+        assert_eq!(log[0].message, "Add new module");
+    }
+
+    // ── list_branches() tests ──
+
+    #[test]
+    fn test_list_branches_single_branch() {
+        let (_tmp, dir) = make_temp_repo();
+        let branches = list_branches(&dir).unwrap();
+        assert!(!branches.is_empty());
+        // The current branch should be marked as current
+        let current = branches.iter().find(|b| b.is_current).unwrap();
+        assert!(
+            current.name == "main" || current.name == "master",
+            "unexpected branch name: {}",
+            current.name
+        );
+        assert!(!current.is_remote);
+    }
+
+    // ── ensure_gitignore_has_vendor_dirs() tests ──
+
+    #[test]
+    fn test_ensure_gitignore_adds_missing_vendor_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        // Start with a minimal .gitignore missing vendor dirs
+        std::fs::write(dir.join(".gitignore"), "*.o\n").unwrap();
+        ensure_gitignore_has_vendor_dirs(dir);
+
+        let content = std::fs::read_to_string(dir.join(".gitignore")).unwrap();
+        for vendor_dir in VENDOR_BUILD_DIRS {
+            let pattern = format!("{}/", vendor_dir);
+            assert!(content.contains(&pattern), "Missing vendor dir: {}", vendor_dir);
+        }
+    }
+
+    #[test]
+    fn test_ensure_gitignore_no_duplicates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        // .gitignore already has all vendor dirs
+        let mut initial = String::new();
+        for vendor_dir in VENDOR_BUILD_DIRS {
+            initial.push_str(&format!("{}/\n", vendor_dir));
+        }
+        std::fs::write(dir.join(".gitignore"), &initial).unwrap();
+        ensure_gitignore_has_vendor_dirs(dir);
+
+        // Should not have added anything extra
+        let content = std::fs::read_to_string(dir.join(".gitignore")).unwrap();
+        assert_eq!(content, initial);
+    }
 }

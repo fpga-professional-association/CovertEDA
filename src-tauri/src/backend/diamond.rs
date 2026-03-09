@@ -528,4 +528,477 @@ mod tests {
         assert!(open_line.contains("proj/design.ldf"),
             "Build script should use the project_file option: {}", open_line);
     }
+
+    // ── Short name ──
+
+    #[test]
+    fn test_diamond_short_name() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        assert_eq!(b.short_name(), "Diamond");
+    }
+
+    // ── CLI tool name ──
+
+    #[test]
+    fn test_diamond_cli_tool() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        assert_eq!(b.cli_tool(), "pnmainc");
+    }
+
+    // ── Default device ──
+
+    #[test]
+    fn test_diamond_default_device() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        assert_eq!(b.default_device(), "LCMXO3LF-6900C-5BG256C");
+    }
+
+    // ── Deferred construction ──
+
+    #[test]
+    fn test_diamond_new_deferred() {
+        let b = DiamondBackend::new_deferred();
+        assert!(b.deferred);
+        assert!(b.install_dir.is_none());
+        assert!(b.version.is_empty());
+        assert!(b.is_deferred());
+        assert!(!b.detect_tool());
+    }
+
+    #[test]
+    fn test_diamond_new_deferred_trait_methods_still_work() {
+        let b = DiamondBackend::new_deferred();
+        assert_eq!(b.id(), "diamond");
+        assert_eq!(b.name(), "Lattice Diamond");
+        assert_eq!(b.short_name(), "Diamond");
+        assert_eq!(b.cli_tool(), "pnmainc");
+        assert_eq!(b.default_device(), "LCMXO3LF-6900C-5BG256C");
+        assert_eq!(b.constraint_ext(), ".lpf");
+        assert_eq!(b.pipeline_stages().len(), 6);
+    }
+
+    // ── Constraint reading (LPF parse) ──
+
+    #[test]
+    fn test_read_constraints_parses_lpf() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_path = tmp.path().join("design.lpf");
+        std::fs::write(&lpf_path, r#"LOCATE COMP "clk" SITE "A10";
+IOBUF PORT "clk" IO_TYPE=LVCMOS33;
+LOCATE COMP "led[0]" SITE "B5";
+IOBUF PORT "led[0]" IO_TYPE=LVCMOS25;
+LOCATE COMP "rst_n" SITE "C3";
+"#).unwrap();
+        let constraints = b.read_constraints(&lpf_path).unwrap();
+        assert_eq!(constraints.len(), 3);
+        // First constraint: clk → A10, LVCMOS33
+        assert_eq!(constraints[0].net, "clk");
+        assert_eq!(constraints[0].pin, "A10");
+        assert_eq!(constraints[0].io_standard, "LVCMOS33");
+        // Second constraint: led[0] → B5, LVCMOS25
+        assert_eq!(constraints[1].net, "led[0]");
+        assert_eq!(constraints[1].pin, "B5");
+        assert_eq!(constraints[1].io_standard, "LVCMOS25");
+        // Third constraint: rst_n → C3, defaults to LVCMOS33 (no IOBUF)
+        assert_eq!(constraints[2].net, "rst_n");
+        assert_eq!(constraints[2].pin, "C3");
+        assert_eq!(constraints[2].io_standard, "LVCMOS33");
+    }
+
+    #[test]
+    fn test_read_constraints_missing_file_returns_error() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let result = b.read_constraints(Path::new("/nonexistent/design.lpf"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_constraints_empty_lpf() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_path = tmp.path().join("empty.lpf");
+        std::fs::write(&lpf_path, "# No constraints\n").unwrap();
+        let constraints = b.read_constraints(&lpf_path).unwrap();
+        assert!(constraints.is_empty());
+    }
+
+    // ── Constraint writing (LPF generate) ──
+
+    #[test]
+    fn test_write_constraints_generates_lpf() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_path = tmp.path().join("output.lpf");
+        let constraints = vec![
+            PinConstraint {
+                pin: "A10".into(),
+                net: "clk".into(),
+                direction: String::new(),
+                io_standard: "LVCMOS33".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+            PinConstraint {
+                pin: "B5".into(),
+                net: "led".into(),
+                direction: String::new(),
+                io_standard: "LVCMOS25".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+        ];
+        b.write_constraints(&constraints, &lpf_path).unwrap();
+        let content = std::fs::read_to_string(&lpf_path).unwrap();
+        assert!(content.contains(r#"LOCATE COMP "clk" SITE "A10""#));
+        assert!(content.contains(r#"IOBUF PORT "clk" IO_TYPE=LVCMOS33"#));
+        assert!(content.contains(r#"LOCATE COMP "led" SITE "B5""#));
+        assert!(content.contains(r#"IOBUF PORT "led" IO_TYPE=LVCMOS25"#));
+    }
+
+    #[test]
+    fn test_write_constraints_empty_list() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_path = tmp.path().join("empty_out.lpf");
+        b.write_constraints(&[], &lpf_path).unwrap();
+        let content = std::fs::read_to_string(&lpf_path).unwrap();
+        assert!(content.contains("CovertEDA"));
+        // No LOCATE or IOBUF lines
+        assert!(!content.contains("LOCATE"));
+        assert!(!content.contains("IOBUF"));
+    }
+
+    // ── Constraint roundtrip (write then read back) ──
+
+    #[test]
+    fn test_constraint_roundtrip_through_file() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_path = tmp.path().join("roundtrip.lpf");
+        let original = vec![
+            PinConstraint {
+                pin: "A10".into(),
+                net: "clk".into(),
+                direction: String::new(),
+                io_standard: "LVCMOS33".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+            PinConstraint {
+                pin: "B5".into(),
+                net: "data_out".into(),
+                direction: String::new(),
+                io_standard: "LVTTL".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+            PinConstraint {
+                pin: "C7".into(),
+                net: "rst_n".into(),
+                direction: String::new(),
+                io_standard: "LVCMOS18".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+        ];
+        b.write_constraints(&original, &lpf_path).unwrap();
+        let parsed = b.read_constraints(&lpf_path).unwrap();
+        assert_eq!(parsed.len(), original.len());
+        for (orig, read) in original.iter().zip(parsed.iter()) {
+            assert_eq!(orig.pin, read.pin, "pin mismatch for net {}", orig.net);
+            assert_eq!(orig.net, read.net, "net mismatch");
+            assert_eq!(orig.io_standard, read.io_standard,
+                "io_standard mismatch for net {}", orig.net);
+        }
+    }
+
+    // ── Build script: stages parameter is ignored (Diamond always runs all) ──
+
+    #[test]
+    fn test_build_script_ignores_stages_parameter() {
+        // Diamond's generate_build_script ignores the stages parameter and always
+        // runs all stages. This test verifies that behavior.
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec!["synth".to_string()]; // request only synthesis
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &stages, &HashMap::new(),
+        ).unwrap();
+        // Even though only "synth" was requested, Diamond runs everything
+        assert!(script.contains("prj_run Synthesis"), "should contain Synthesis");
+        assert!(script.contains("prj_run Translate"), "should contain Translate");
+        assert!(script.contains("prj_run Map"), "should contain Map");
+        assert!(script.contains("prj_run PAR"), "should contain PAR");
+        assert!(script.contains("prj_run Export -task Bitgen"), "should contain Bitgen");
+        assert!(script.contains("prj_run Export -task TimingSimFileVer"), "should contain Timing");
+    }
+
+    #[test]
+    fn test_build_script_all_stages_with_empty_stages_slice() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
+        ).unwrap();
+        // Count the number of prj_run commands
+        let prj_run_count = script.lines().filter(|l| l.contains("prj_run")).count();
+        assert_eq!(prj_run_count, 6, "should have 6 prj_run commands, got {}", prj_run_count);
+    }
+
+    // ── Build script contains device and top_module ──
+
+    #[test]
+    fn test_build_script_contains_device_in_header() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let device = "LCMXO3LF-6900C-5BG256C";
+        let script = b.generate_build_script(
+            tmp.path(), device, "top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains(device),
+            "build script should contain device name in header");
+    }
+
+    #[test]
+    fn test_build_script_contains_top_module_in_header() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "my_top_module", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("my_top_module"),
+            "build script should contain top module name in header");
+    }
+
+    // ── Build script contains tool paths (prj_project open with .ldf path) ──
+
+    #[test]
+    fn test_build_script_contains_ldf_path() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
+        ).unwrap();
+        // Script should reference the .ldf project file
+        assert!(script.contains("top.ldf"),
+            "build script should reference .ldf project file: {}", script);
+    }
+
+    #[test]
+    fn test_build_script_with_absolute_project_file_option() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let abs_path = tmp.path().join("my_project.ldf");
+        let mut opts = HashMap::new();
+        opts.insert("project_file".to_string(), abs_path.display().to_string());
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &opts,
+        ).unwrap();
+        let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
+        assert!(open_line.contains("my_project.ldf"),
+            "build script should reference absolute project file: {}", open_line);
+    }
+
+    #[test]
+    fn test_build_script_opens_and_closes_project() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_project open"), "should open project");
+        assert!(script.contains("prj_project close"), "should close project");
+        // open should come before close
+        let open_pos = script.find("prj_project open").unwrap();
+        let close_pos = script.find("prj_project close").unwrap();
+        assert!(open_pos < close_pos, "open should come before close");
+    }
+
+    // ── Build script: forward slashes in all paths ──
+
+    #[test]
+    fn test_build_script_forward_slashes_with_project_file() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = HashMap::new();
+        opts.insert("project_file".to_string(), "subdir/my_project.ldf".to_string());
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &opts,
+        ).unwrap();
+        // All lines containing paths should use forward slashes only
+        for line in script.lines() {
+            if line.contains("prj_project open") {
+                assert!(!line.contains('\\'),
+                    "path should use forward slashes, not backslashes: {}", line);
+            }
+        }
+    }
+
+    // ── Pipeline stage ordering ──
+
+    #[test]
+    fn test_diamond_pipeline_stage_order() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let stages = b.pipeline_stages();
+        let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["synth", "translate", "map", "par", "bitgen", "timing"]);
+    }
+
+    #[test]
+    fn test_diamond_pipeline_stages_have_labels_and_details() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let stages = b.pipeline_stages();
+        for stage in &stages {
+            assert!(!stage.label.is_empty(), "stage {} should have a label", stage.id);
+            assert!(!stage.detail.is_empty(), "stage {} should have a detail", stage.id);
+            assert!(!stage.cmd.is_empty(), "stage {} should have a cmd", stage.id);
+        }
+    }
+
+    // ── Version and install_path_str ──
+
+    #[test]
+    fn test_diamond_version_with_custom_version() {
+        let b = DiamondBackend { version: "3.13".into(), install_dir: None, deferred: false };
+        assert_eq!(b.version(), "3.13");
+    }
+
+    #[test]
+    fn test_diamond_install_path_str_none() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        assert!(b.install_path_str().is_none());
+    }
+
+    #[test]
+    fn test_diamond_install_path_str_some() {
+        let b = DiamondBackend {
+            version: "3.13".into(),
+            install_dir: Some(PathBuf::from("/opt/lscc/diamond/3.13")),
+            deferred: false,
+        };
+        assert_eq!(b.install_path_str().unwrap(), "/opt/lscc/diamond/3.13");
+    }
+
+    // ── Power and DRC reports return None ──
+
+    #[test]
+    fn test_diamond_power_report_returns_none() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_power_report(tmp.path()).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_diamond_drc_report_returns_none() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_drc_report(tmp.path()).unwrap();
+        assert!(result.is_none());
+    }
+
+    // ── Timing/utilization report file not found ──
+
+    #[test]
+    fn test_diamond_timing_report_not_found() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_timing_report(tmp.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_diamond_utilization_report_not_found() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_utilization_report(tmp.path());
+        assert!(result.is_err());
+    }
+
+    // ── detect_tool with no install dir ──
+
+    #[test]
+    fn test_diamond_detect_tool_no_install_dir() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        // tool_path returns None when install_dir is None, so detect_tool returns false
+        assert!(!b.detect_tool());
+    }
+
+    // ── install_dir accessor ──
+
+    #[test]
+    fn test_diamond_install_dir_accessor() {
+        let b = DiamondBackend {
+            version: "3.13".into(),
+            install_dir: Some(PathBuf::from("/opt/lscc/diamond/3.13")),
+            deferred: false,
+        };
+        assert_eq!(b.install_dir().unwrap(), Path::new("/opt/lscc/diamond/3.13"));
+    }
+
+    #[test]
+    fn test_diamond_install_dir_none() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        assert!(b.install_dir().is_none());
+    }
+
+    // ── Build script with discovered .ldf file ──
+
+    #[test]
+    fn test_build_script_discovers_ldf_in_project_dir() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        // Create a .ldf file matching top_module name
+        std::fs::write(tmp.path().join("counter.ldf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "counter", &[], &HashMap::new(),
+        ).unwrap();
+        let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
+        assert!(open_line.contains("counter.ldf"),
+            "should discover counter.ldf: {}", open_line);
+    }
+
+    #[test]
+    fn test_build_script_discovers_ldf_in_subdirectory() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let sub = tmp.path().join("proj");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("design.ldf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
+        ).unwrap();
+        let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
+        assert!(open_line.contains("design.ldf"),
+            "should discover design.ldf in subdirectory: {}", open_line);
+    }
+
+    // ── find_project_files skips hidden and build dirs ──
+
+    #[test]
+    fn test_find_project_files_skips_hidden_and_build_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Create .ldf files in hidden and build directories that should be skipped
+        let hidden_dir = tmp.path().join(".hidden");
+        std::fs::create_dir(&hidden_dir).unwrap();
+        std::fs::write(hidden_dir.join("hidden.ldf"), "").unwrap();
+        let impl_dir = tmp.path().join("impl1");
+        std::fs::create_dir(&impl_dir).unwrap();
+        std::fs::write(impl_dir.join("output.ldf"), "").unwrap();
+        let build_dir = tmp.path().join("build");
+        std::fs::create_dir(&build_dir).unwrap();
+        std::fs::write(build_dir.join("build.ldf"), "").unwrap();
+        // Only this one should be found
+        std::fs::write(tmp.path().join("real.ldf"), "").unwrap();
+
+        let files = DiamondBackend::find_project_files(tmp.path(), "real");
+        assert_eq!(files.len(), 1, "should only find real.ldf, got: {:?}", files);
+        assert!(files[0].ends_with("real.ldf"));
+    }
 }

@@ -780,4 +780,389 @@ export const GOWIN_IP_CATALOG: IpCore[] = [
   },
 ];
 
+/** AMD Vivado — Xilinx IP cores for 7-series, UltraScale, UltraScale+, and Versal devices. */
+export const VIVADO_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "Block Memory Generator",
+    category: "Memory",
+    description: "Configurable block RAM (BRAM) using RAMB36E1/RAMB18E1 primitives",
+    families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"],
+    params: [
+      { key: "MEMORY_TYPE", label: "Memory Type", type: "select", default: "Simple_Dual_Port_RAM", choices: ["Single_Port_RAM", "Simple_Dual_Port_RAM", "True_Dual_Port_RAM", "Single_Port_ROM", "Dual_Port_ROM"] },
+      { key: "DATA_WIDTH_A", label: "Port A Width", type: "number", default: "32", min: 1, max: 4608, unit: "bits" },
+      { key: "DEPTH_A", label: "Port A Depth", type: "number", default: "1024", min: 2, max: 1048576 },
+      { key: "INIT_FILE", label: "Init File (.coe)", type: "text", default: "" },
+    ],
+    template: `blk_mem_gen_0 {INSTANCE_NAME} (\n  .clka(clka),\n  .ena(ena),\n  .wea(wea),\n  .addra(addra),\n  .dina(dina),\n  .douta(douta)\n);`,
+  },
+  {
+    name: "FIFO Generator",
+    category: "Memory",
+    description: "Synchronous or asynchronous FIFO with configurable depth and width",
+    families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"],
+    params: [
+      { key: "FIFO_TYPE", label: "FIFO Type", type: "select", default: "Common_Clock", choices: ["Common_Clock", "Independent_Clocks"] },
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "32", min: 1, max: 4096, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "number", default: "512", min: 16, max: 131072 },
+      { key: "PROG_FULL_THRESH", label: "Prog Full Threshold", type: "number", default: "480", min: 1, max: 131072 },
+    ],
+    template: `fifo_generator_0 {INSTANCE_NAME} (\n  .clk(clk),\n  .srst(rst),\n  .din(din),\n  .wr_en(wr_en),\n  .rd_en(rd_en),\n  .dout(dout),\n  .full(full),\n  .empty(empty),\n  .prog_full(prog_full)\n);`,
+  },
+  { name: "Distributed Memory Generator", category: "Memory", description: "LUT-based distributed RAM/ROM", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+
+  // DSP
+  {
+    name: "Multiplier",
+    category: "DSP",
+    description: "Parameterized multiplier using DSP48E1/DSP48E2 slices",
+    families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"],
+    params: [
+      { key: "PORT_A_WIDTH", label: "A Width", type: "number", default: "18", min: 2, max: 64, unit: "bits" },
+      { key: "PORT_B_WIDTH", label: "B Width", type: "number", default: "18", min: 2, max: 64, unit: "bits" },
+      { key: "PORT_A_TYPE", label: "A Type", type: "select", default: "Signed", choices: ["Signed", "Unsigned"] },
+      { key: "PIPELINE_STAGES", label: "Pipeline Stages", type: "select", default: "3", choices: ["0", "1", "2", "3", "4", "5", "6"] },
+    ],
+  },
+  { name: "DDS Compiler", category: "DSP", description: "Direct Digital Synthesis for sine/cosine wave generation", families: ["Artix-7", "Kintex-7", "Virtex-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "FIR Compiler", category: "DSP", description: "Finite Impulse Response digital filter", families: ["Artix-7", "Kintex-7", "Virtex-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "Floating-Point Operator", category: "DSP", description: "IEEE 754 floating-point arithmetic (add, multiply, divide, sqrt)", families: ["Artix-7", "Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "CORDIC", category: "DSP", description: "CORDIC algorithm for trigonometric, hyperbolic, and sqrt functions", families: ["Artix-7", "Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+
+  // Interface
+  { name: "AXI UART Lite", category: "Interface", description: "AXI4-Lite UART controller (fixed baud, no FIFO)", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"],
+    params: [
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"] },
+    ],
+  },
+  { name: "AXI UART 16550", category: "Interface", description: "AXI4 UART with 16550-compatible register interface and FIFO", families: ["Artix-7", "Kintex-7", "Virtex-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+  { name: "AXI Quad SPI", category: "Interface", description: "AXI4-Lite SPI controller with dual/quad mode support", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "AXI IIC", category: "Interface", description: "AXI4-Lite I2C master/slave controller", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "MIG 7 Series", category: "Interface", description: "DDR3/DDR2 memory interface generator for 7-series", families: ["Artix-7", "Kintex-7", "Virtex-7"] },
+  { name: "DDR4 SDRAM", category: "Interface", description: "DDR4 memory controller for UltraScale/UltraScale+", families: ["Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+  { name: "AXI Ethernet", category: "Interface", description: "AXI 1G/2.5G Ethernet subsystem", families: ["Artix-7", "Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+  { name: "PCIe", category: "Interface", description: "Xilinx PCI Express IP core (Gen2/Gen3/Gen4)", families: ["Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "AXI Interconnect", category: "Interface", description: "AXI4 crossbar interconnect for multi-master/slave systems", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+
+  // Clock
+  {
+    name: "Clocking Wizard",
+    category: "Clock",
+    description: "MMCM/PLL-based clock generation with multiple outputs",
+    families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"],
+    params: [
+      { key: "CLK_IN_FREQ", label: "Input Frequency", type: "number", default: "100", min: 1, max: 1066, unit: "MHz" },
+      { key: "CLK_OUT1_FREQ", label: "Output 1 Frequency", type: "number", default: "200", min: 1, max: 1066, unit: "MHz" },
+      { key: "CLK_OUT2_FREQ", label: "Output 2 Frequency", type: "number", default: "0", min: 0, max: 1066, unit: "MHz" },
+      { key: "PRIMITIVE", label: "Primitive", type: "select", default: "MMCM", choices: ["MMCM", "PLL"] },
+    ],
+    template: `clk_wiz_0 {INSTANCE_NAME} (\n  .clk_in1(clk_in),\n  .clk_out1(clk_out1),\n  .reset(rst),\n  .locked(locked)\n);`,
+  },
+  { name: "Processor System Reset", category: "Clock", description: "Synchronized reset generator for processor systems", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+
+  // I/O
+  { name: "Utility Buffer", category: "I/O", description: "I/O buffer instantiation (IBUF, OBUF, IOBUF, IBUFDS, OBUFDS)", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "SelectIO Interface Wizard", category: "I/O", description: "High-speed SelectIO interface with ISERDES/OSERDES", families: ["Artix-7", "Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+  { name: "AXI GPIO", category: "I/O", description: "AXI4-Lite general purpose I/O controller", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+
+  // Misc
+  { name: "MicroBlaze", category: "Misc", description: "32-bit RISC soft processor core", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+"] },
+  { name: "ILA", category: "Misc", description: "Integrated Logic Analyzer for in-system hardware debug", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "VIO", category: "Misc", description: "Virtual I/O for runtime signal probing and driving", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "JTAG-to-AXI Master", category: "Misc", description: "JTAG-based AXI master for register access during debug", families: ["Artix-7", "Kintex-7", "Virtex-7", "Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+  { name: "XADC Wizard", category: "Misc", description: "7-series analog-to-digital converter configuration", families: ["Artix-7", "Kintex-7", "Virtex-7", "Spartan-7", "Zynq-7000"] },
+  { name: "System Management Wizard", category: "Misc", description: "UltraScale+ SYSMONE4 analog monitoring", families: ["Kintex UltraScale", "Virtex UltraScale", "Zynq UltraScale+", "Versal"] },
+];
+
+/** Lattice Diamond — IP cores for ECP5, MachXO2/3, and LatticeXP2 devices. */
+export const DIAMOND_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "EBR (Embedded Block RAM)",
+    category: "Memory",
+    description: "Sysmem EBR-based single/dual-port RAM primitive",
+    families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D", "LatticeXP2"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 36, unit: "bits" },
+      { key: "ADDR_WIDTH", label: "Address Width", type: "number", default: "10", min: 2, max: 14, unit: "bits" },
+      { key: "MODE", label: "Port Mode", type: "select", default: "DP", choices: ["SP", "DP", "PDP"] },
+    ],
+  },
+  {
+    name: "Distributed RAM",
+    category: "Memory",
+    description: "LUT-based distributed RAM for small memories",
+    families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"],
+  },
+  {
+    name: "FIFO_DC",
+    category: "Memory",
+    description: "Dual-clock FIFO with configurable depth",
+    families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "8", min: 1, max: 36, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "select", default: "256", choices: ["16", "32", "64", "128", "256", "512", "1024", "2048"] },
+    ],
+  },
+  { name: "FIFO", category: "Memory", description: "Single-clock FIFO buffer", families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"] },
+
+  // DSP
+  {
+    name: "DSP Multiply",
+    category: "DSP",
+    description: "MULT18X18D hard multiplier block (18x18 signed)",
+    families: ["ECP5", "ECP3"],
+    params: [
+      { key: "A_WIDTH", label: "A Width", type: "number", default: "18", min: 1, max: 36, unit: "bits" },
+      { key: "B_WIDTH", label: "B Width", type: "number", default: "18", min: 1, max: 36, unit: "bits" },
+      { key: "PIPELINE", label: "Pipeline Stages", type: "select", default: "1", choices: ["0", "1", "2"] },
+    ],
+  },
+  { name: "ALU54B", category: "DSP", description: "54-bit ALU for wide arithmetic operations", families: ["ECP5"] },
+
+  // Interface
+  { name: "SPI Controller", category: "Interface", description: "SPI master/slave via EFB or soft core", families: ["ECP5", "MachXO2", "MachXO3LF", "MachXO3D"],
+    params: [
+      { key: "MODE", label: "Mode", type: "select", default: "Master", choices: ["Master", "Slave"] },
+      { key: "CPOL", label: "CPOL", type: "select", default: "0", choices: ["0", "1"] },
+      { key: "CPHA", label: "CPHA", type: "select", default: "0", choices: ["0", "1"] },
+    ],
+  },
+  { name: "I2C Controller", category: "Interface", description: "I2C master/slave via EFB hard block", families: ["ECP5", "MachXO2", "MachXO3LF", "MachXO3D"] },
+  { name: "UART", category: "Interface", description: "Soft UART with baud rate generator", families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"],
+    params: [
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400"] },
+      { key: "DATA_BITS", label: "Data Bits", type: "select", default: "8", choices: ["7", "8"] },
+    ],
+  },
+  { name: "PCIe Endpoint", category: "Interface", description: "PCI Express Gen1/Gen2 hard IP endpoint", families: ["ECP5"] },
+  { name: "SERDES", category: "Interface", description: "High-speed serializer/deserializer (up to 5 Gbps)", families: ["ECP5"] },
+
+  // Clock
+  {
+    name: "PLL",
+    category: "Clock",
+    description: "Phase-locked loop for clock synthesis (EHXPLLL primitive)",
+    families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"],
+    params: [
+      { key: "CLKI_FREQ", label: "Input Frequency", type: "number", default: "25", min: 1, max: 400, unit: "MHz" },
+      { key: "CLKOP_FREQ", label: "Primary Output Frequency", type: "number", default: "100", min: 1, max: 400, unit: "MHz" },
+    ],
+  },
+  { name: "DCC", category: "Clock", description: "Dynamic clock control mux for clock gating", families: ["ECP5", "MachXO2", "MachXO3LF", "MachXO3D"] },
+  { name: "OSCH", category: "Clock", description: "Internal oscillator (MachXO2/3 devices)", families: ["MachXO2", "MachXO3LF", "MachXO3D"] },
+
+  // I/O
+  { name: "GPIO", category: "I/O", description: "General-purpose I/O with configurable drive and standards", families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D", "LatticeXP2"] },
+  { name: "LVDS", category: "I/O", description: "Low-voltage differential signaling I/O", families: ["ECP5", "ECP3"] },
+  { name: "DDR I/O", category: "I/O", description: "Double-data-rate I/O registers (IDDRX1F/ODDRX1F)", families: ["ECP5"] },
+
+  // Misc
+  { name: "EFB", category: "Misc", description: "Embedded Function Block (timer, SPI, I2C, flash access)", families: ["MachXO2", "MachXO3LF", "MachXO3D"] },
+  { name: "LatticeMico32", category: "Misc", description: "32-bit RISC soft processor core", families: ["ECP5", "ECP3"] },
+  { name: "Reveal Inserter", category: "Misc", description: "In-system logic analyzer for debug", families: ["ECP5", "ECP3", "MachXO2", "MachXO3LF", "MachXO3D"] },
+];
+
+/** Achronix ACE — IP cores for Speedster7t devices. */
+export const ACE_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "BRAM72K",
+    category: "Memory",
+    description: "72Kbit block RAM with configurable aspect ratio",
+    families: ["Speedster7t"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "32", min: 1, max: 72, unit: "bits" },
+      { key: "ADDR_WIDTH", label: "Address Width", type: "number", default: "10", min: 5, max: 16, unit: "bits" },
+      { key: "MODE", label: "Mode", type: "select", default: "SDP", choices: ["SP", "SDP", "TDP"] },
+    ],
+  },
+  {
+    name: "LRAM",
+    category: "Memory",
+    description: "Distributed LRAM (logic RAM) for small memories",
+    families: ["Speedster7t"],
+  },
+  {
+    name: "FIFO",
+    category: "Memory",
+    description: "Synchronous/asynchronous FIFO with ECC support",
+    families: ["Speedster7t"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "32", min: 1, max: 72, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "number", default: "512", min: 16, max: 65536 },
+      { key: "ASYNC", label: "Asynchronous", type: "boolean", default: "false" },
+      { key: "ECC", label: "ECC Enable", type: "boolean", default: "false" },
+    ],
+  },
+
+  // DSP
+  {
+    name: "MLP (Machine Learning Processor)",
+    category: "DSP",
+    description: "Speedster7t machine learning processor block for INT8/FP16/BF16",
+    families: ["Speedster7t"],
+    params: [
+      { key: "DATA_TYPE", label: "Data Type", type: "select", default: "INT8", choices: ["INT8", "INT16", "FP16", "BF16"] },
+      { key: "BATCH_SIZE", label: "Batch Size", type: "number", default: "1", min: 1, max: 32 },
+    ],
+  },
+  {
+    name: "DSP64",
+    category: "DSP",
+    description: "64-bit DSP block for multiply-accumulate operations",
+    families: ["Speedster7t"],
+    params: [
+      { key: "A_WIDTH", label: "A Width", type: "number", default: "27", min: 1, max: 27, unit: "bits" },
+      { key: "B_WIDTH", label: "B Width", type: "number", default: "24", min: 1, max: 24, unit: "bits" },
+    ],
+  },
+
+  // Interface
+  {
+    name: "Ethernet MAC",
+    category: "Interface",
+    description: "10G/25G/100G/400G Ethernet MAC hard IP",
+    families: ["Speedster7t"],
+    params: [
+      { key: "RATE", label: "Rate", type: "select", default: "100G", choices: ["10G", "25G", "100G", "400G"] },
+    ],
+  },
+  {
+    name: "PCIe Gen5",
+    category: "Interface",
+    description: "PCI Express Gen5 x16 hard IP controller",
+    families: ["Speedster7t"],
+  },
+  {
+    name: "GDDR6",
+    category: "Interface",
+    description: "GDDR6 memory controller hard IP",
+    families: ["Speedster7t"],
+  },
+  {
+    name: "SerDes",
+    category: "Interface",
+    description: "High-speed SerDes transceiver (up to 112 Gbps PAM4)",
+    families: ["Speedster7t"],
+    params: [
+      { key: "RATE", label: "Line Rate", type: "select", default: "28G", choices: ["10G", "25G", "28G", "56G", "112G"] },
+    ],
+  },
+  { name: "NoC (Network on Chip)", category: "Interface", description: "2D mesh NoC for high-bandwidth on-chip data movement", families: ["Speedster7t"] },
+
+  // Clock
+  {
+    name: "PLL",
+    category: "Clock",
+    description: "Phase-locked loop for clock synthesis",
+    families: ["Speedster7t"],
+    params: [
+      { key: "REF_FREQ", label: "Reference Frequency", type: "number", default: "100", min: 1, max: 1200, unit: "MHz" },
+      { key: "OUT_FREQ", label: "Output Frequency", type: "number", default: "500", min: 1, max: 1200, unit: "MHz" },
+    ],
+  },
+  { name: "Clock Mux", category: "Clock", description: "Glitch-free clock multiplexer", families: ["Speedster7t"] },
+
+  // I/O
+  { name: "GPIO", category: "I/O", description: "General-purpose I/O with configurable drive and voltage", families: ["Speedster7t"] },
+  { name: "LVDS", category: "I/O", description: "Low-voltage differential signaling I/O", families: ["Speedster7t"] },
+
+  // Misc
+  { name: "SnapShot Debugger", category: "Misc", description: "In-system signal capture and debug tool", families: ["Speedster7t"] },
+  { name: "JTAG", category: "Misc", description: "JTAG boundary scan and debug interface", families: ["Speedster7t"] },
+];
+
+/** Microchip Libero SoC — IP cores for PolarFire, PolarFire SoC, SmartFusion2, IGLOO2, and RTG4 devices. */
+export const LIBERO_IP_CATALOG: IpCore[] = [
+  // Memory
+  {
+    name: "LSRAM",
+    category: "Memory",
+    description: "Large SRAM block (up to 20Kbit per instance) for data storage",
+    families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "32", min: 1, max: 40, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "number", default: "512", min: 2, max: 20480 },
+      { key: "MODE", label: "Port Mode", type: "select", default: "SDP", choices: ["SP", "SDP", "TDP"] },
+    ],
+  },
+  {
+    name: "uSRAM",
+    category: "Memory",
+    description: "Micro SRAM (64x12 distributed RAM) for small lookup tables",
+    families: ["PolarFire", "PolarFire SoC"],
+  },
+  {
+    name: "FIFO",
+    category: "Memory",
+    description: "Synchronous or asynchronous FIFO controller with ECC",
+    families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"],
+    params: [
+      { key: "DATA_WIDTH", label: "Data Width", type: "number", default: "32", min: 1, max: 40, unit: "bits" },
+      { key: "DEPTH", label: "Depth", type: "number", default: "512", min: 16, max: 65536 },
+      { key: "ASYNC", label: "Dual-Clock", type: "boolean", default: "false" },
+      { key: "ECC", label: "ECC Enable", type: "boolean", default: "false" },
+    ],
+  },
+
+  // DSP
+  {
+    name: "MACC (Multiply-Accumulate)",
+    category: "DSP",
+    description: "18x18 signed multiply-accumulate hard block",
+    families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"],
+    params: [
+      { key: "A_WIDTH", label: "A Width", type: "number", default: "18", min: 1, max: 18, unit: "bits" },
+      { key: "B_WIDTH", label: "B Width", type: "number", default: "18", min: 1, max: 18, unit: "bits" },
+      { key: "PIPELINE", label: "Pipeline Stages", type: "select", default: "1", choices: ["0", "1", "2"] },
+    ],
+  },
+  { name: "Math Block", category: "DSP", description: "Configurable DSP block with pre-adder, multiplier, and accumulator", families: ["PolarFire", "PolarFire SoC"] },
+
+  // Interface
+  {
+    name: "CoreUART",
+    category: "Interface",
+    description: "Soft UART controller with configurable baud rate and FIFO",
+    families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"],
+    params: [
+      { key: "BAUD_RATE", label: "Baud Rate", type: "select", default: "115200", choices: ["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"] },
+      { key: "DATA_BITS", label: "Data Bits", type: "select", default: "8", choices: ["7", "8"] },
+      { key: "PARITY", label: "Parity", type: "select", default: "None", choices: ["None", "Even", "Odd"] },
+    ],
+  },
+  { name: "CoreSPI", category: "Interface", description: "SPI master/slave controller", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"] },
+  { name: "CoreI2C", category: "Interface", description: "I2C master/slave controller (100/400 kHz)", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"] },
+  { name: "DDR Controller", category: "Interface", description: "DDR3/DDR4/LPDDR3/LPDDR4 memory controller hard IP", families: ["PolarFire", "PolarFire SoC"] },
+  { name: "PCIe", category: "Interface", description: "PCI Express Gen2 x1/x2/x4 endpoint controller", families: ["PolarFire", "PolarFire SoC"] },
+  { name: "Transceiver", category: "Interface", description: "Multi-rate transceiver (up to 12.7 Gbps)", families: ["PolarFire", "PolarFire SoC"] },
+  { name: "MSS (Microprocessor Subsystem)", category: "Interface", description: "PolarFire SoC RISC-V MSS with 4x U54 + 1x E51 cores", families: ["PolarFire SoC"] },
+
+  // Clock
+  {
+    name: "PLL",
+    category: "Clock",
+    description: "CCC (Clock Conditioning Circuit) with PLL for clock generation",
+    families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"],
+    params: [
+      { key: "REF_FREQ", label: "Reference Frequency", type: "number", default: "50", min: 1, max: 1600, unit: "MHz" },
+      { key: "OUT_FREQ", label: "Output Frequency", type: "number", default: "100", min: 1, max: 1600, unit: "MHz" },
+    ],
+  },
+  { name: "Clock Divider", category: "Clock", description: "Programmable clock divider via CCC", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2"] },
+  { name: "RC Oscillator", category: "Clock", description: "On-chip RC oscillator (1/25/50 MHz)", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2"] },
+
+  // I/O
+  { name: "GPIO", category: "I/O", description: "General-purpose I/O with configurable drive, slew, and pull", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"] },
+  { name: "LVDS", category: "I/O", description: "Low-voltage differential signaling I/O", families: ["PolarFire", "PolarFire SoC"] },
+  { name: "HSIO", category: "I/O", description: "High-speed I/O for DDR interfaces", families: ["PolarFire", "PolarFire SoC"] },
+
+  // Misc
+  { name: "uPROM", category: "Misc", description: "User PROM for non-volatile data storage", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2"] },
+  { name: "SmartDebug", category: "Misc", description: "In-system debug and diagnostic tool", families: ["PolarFire", "PolarFire SoC", "SmartFusion2", "IGLOO2", "RTG4"] },
+  { name: "SRAM-PUF", category: "Misc", description: "SRAM-based Physical Unclonable Function for device identity", families: ["PolarFire", "PolarFire SoC"] },
+  { name: "Crypto Processor", category: "Misc", description: "Hardware AES-256, SHA-256, and ECC crypto engine", families: ["PolarFire", "PolarFire SoC"] },
+];
+
 export const IP_CATEGORIES = ["Memory", "DSP", "Interface", "Clock", "I/O", "Misc"] as const;

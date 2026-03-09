@@ -994,6 +994,188 @@ set_io {reset_n} -pinname {G14} -fixed true -io_std {LVCMOS33}
     }
 
     #[test]
+    fn test_parse_timing_with_fixture() {
+        let content = include_str!("../../tests/fixtures/libero/timing.rpt");
+        let report = parse_libero_timing(content).unwrap();
+        assert!((report.fmax_mhz - 312.50).abs() < 0.1, "fmax={}", report.fmax_mhz);
+        assert!(report.wns_ns > 0.0, "wns={}", report.wns_ns);
+        assert_eq!(report.failing_paths, 0);
+        assert!(report.clock_domains.len() >= 2, "should have 2+ clock domains");
+        let sys = report.clock_domains.iter().find(|c| c.name == "sys_clk");
+        assert!(sys.is_some(), "should have sys_clk domain");
+        assert!((sys.unwrap().frequency_mhz - 187.50).abs() < 0.1);
+        let pll = report.clock_domains.iter().find(|c| c.name == "pll_clk");
+        assert!(pll.is_some(), "should have pll_clk domain");
+        assert!((pll.unwrap().frequency_mhz - 312.50).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_timing_empty() {
+        let report = parse_libero_timing("").unwrap();
+        assert_eq!(report.fmax_mhz, 0.0);
+        assert!(report.clock_domains.is_empty());
+    }
+
+    #[test]
+    fn test_parse_timing_with_data() {
+        let content = "sys_clk                 | 200.00 MHz  | 100.00 MHz    | Yes\n\
+                       WNS: 2.500\nTNS: 0.000\nFailing Paths: 0\nTotal Paths: 64\n";
+        let report = parse_libero_timing(content).unwrap();
+        assert!((report.fmax_mhz - 200.0).abs() < 0.1);
+        assert!((report.wns_ns - 2.5).abs() < 0.01);
+        assert_eq!(report.failing_paths, 0);
+        assert_eq!(report.total_paths, 64);
+    }
+
+    #[test]
+    fn test_parse_timing_failing() {
+        let content = "fast_clk                | 80.00 MHz   | 100.00 MHz    | No\n\
+                       WNS: -1.250\nTNS: -3.500\nFailing Paths: 4\nTotal Paths: 128\n";
+        let report = parse_libero_timing(content).unwrap();
+        assert!((report.wns_ns - (-1.250)).abs() < 0.01);
+        assert!((report.tns_ns - (-3.500)).abs() < 0.01);
+        assert_eq!(report.failing_paths, 4);
+    }
+
+    #[test]
+    fn test_parse_utilization_with_fixture() {
+        let content = include_str!("../../tests/fixtures/libero/utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").unwrap();
+        assert_eq!(report.device, "MPF300T");
+        assert!(!report.categories.is_empty());
+
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some(), "should have Logic category");
+        let lut = logic.unwrap().items.iter().find(|i| i.resource.contains("4LUT"));
+        assert!(lut.is_some(), "should have 4LUT");
+        assert_eq!(lut.unwrap().used, 256);
+        assert_eq!(lut.unwrap().total, 299008);
+
+        let dff = logic.unwrap().items.iter().find(|i| i.resource.contains("DFF"));
+        assert!(dff.is_some(), "should have DFF");
+        assert_eq!(dff.unwrap().used, 128);
+
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "should have I/O category");
+        assert_eq!(io.unwrap().items[0].used, 18);
+
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "should have Memory category");
+        assert_eq!(mem.unwrap().items.len(), 2); // LSRAM + uSRAM
+
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some(), "should have DSP category");
+        assert_eq!(dsp.unwrap().items[0].used, 1);
+    }
+
+    #[test]
+    fn test_parse_power_with_fixture() {
+        let content = include_str!("../../tests/fixtures/libero/power.rpt");
+        let report = parse_libero_power(content);
+        assert!((report.total_mw - 125.40).abs() < 0.1, "total_mw={}", report.total_mw);
+        assert!((report.junction_temp_c - 32.5).abs() < 0.1, "temp={}", report.junction_temp_c);
+    }
+
+    #[test]
+    fn test_parse_power_empty() {
+        let report = parse_libero_power("");
+        assert_eq!(report.total_mw, 0.0);
+        assert_eq!(report.junction_temp_c, 25.0); // default
+    }
+
+    #[test]
+    fn test_parse_drc_with_fixture() {
+        let content = include_str!("../../tests/fixtures/libero/drc.rpt");
+        let report = parse_libero_drc(content);
+        assert_eq!(report.errors, 0);
+        assert_eq!(report.warnings, 2);
+    }
+
+    #[test]
+    fn test_parse_drc_empty() {
+        let report = parse_libero_drc("");
+        assert_eq!(report.errors, 0);
+        assert_eq!(report.warnings, 0);
+    }
+
+    #[test]
+    fn test_parse_drc_with_errors() {
+        let content = "Errors: 3\nWarnings: 5\n";
+        let report = parse_libero_drc(content);
+        assert_eq!(report.errors, 3);
+        assert_eq!(report.warnings, 5);
+    }
+
+    #[test]
+    fn test_default_package() {
+        assert_eq!(default_package("MPF300T"), "FCG1152");
+        assert_eq!(default_package("MPF100T"), "FCG484");
+        assert_eq!(default_package("MPFS250T"), "FCVG484");
+        assert_eq!(default_package("M2S050"), "FBGA256");
+    }
+
+    #[test]
+    fn test_pdc_roundtrip() {
+        let constraints = vec![
+            PinConstraint {
+                pin: "T2".into(),
+                net: "clk".into(),
+                direction: "IN".into(),
+                io_standard: "LVCMOS33".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+            PinConstraint {
+                pin: "C16".into(),
+                net: "led[0]".into(),
+                direction: "INOUT".into(),
+                io_standard: "LVCMOS25".into(),
+                bank: String::new(),
+                locked: true,
+                extra: vec![],
+            },
+        ];
+        let pdc = format_pdc_constraints(&constraints);
+        let parsed = parse_pdc_constraints(&pdc).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].net, "clk");
+        assert_eq!(parsed[0].pin, "T2");
+        assert_eq!(parsed[0].io_standard, "LVCMOS33");
+        assert_eq!(parsed[1].net, "led[0]");
+        assert_eq!(parsed[1].pin, "C16");
+        assert_eq!(parsed[1].io_standard, "LVCMOS25");
+    }
+
+    #[test]
+    fn test_build_script_has_stages() {
+        use std::collections::HashMap;
+        let b = LiberoBackend::new_deferred();
+        let dir = std::path::PathBuf::from("/tmp/test_project");
+        // This will fail because no sources found, which is expected
+        let result = b.generate_build_script(&dir, "MPF300T", "top", &[], &HashMap::new());
+        // No project file will be found and no sources either
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_libero_name() {
+        let b = LiberoBackend::new_deferred();
+        assert_eq!(b.name(), "Microchip Libero SoC");
+        assert_eq!(b.short_name(), "Libero");
+        assert_eq!(b.cli_tool(), "libero");
+        assert_eq!(b.constraint_ext(), ".pdc");
+        assert_eq!(b.default_device(), "MPF300T");
+    }
+
+    #[test]
+    fn test_libero_deferred() {
+        let b = LiberoBackend::new_deferred();
+        assert!(b.is_deferred());
+        assert!(!b.detect_tool());
+    }
+
+    #[test]
     fn test_parse_utilization_table() {
         let report = r#"
 +--------------------------------------+------+-----------+-------------+

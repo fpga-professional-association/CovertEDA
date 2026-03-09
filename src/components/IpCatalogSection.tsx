@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Select } from "./shared";
 import { Box } from "./Icons";
-import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, IP_CATEGORIES, IpCore } from "../data/ipCatalog";
+import { RADIANT_IP_CATALOG, QUARTUS_IP_CATALOG, OSS_IP_CATALOG, ICE40_IP_CATALOG, GOWIN_IP_CATALOG, VIVADO_IP_CATALOG, DIAMOND_IP_CATALOG, ACE_IP_CATALOG, LIBERO_IP_CATALOG, IP_CATEGORIES, IpCore } from "../data/ipCatalog";
 import { listen, executeIpGenerate, pickDirectory } from "../hooks/useTauri";
 
 interface IpCatalogSectionProps {
@@ -34,8 +34,12 @@ export default function IpCatalogSection({ backendId, projectDir, device, onRefr
   const builtinCatalog = useMemo(() => {
     let base: IpCore[];
     let sourceName: string;
-    if (backendId === "quartus") { base = QUARTUS_IP_CATALOG; sourceName = "Quartus IP Library"; }
-    else if (backendId === "opensource") {
+    if (backendId === "quartus" || backendId === "quartus_pro") { base = QUARTUS_IP_CATALOG; sourceName = "Quartus IP Library"; }
+    else if (backendId === "vivado") { base = VIVADO_IP_CATALOG; sourceName = "Vivado IP Catalog"; }
+    else if (backendId === "diamond") { base = DIAMOND_IP_CATALOG; sourceName = "Diamond IP Library"; }
+    else if (backendId === "ace") { base = ACE_IP_CATALOG; sourceName = "ACE IP Library"; }
+    else if (backendId === "libero") { base = LIBERO_IP_CATALOG; sourceName = "Libero SoC IP Library"; }
+    else if (backendId === "opensource" || backendId === "oss") {
       const d = device.toUpperCase();
       if (d.startsWith("ICE40")) { base = ICE40_IP_CATALOG; sourceName = "iCE40 IP Library"; }
       else if (d.startsWith("GW")) { base = GOWIN_IP_CATALOG; sourceName = "Gowin IP Library"; }

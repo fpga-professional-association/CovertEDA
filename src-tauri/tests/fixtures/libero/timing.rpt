@@ -1,0 +1,54 @@
+================================================================================
+                    Microsemi Libero Software
+                SmartTime Timing Analyzer Report
+                   Design: counter_top
+                   Family: PolarFire
+                   Die: MPF300T
+                   Package: FCG1152
+                   Speed Grade: STD
+                   Temperature: COM
+                   Voltage: 1.0V
+================================================================================
+
+Timing Summary
+================================================================================
+                                        WNS     TNS
+Setup (worst case)                      1.250   0.000
+Hold  (worst case)                      0.085   0.000
+
+Failing Paths: 0
+Total Paths: 256
+
+Fmax Summary
+================================================================================
+Constraint              | Actual Fmax | Required Fmax | Met
+--------------------------------------------------------------------------------
+sys_clk                 | 187.50 MHz  | 100.00 MHz    | Yes
+pll_clk                 | 312.50 MHz  | 250.00 MHz    | Yes
+
+Clock Domain: sys_clk
+================================================================================
+  Clock Period: 10.000 ns
+  Clock Frequency: 100.000 MHz
+  Achieved Fmax: 187.500 MHz
+  WNS: 1.250 ns
+
+  Number of paths analyzed: 128
+  Number of failing paths: 0
+
+Clock Domain: pll_clk
+================================================================================
+  Clock Period: 4.000 ns
+  Clock Frequency: 250.000 MHz
+  Achieved Fmax: 312.500 MHz
+  WNS: 0.800 ns
+
+  Number of paths analyzed: 128
+  Number of failing paths: 0
+
+Unconstrained Paths
+================================================================================
+  Number of I/O ports without constraint | 4
+
+================================================================================
+End of SmartTime Timing Report

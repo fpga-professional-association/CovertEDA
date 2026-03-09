@@ -635,4 +635,89 @@ mod tests {
         ).unwrap();
         assert!(script.contains("write_bitstream"));
     }
+
+    #[test]
+    fn test_vivado_default_device() {
+        let b = VivadoBackend::new();
+        assert_eq!(b.default_device(), "xc7a100tcsg324-1");
+    }
+
+    #[test]
+    fn test_vivado_short_name_and_cli_tool() {
+        let b = VivadoBackend::new();
+        assert_eq!(b.short_name(), "Vivado");
+        assert_eq!(b.cli_tool(), "vivado");
+    }
+
+    #[test]
+    fn test_vivado_constraint_extension() {
+        let b = VivadoBackend::new();
+        assert_eq!(b.constraint_ext(), ".xdc");
+    }
+
+    #[test]
+    fn test_vivado_build_script_selective_stages_ignored() {
+        // Vivado backend currently ignores the stages parameter and always
+        // generates the full flow. Verify the script is complete regardless
+        // of which stages are requested.
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let stages = vec!["synth".into(), "route".into()];
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &stages, &std::collections::HashMap::new(),
+        ).unwrap();
+        // All stages should still be present since Vivado ignores selective stages
+        assert!(script.contains("synth_design -top top"));
+        assert!(script.contains("opt_design"));
+        assert!(script.contains("place_design"));
+        assert!(script.contains("phys_opt_design"));
+        assert!(script.contains("route_design"));
+        assert!(script.contains("write_bitstream"));
+    }
+
+    #[test]
+    fn test_vivado_build_script_contains_opt_design() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("opt_design -directive Explore"));
+    }
+
+    #[test]
+    fn test_vivado_build_script_contains_phys_opt_design() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("phys_opt_design -directive AggressiveExplore"));
+    }
+
+    #[test]
+    fn test_vivado_build_script_with_frequency_option() {
+        // Vivado backend does not currently use a frequency option, but
+        // passing one should not cause an error — it is silently ignored.
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = std::collections::HashMap::new();
+        opts.insert("frequency".into(), "200".into());
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &opts,
+        ).unwrap();
+        // Script should still generate successfully with all standard stages
+        assert!(script.contains("synth_design -top top"));
+        assert!(script.contains("route_design"));
+        assert!(script.contains("write_bitstream"));
+    }
+
+    #[test]
+    fn test_vivado_pipeline_stage_count_and_ids() {
+        let b = VivadoBackend::new();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 6);
+        let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["synth", "opt", "place", "phys", "route", "bitgen"]);
+    }
 }

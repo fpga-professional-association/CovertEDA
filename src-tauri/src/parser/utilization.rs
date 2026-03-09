@@ -263,11 +263,95 @@ pub fn parse_quartus_utilization(content: &str, device: &str) -> BackendResult<R
 }
 
 /// Parse Vivado utilization report
+///
+/// Vivado utilization reports contain numbered sections with tables:
+///   | Site Type         | Used | Fixed | Prohibited | Available | Util% |
+///   | Slice LUTs        |  384 |     0 |          0 |     63400 |  0.61 |
 pub fn parse_vivado_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
-    let _ = content;
+    let row_re = Regex::new(
+        r"\|\s*([\w\s/()]+?)\s+\|\s*(\d+)\s*\|\s*\d+\s*\|\s*\d+\s*\|\s*(\d+)\s*\|"
+    ).unwrap();
+
+    let mut logic_items = vec![];
+    let mut io_items = vec![];
+    let mut memory_items = vec![];
+    let mut dsp_items = vec![];
+    let mut clock_items = vec![];
+    let mut other_items = vec![];
+
+    // Track current section from headers like "1. Slice Logic", "3. Memory"
+    let mut current_section = String::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        // Detect section headers: "1. Slice Logic", "3. Memory", etc.
+        if let Some(rest) = trimmed.strip_prefix(|c: char| c.is_ascii_digit()) {
+            if let Some(name) = rest.strip_prefix(". ") {
+                current_section = name.to_lowercase();
+            }
+        }
+
+        if let Some(cap) = row_re.captures(line) {
+            let name = cap[1].trim().to_string();
+            let used: u64 = cap[2].parse().unwrap_or(0);
+            let total: u64 = cap[3].parse().unwrap_or(0);
+
+            if total == 0 || name == "Site Type" {
+                continue;
+            }
+
+            // Skip indented sub-rows (e.g., "  LUT as Logic" under "Slice LUTs")
+            if line.contains("|   ") && !line.starts_with('|') {
+                continue;
+            }
+
+            let item = ResourceItem {
+                resource: name.clone(),
+                used,
+                total,
+                detail: None,
+            };
+
+            let n = name.to_lowercase();
+            // Use both section context and name for categorization
+            if current_section.contains("clocking") || n.contains("bufg") || n.contains("mmcm") || n.contains("pll") {
+                clock_items.push(item);
+            } else if current_section.contains("io") || n.contains("iob") || n.contains("i/o") || n.contains("pad") {
+                io_items.push(item);
+            } else if current_section.contains("memory") || n.contains("ram") || n.contains("fifo") {
+                memory_items.push(item);
+            } else if current_section.contains("dsp") || n.contains("dsp") {
+                dsp_items.push(item);
+            } else if n.contains("lut") || n.contains("register") || n.contains("slice") || n.contains("mux") {
+                logic_items.push(item);
+            } else {
+                other_items.push(item);
+            }
+        }
+    }
+
+    let mut categories = vec![];
+    if !logic_items.is_empty() {
+        categories.push(ResourceCategory { name: "Logic".into(), items: logic_items });
+    }
+    if !io_items.is_empty() {
+        categories.push(ResourceCategory { name: "I/O".into(), items: io_items });
+    }
+    if !memory_items.is_empty() {
+        categories.push(ResourceCategory { name: "Memory".into(), items: memory_items });
+    }
+    if !dsp_items.is_empty() {
+        categories.push(ResourceCategory { name: "DSP".into(), items: dsp_items });
+    }
+    if !clock_items.is_empty() {
+        categories.push(ResourceCategory { name: "Clocking".into(), items: clock_items });
+    }
+    if !other_items.is_empty() {
+        categories.push(ResourceCategory { name: "Other".into(), items: other_items });
+    }
+
     Ok(ResourceReport {
         device: device.to_string(),
-        categories: vec![],
+        categories,
         by_module: vec![],
     })
 }
@@ -680,4 +764,93 @@ mod tests {
         let result = parse_nextpnr_utilization("not json", "test");
         assert!(result.is_err());
     }
+
+    // ── Vivado utilization tests ──
+
+    #[test]
+    fn test_parse_vivado_utilization_with_fixture() {
+        let content = include_str!("../../tests/fixtures/vivado/utilization.rpt");
+        let report = parse_vivado_utilization(content, "xc7a100tcsg324-1").unwrap();
+        assert_eq!(report.device, "xc7a100tcsg324-1");
+        assert!(!report.categories.is_empty(), "should have categories");
+
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some(), "should have Logic category");
+        let lut = logic.unwrap().items.iter().find(|i| i.resource.contains("Slice LUTs"));
+        assert!(lut.is_some(), "should have Slice LUTs");
+        assert_eq!(lut.unwrap().used, 384);
+        assert_eq!(lut.unwrap().total, 63400);
+
+        let regs = logic.unwrap().items.iter().find(|i| i.resource.contains("Slice Registers"));
+        assert!(regs.is_some(), "should have Slice Registers");
+        assert_eq!(regs.unwrap().used, 256);
+
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "should have I/O category");
+        let iob = io.unwrap().items.iter().find(|i| i.resource.contains("Bonded IOB"));
+        assert!(iob.is_some(), "should have Bonded IOB");
+        assert_eq!(iob.unwrap().used, 18);
+
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "should have Memory category");
+
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some(), "should have DSP category");
+        let dsp48 = dsp.unwrap().items.iter().find(|i| i.resource.contains("DSPs"));
+        assert!(dsp48.is_some(), "should have DSPs");
+        assert_eq!(dsp48.unwrap().used, 2);
+
+        let clk = report.categories.iter().find(|c| c.name == "Clocking");
+        assert!(clk.is_some(), "should have Clocking category");
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_categorizes_luts() {
+        let content = "1. Slice Logic\n\
+                       +---+------+---+---+---------+-------+\n\
+                       | Site Type                  | Used | Fixed | Prohibited | Available | Util% |\n\
+                       | Slice LUTs                 |  100 |     0 |          0 |     63400 |  0.16 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some(), "LUTs should be Logic");
+        assert_eq!(logic.unwrap().items[0].used, 100);
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_categorizes_bram() {
+        let content = "3. Memory\n\
+                       | Block RAM Tile    |    4 |     0 |          0 |       135 |  2.96 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some(), "BRAM should be Memory");
+        assert_eq!(mem.unwrap().items[0].used, 4);
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_categorizes_io() {
+        let content = "5. IO and GT Specific\n\
+                       | Bonded IOB                  |   18 |    18 |          0 |       210 |  8.57 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some(), "IOB should be I/O");
+        assert_eq!(io.unwrap().items[0].used, 18);
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_categorizes_clocking() {
+        let content = "6. Clocking\n\
+                       | BUFGCTRL                    |    2 |     0 |          0 |        32 |  6.25 |\n\
+                       | MMCME2_ADV                  |    1 |     0 |          0 |         6 | 16.67 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let clk = report.categories.iter().find(|c| c.name == "Clocking");
+        assert!(clk.is_some(), "BUFGCTRL/MMCM should be Clocking");
+        assert_eq!(clk.unwrap().items.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_empty() {
+        let report = parse_vivado_utilization("", "test").unwrap();
+        assert!(report.categories.is_empty());
+    }
+
 }
