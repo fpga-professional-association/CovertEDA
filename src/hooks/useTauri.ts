@@ -322,7 +322,7 @@ import type {
   FileContent, ProjectFile, TimingReportData, UtilizationReportData,
   PowerReportData, DrcReportData, IoBankData,
   RuntimeBackend, PipelineStage,
-  SourceDirSuggestion, VendorImportResult,
+  SourceDirSuggestion, VendorImportResult, RemoteDirEntry,
 } from "../types";
 import { MOCK_RECENT_PROJECTS, MOCK_PROJECT_CONFIG, BACKEND_META } from "../data/mockData";
 
@@ -619,6 +619,7 @@ export interface AppConfig {
     diamond: string | null;
     radiant: string | null;
     quartus: string | null;
+    quartus_pro: string | null;
     vivado: string | null;
     yosys: string | null;
     nextpnr: string | null;
@@ -639,7 +640,7 @@ export interface AppConfig {
 }
 
 const DEFAULT_APP_CONFIG: AppConfig = {
-  tool_paths: { diamond: null, radiant: null, quartus: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
+  tool_paths: { diamond: null, radiant: null, quartus: null, quartus_pro: null, vivado: null, yosys: null, nextpnr: null, oss_cad_suite: null },
   license_servers: [],
   default_backend: "radiant",
   theme: "dark",
@@ -1354,4 +1355,34 @@ export async function sshRemoteFileTree(): Promise<unknown[]> {
 export async function sshReadRemoteFile(path: string): Promise<string> {
   if (!isTauri) return "";
   return invoke<string>("ssh_read_remote_file", { path });
+}
+
+export async function sshBrowseDirectory(dir: string): Promise<RemoteDirEntry[]> {
+  if (!isTauri) return [];
+  return invoke<RemoteDirEntry[]>("ssh_browse_directory", { dir });
+}
+
+export async function sshCheckProjectDir(dir: string): Promise<ProjectConfig | null> {
+  if (!isTauri) return null;
+  return invoke<ProjectConfig | null>("ssh_check_project", { dir });
+}
+
+export async function sshCreateProject(
+  dir: string,
+  name: string,
+  backendId: string,
+  device: string,
+  topModule: string,
+  sourcePatterns?: string[],
+  constraintFiles?: string[],
+): Promise<ProjectConfig> {
+  return invoke<ProjectConfig>("ssh_create_project", {
+    dir,
+    name,
+    backendId,
+    device,
+    topModule,
+    sourcePatterns: sourcePatterns ?? null,
+    constraintFiles: constraintFiles ?? null,
+  });
 }

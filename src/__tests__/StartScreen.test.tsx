@@ -25,10 +25,19 @@ vi.mock("../hooks/useTauri", () => ({
     { backendId: "radiant", name: "Lattice Radiant", version: "2025.2", installPath: "/mnt/c/lscc", available: true },
     { backendId: "quartus", name: "Intel Quartus", version: "23.1", installPath: null, available: false },
   ])),
+  sshLoadConfig: vi.fn(() => Promise.resolve(null)),
+  sshSaveConfig: vi.fn(() => Promise.resolve()),
+  sshTestConnection: vi.fn(() => Promise.resolve({ ok: false })),
+  sshDetectTools: vi.fn(() => Promise.resolve([])),
+  sshCheckProjectDir: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("../components/NewProjectWizard", () => ({
   default: () => <div data-testid="wizard">Wizard</div>,
+}));
+
+vi.mock("../components/RemoteDirBrowser", () => ({
+  default: () => <div data-testid="remote-browser">RemoteBrowser</div>,
 }));
 
 describe("StartScreen", () => {

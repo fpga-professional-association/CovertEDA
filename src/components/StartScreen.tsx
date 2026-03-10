@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RecentProject, ProjectConfig, BackendMeta, DetectedTool, LicenseCheckResult } from "../types";
+import { RecentProject, ProjectConfig, BackendMeta, DetectedTool, LicenseCheckResult, RemoteToolInfo, SshConnectionInfo } from "../types";
 import { useTheme } from "../context/ThemeContext";
-import { Btn, Badge } from "./shared";
+import { Btn, Badge, Input } from "./shared";
 import { Chip, Zap, Key, Settings, GitHub, LinkedIn } from "./Icons";
 
 // ── Inject CSS hover for start screen elements ──
@@ -32,11 +32,16 @@ import {
   importVendorProject,
   createProject,
   openUrl,
+  sshLoadConfig,
+  sshSaveConfig,
+  sshTestConnection,
+  sshDetectTools,
   type WhichResult,
   type DetectedVersion,
 } from "../hooks/useTauri";
-import type { VendorImportResult } from "../types"; // used by handleOpenDir
+import type { SshConfig, VendorImportResult } from "../types";
 import NewProjectWizard from "./NewProjectWizard";
+import RemoteDirBrowser from "./RemoteDirBrowser";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -74,6 +79,17 @@ export default function StartScreen({
   const [whichInfo, setWhichInfo] = useState<Record<string, WhichResult & { status: string }>>({});
   const [allVersions, setAllVersions] = useState<Record<string, DetectedVersion[]>>({});
   const [selectingVersion, setSelectingVersion] = useState<string | null>(null);
+  // SSH state
+  const [sshConnected, setSshConnected] = useState(false);
+  const [sshConnecting, setSshConnecting] = useState(false);
+  const [sshInfo, setSshInfo] = useState<SshConnectionInfo | null>(null);
+  const [sshConfig, setSshConfig] = useState<SshConfig | null>(null);
+  const [sshExpanded, setSshExpanded] = useState(false);
+  const [sshHost, setSshHost] = useState("");
+  const [sshUser, setSshUser] = useState("");
+  const [sshKeyPath, setSshKeyPath] = useState("");
+  const [remoteTools, setRemoteTools] = useState<RemoteToolInfo[]>([]);
+  const [remoteBrowseOpen, setRemoteBrowseOpen] = useState(false);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -99,9 +115,22 @@ export default function StartScreen({
     getRecentProjects().then(setRecents).catch(() => {});
     detectTools().then(setTools).catch(() => {});
     checkLicenses().then(setLicenseResult).catch(() => {});
+    sshLoadConfig().then((cfg) => {
+      if (cfg) {
+        setSshConfig(cfg);
+        setSshHost(cfg.host);
+        setSshUser(cfg.user);
+        setSshKeyPath(cfg.keyPath ?? "");
+      }
+    }).catch(() => {});
   }, []);
 
   const handleOpenDir = async () => {
+    // If SSH connected, use remote directory browser
+    if (sshConnected) {
+      setRemoteBrowseOpen(true);
+      return;
+    }
     const dir = await pickDirectory();
     if (!dir) return;
     setOpeningDir(true);
@@ -165,6 +194,69 @@ export default function StartScreen({
     e.stopPropagation();
     await removeRecentProject(path);
     setRecents((prev) => prev.filter((p) => p.path !== path));
+  };
+
+  const handleSshConnect = async () => {
+    setSshConnecting(true);
+    setSshInfo(null);
+    try {
+      const tool = sshConfig?.tool ?? "openssh";
+      const auth = sshConfig?.auth ?? "agent";
+      const info = await sshTestConnection(
+        sshHost, sshConfig?.port ?? 22, sshUser, tool,
+        auth === "key" ? sshKeyPath || undefined : undefined,
+        sshConfig?.customSshPath ?? undefined,
+        sshConfig?.customScpPath ?? undefined,
+      );
+      setSshInfo(info);
+      if (info.ok) {
+        setSshConnected(true);
+        setSshExpanded(false);
+        // Save config
+        const cfg: SshConfig = {
+          enabled: true,
+          tool,
+          host: sshHost,
+          port: sshConfig?.port ?? 22,
+          user: sshUser,
+          auth,
+          keyPath: sshKeyPath || undefined,
+          remoteProjectDir: sshConfig?.remoteProjectDir ?? "",
+          remoteToolPaths: sshConfig?.remoteToolPaths ?? {},
+        };
+        setSshConfig(cfg);
+        await sshSaveConfig(cfg);
+        // Detect remote tools
+        sshDetectTools().then(setRemoteTools).catch(() => {});
+      }
+    } catch (e) {
+      setSshInfo({ ok: false, error: String(e) });
+    } finally {
+      setSshConnecting(false);
+    }
+  };
+
+  const handleSshDisconnect = () => {
+    setSshConnected(false);
+    setSshInfo(null);
+    setRemoteTools([]);
+  };
+
+  const handleRemoteDirSelect = async (dir: string, config: ProjectConfig | null) => {
+    setRemoteBrowseOpen(false);
+    if (config) {
+      // Save the remote project dir
+      if (sshConfig) {
+        const updated = { ...sshConfig, remoteProjectDir: dir };
+        setSshConfig(updated);
+        sshSaveConfig(updated).catch(() => {});
+      }
+      onOpenProject(dir, config);
+    } else {
+      // No .coverteda found — open wizard with remote dir
+      setWizardDir(dir);
+      setWizardOpen(true);
+    }
   };
 
   const card: React.CSSProperties = {
@@ -325,10 +417,18 @@ export default function StartScreen({
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span style={{ color: C.cyan, fontSize: 14 }}>&#128194;</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Open Existing Directory</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>
+                {sshConnected ? "Open Remote Directory" : "Open Existing Directory"}
+              </span>
+              {sshConnected && (
+                <Badge color={C.ok}>SSH</Badge>
+              )}
             </div>
             <div style={{ fontSize: 10, color: C.t3, lineHeight: 1.5 }}>
-              Open any FPGA project directory. Auto-detects vendor files and creates a <code style={{ color: C.t2 }}>.coverteda</code> project.
+              {sshConnected
+                ? "Browse the remote server to find or create an FPGA project."
+                : <>Open any FPGA project directory. Auto-detects vendor files and creates a <code style={{ color: C.t2 }}>.coverteda</code> project.</>
+              }
             </div>
           </div>
 
@@ -373,6 +473,172 @@ export default function StartScreen({
           >
             Exit
           </div>
+
+          {/* SSH Remote */}
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              SSH REMOTE
+            </div>
+            {!sshConnected ? (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  border: `1px solid ${C.b1}`,
+                  background: C.bg,
+                }}
+              >
+                {!sshExpanded ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12 }}>{"\uD83D\uDD12"}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: C.t2, flex: 1 }}>
+                      SSH Remote
+                    </span>
+                    <Btn small onClick={() => {
+                      if (sshHost && sshUser) {
+                        handleSshConnect();
+                      } else {
+                        setSshExpanded(true);
+                      }
+                    }}>
+                      Connect
+                    </Btn>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ flex: 2 }}>
+                        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 600, display: "block", marginBottom: 2 }}>HOST</span>
+                        <Input
+                          value={sshHost}
+                          onChange={setSshHost}
+                          placeholder="build-server.local"
+                          title="SSH hostname or IP"
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 600, display: "block", marginBottom: 2 }}>USER</span>
+                        <Input
+                          value={sshUser}
+                          onChange={setSshUser}
+                          placeholder="fpga"
+                          title="SSH username"
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 600, display: "block", marginBottom: 2 }}>KEY PATH (optional)</span>
+                      <Input
+                        value={sshKeyPath}
+                        onChange={setSshKeyPath}
+                        placeholder="~/.ssh/id_rsa"
+                        title="Path to SSH private key"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <Btn small onClick={() => setSshExpanded(false)}>Cancel</Btn>
+                      <Btn
+                        small
+                        primary
+                        onClick={handleSshConnect}
+                        disabled={sshConnecting || !sshHost || !sshUser}
+                      >
+                        {sshConnecting ? "Connecting..." : "Connect"}
+                      </Btn>
+                    </div>
+                    {sshInfo && !sshInfo.ok && (
+                      <div style={{ fontSize: 8, fontFamily: MONO, color: C.err, marginTop: 2 }}>
+                        {sshInfo.error}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  border: `1px solid ${C.ok}30`,
+                  background: `${C.ok}06`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: C.ok,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.t1, flex: 1 }}>
+                    {sshInfo?.hostname ?? sshHost}
+                  </span>
+                  <Badge color={C.ok}>CONNECTED</Badge>
+                  <Btn small onClick={handleSshDisconnect}>Disconnect</Btn>
+                </div>
+                {sshInfo?.os && (
+                  <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3, marginTop: 4, marginLeft: 15 }}>
+                    {sshInfo.os.length > 60 ? sshInfo.os.slice(0, 60) + "..." : sshInfo.os}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Remote Tools (when SSH connected) */}
+          {sshConnected && remoteTools.length > 0 && (
+            <div>
+              <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                REMOTE TOOLS ({sshInfo?.hostname ?? sshHost})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {remoteTools.map((t) => {
+                  const bm = backendMeta(t.backendId);
+                  return (
+                    <div
+                      key={t.backendId}
+                      title={t.available ? `${t.name} — ${t.path}` : `${t.name} — not found`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        background: t.available ? `${bm.color}08` : "transparent",
+                        border: `1px solid ${t.available ? `${bm.color}30` : C.b1}`,
+                      }}
+                    >
+                      <span style={{ color: bm.color, fontSize: 11 }}>{bm.icon}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
+                        {t.name}
+                      </span>
+                      {t.available && (
+                        <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                          {t.path}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontFamily: MONO,
+                          fontWeight: 700,
+                          color: t.available ? C.ok : C.t3,
+                        }}
+                      >
+                        {t.available ? "FOUND" : "NOT FOUND"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Detected Tools */}
           <div style={{ marginTop: 8 }}>
@@ -835,6 +1101,15 @@ export default function StartScreen({
           )}
         </div>
       </div>
+
+      {/* Remote directory browser modal */}
+      {remoteBrowseOpen && (
+        <RemoteDirBrowser
+          initialDir={sshConfig?.remoteProjectDir || `/home/${sshUser}`}
+          onSelect={handleRemoteDirSelect}
+          onClose={() => setRemoteBrowseOpen(false)}
+        />
+      )}
 
       {/* Wizard modal */}
       {wizardOpen && (

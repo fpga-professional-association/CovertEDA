@@ -310,6 +310,12 @@ export interface RemoteToolInfo {
   available: boolean;
 }
 
+export interface RemoteDirEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+}
+
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream" | "files";
 
 export interface ReportFileEntry {

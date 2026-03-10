@@ -117,6 +117,9 @@ pub fn run() {
             commands::ssh_get_password,
             commands::ssh_remote_file_tree,
             commands::ssh_read_remote_file,
+            commands::ssh_browse_directory,
+            commands::ssh_check_project,
+            commands::ssh_create_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

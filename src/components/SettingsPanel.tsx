@@ -107,6 +107,7 @@ const TOOL_FIELDS: { key: keyof AppConfig["tool_paths"]; label: string }[] = [
   { key: "diamond", label: "Lattice Diamond" },
   { key: "radiant", label: "Lattice Radiant" },
   { key: "quartus", label: "Intel Quartus" },
+  { key: "quartus_pro", label: "Intel Quartus Pro" },
   { key: "vivado", label: "AMD Vivado" },
   { key: "oss_cad_suite", label: "OSS CAD Suite" },
 ];

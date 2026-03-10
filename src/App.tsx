@@ -1657,6 +1657,12 @@ export default function App() {
                   deviceString={project?.device ?? ""}
                   projectDir={projectDir}
                   topModule={project?.topModule}
+                  onTopModuleChange={(name) => {
+                    if (!project || !projectDir) return;
+                    const updated = { ...project, topModule: name };
+                    setProject(updated);
+                    saveProject(projectDir, updated).catch(() => {});
+                  }}
                   onMakefileImport={(result) => {
                     if (project) {
                       const updated = { ...project };

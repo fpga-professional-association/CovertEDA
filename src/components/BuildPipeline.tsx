@@ -514,8 +514,10 @@ interface BuildPipelineProps {
   deviceString?: string;
   /** Project directory — used for Makefile import/export */
   projectDir?: string;
-  /** Top module name — used for Makefile export */
+  /** Top module name — used for Makefile export and build scripts */
   topModule?: string;
+  /** Callback when the user edits the top module name */
+  onTopModuleChange?: (name: string) => void;
   /** Callback when Makefile is imported with device/topModule/source changes */
   onMakefileImport?: (result: import("../hooks/useTauri").MakefileImportResult) => void;
 }
@@ -870,6 +872,7 @@ export default memo(function BuildPipeline({
   deviceString,
   projectDir,
   topModule,
+  onTopModuleChange,
   onMakefileImport,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
@@ -1107,6 +1110,38 @@ export default memo(function BuildPipeline({
             <Btn small onClick={handleExportMakefile} title="Export current build settings as a Makefile" style={{ fontSize: 7 }}>
               Export
             </Btn>
+          </div>
+        )}
+        {/* Top Module */}
+        {!building && (
+          <div style={{
+            display: "flex", gap: 6, marginBottom: 8, alignItems: "center",
+            padding: "6px 8px", borderRadius: 5, background: C.s2, border: `1px solid ${C.b1}`,
+          }}>
+            <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, fontWeight: 700, letterSpacing: 0.5, flexShrink: 0 }}>
+              TOP MODULE
+            </span>
+            <input
+              value={topModule ?? ""}
+              onChange={(e) => onTopModuleChange?.(e.target.value)}
+              placeholder="top_level"
+              title="Top-level module/entity name. Case-sensitive for VHDL."
+              style={{
+                flex: 1,
+                padding: "3px 6px",
+                background: C.bg,
+                border: `1px solid ${C.b1}`,
+                borderRadius: 3,
+                color: C.t1,
+                fontSize: 9,
+                fontFamily: MONO,
+                outline: "none",
+                minWidth: 80,
+              }}
+            />
+            <span style={{ fontSize: 7, fontFamily: MONO, color: C.t3, flexShrink: 0 }}>
+              case-sensitive for VHDL
+            </span>
           </div>
         )}
         {/* Changed from last commit */}

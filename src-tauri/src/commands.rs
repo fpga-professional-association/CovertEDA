@@ -4342,3 +4342,61 @@ pub async fn ssh_read_remote_file(
         .await
         .map_err(|e| e.to_string())?
 }
+
+#[tauri::command]
+pub async fn ssh_browse_directory(
+    state: State<'_, AppState>,
+    dir: String,
+) -> Result<Vec<crate::ssh::RemoteDirEntry>, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_list_directory(&cfg, &dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ssh_check_project(
+    state: State<'_, AppState>,
+    dir: String,
+) -> Result<Option<crate::project::ProjectConfig>, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_check_project_dir(&cfg, &dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ssh_create_project(
+    state: State<'_, AppState>,
+    dir: String,
+    name: String,
+    backend_id: String,
+    device: String,
+    top_module: String,
+    source_patterns: Option<Vec<String>>,
+    constraint_files: Option<Vec<String>>,
+) -> Result<crate::project::ProjectConfig, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    let mut project_config =
+        crate::project::ProjectConfig::new_with_defaults(&name, &backend_id, &device, &top_module);
+    if let Some(sp) = source_patterns {
+        project_config.source_patterns = sp;
+    }
+    if let Some(cf) = constraint_files {
+        project_config.constraint_files = cf;
+    }
+    let pc = project_config.clone();
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_create_project_file(&cfg, &dir, &pc))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(project_config)
+}

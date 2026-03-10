@@ -473,6 +473,105 @@ pub fn scp_download(cfg: &SshConfig, remote_path: &str, local_path: &str) -> Res
     }
 }
 
+// ── Directory Browsing ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDirEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+/// List immediate children of a remote directory.
+/// Returns directories first, sorted alphabetically. Filters `.` and `..`.
+pub fn ssh_list_directory(cfg: &SshConfig, dir: &str) -> Result<Vec<RemoteDirEntry>, String> {
+    // ls -1pa: one entry per line, append / to dirs, include hidden files
+    let output = ssh_exec(cfg, &format!("ls -1pa '{}'", dir))?;
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() || line == "./" || line == "../" {
+            continue;
+        }
+        let is_dir = line.ends_with('/');
+        let name = if is_dir {
+            line.trim_end_matches('/')
+        } else {
+            line
+        };
+        if name.is_empty() {
+            continue;
+        }
+        let entry_path = if dir.ends_with('/') {
+            format!("{}{}", dir, name)
+        } else {
+            format!("{}/{}", dir, name)
+        };
+        let entry = RemoteDirEntry {
+            name: name.to_string(),
+            path: entry_path,
+            is_dir,
+        };
+        if is_dir {
+            dirs.push(entry);
+        } else {
+            files.push(entry);
+        }
+    }
+    dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    dirs.append(&mut files);
+    Ok(dirs)
+}
+
+/// Check if a remote directory contains a `.coverteda` project file.
+/// Returns the parsed ProjectConfig if found, None otherwise.
+pub fn ssh_check_project_dir(
+    cfg: &SshConfig,
+    dir: &str,
+) -> Result<Option<crate::project::ProjectConfig>, String> {
+    let coverteda_path = if dir.ends_with('/') {
+        format!("{}.coverteda", dir)
+    } else {
+        format!("{}/.coverteda", dir)
+    };
+    // Check existence and read in one command
+    let cmd = format!(
+        "if [ -f '{}' ]; then cat '{}'; else echo '__NOT_FOUND__'; fi",
+        coverteda_path, coverteda_path
+    );
+    let output = ssh_exec(cfg, &cmd)?;
+    let trimmed = output.trim();
+    if trimmed == "__NOT_FOUND__" {
+        return Ok(None);
+    }
+    let config: crate::project::ProjectConfig =
+        serde_json::from_str(trimmed).map_err(|e| format!("Invalid .coverteda: {}", e))?;
+    Ok(Some(config))
+}
+
+/// Write a `.coverteda` project file to a remote directory.
+pub fn ssh_create_project_file(
+    cfg: &SshConfig,
+    dir: &str,
+    config: &crate::project::ProjectConfig,
+) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("JSON serialization error: {}", e))?;
+    let coverteda_path = if dir.ends_with('/') {
+        format!("{}.coverteda", dir)
+    } else {
+        format!("{}/.coverteda", dir)
+    };
+    // Use printf to avoid heredoc escaping issues
+    let escaped = json.replace('\\', "\\\\").replace('\'', "'\\''");
+    let cmd = format!("printf '%s' '{}' > '{}'", escaped, coverteda_path);
+    ssh_exec(cfg, &cmd)?;
+    Ok(())
+}
+
 // ── OS Keyring helpers for SSH password ──
 
 const KEYRING_SERVICE: &str = "coverteda_ssh";
@@ -643,5 +742,92 @@ mod tests {
         assert_eq!(parsed.user, "fpga");
         assert_eq!(parsed.port, 22);
         assert_eq!(parsed.tool, SshToolKind::OpenSsh);
+    }
+
+    #[test]
+    fn test_remote_dir_entry_serialization() {
+        let entry = RemoteDirEntry {
+            name: "src".into(),
+            path: "/home/fpga/src".into(),
+            is_dir: true,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"isDir\":true"));
+        assert!(json.contains("\"name\":\"src\""));
+        let parsed: RemoteDirEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, "src");
+        assert!(parsed.is_dir);
+    }
+
+    #[test]
+    fn test_parse_ls_output() {
+        // Simulate ls -1pa output parsing
+        let output = ".\n../\ndir1/\ndir2/\nfile1.v\nfile2.vhd\n.hidden_dir/\n.hidden_file\n";
+        let mut dirs = Vec::new();
+        let mut files = Vec::new();
+        let base = "/home/fpga/project";
+        for line in output.lines() {
+            let line = line.trim();
+            if line.is_empty() || line == "./" || line == "../" || line == "." {
+                continue;
+            }
+            let is_dir = line.ends_with('/');
+            let name = if is_dir { line.trim_end_matches('/') } else { line };
+            if name.is_empty() { continue; }
+            let entry = RemoteDirEntry {
+                name: name.to_string(),
+                path: format!("{}/{}", base, name),
+                is_dir,
+            };
+            if is_dir { dirs.push(entry); } else { files.push(entry); }
+        }
+        dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        dirs.append(&mut files);
+
+        assert_eq!(dirs.len(), 6);
+        // Directories first
+        assert!(dirs[0].is_dir);
+        assert_eq!(dirs[0].name, ".hidden_dir");
+        assert!(dirs[1].is_dir);
+        assert_eq!(dirs[1].name, "dir1");
+        assert!(dirs[2].is_dir);
+        assert_eq!(dirs[2].name, "dir2");
+        // Files after
+        assert!(!dirs[3].is_dir);
+        assert_eq!(dirs[3].name, ".hidden_file");
+        assert!(!dirs[4].is_dir);
+        assert_eq!(dirs[4].name, "file1.v");
+        assert!(!dirs[5].is_dir);
+        assert_eq!(dirs[5].name, "file2.vhd");
+    }
+
+    #[test]
+    fn test_parse_coverteda_json() {
+        let json = r#"{
+            "name": "counter",
+            "backendId": "radiant",
+            "device": "LIFCL-40",
+            "topModule": "top",
+            "sourcePatterns": ["*.v"],
+            "constraintFiles": ["*.pdc"],
+            "implDir": "impl1",
+            "backendConfig": {},
+            "buildStages": ["synth", "map", "par", "bitgen"],
+            "buildOptions": {},
+            "createdAt": "2025-01-01T00:00:00Z",
+            "updatedAt": "2025-01-01T00:00:00Z"
+        }"#;
+        let config: crate::project::ProjectConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.name, "counter");
+        assert_eq!(config.backend_id, "radiant");
+        assert_eq!(config.device, "LIFCL-40");
+        assert_eq!(config.top_module, "top");
+    }
+
+    #[test]
+    fn test_parse_coverteda_not_found() {
+        let output = "__NOT_FOUND__";
+        assert_eq!(output.trim(), "__NOT_FOUND__");
     }
 }
