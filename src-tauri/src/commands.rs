@@ -438,62 +438,92 @@ pub fn start_build(
 
     // Determine environment variables for vendor tools
     let mut env_vars: HashMap<String, String> = HashMap::new();
-    if backend_id == "diamond" {
-        let diamond = crate::backend::diamond::DiamondBackend::new();
-        if let Some(install_dir) = diamond.install_dir() {
-            // LSC_DIAMOND points to the version directory (e.g., C:\lscc\diamond\3.14)
-            env_vars.insert(
-                "LSC_DIAMOND".into(),
-                wsl_to_windows_path(install_dir),
-            );
-            // foundry = the cae_library parent. Diamond expects <parent>/cae_library/
-            // The cae_library is a sibling of the "diamond" directory:
-            //   C:\lscc\cae_library\   (sibling of C:\lscc\diamond\)
-            // OR inside the version dir:
-            //   C:\lscc\diamond\3.14\cae_library\
-            // Check both and set the correct foundry path.
-            let cae_in_version = install_dir.join("cae_library");
-            if cae_in_version.exists() {
-                // cae_library is inside the version dir
-                env_vars.insert("foundry".into(), wsl_to_windows_path(install_dir));
-            } else if let Some(diamond_parent) = install_dir.parent() {
-                // install_dir = .../diamond/3.14, parent = .../diamond
-                if let Some(lscc_root) = diamond_parent.parent() {
-                    // lscc_root = .../lscc — cae_library should be here
-                    let cae_at_root = lscc_root.join("cae_library");
-                    if cae_at_root.exists() {
-                        env_vars.insert("foundry".into(), wsl_to_windows_path(lscc_root));
-                    } else {
-                        // Best guess: use install parent
-                        env_vars.insert("foundry".into(), wsl_to_windows_path(diamond_parent));
+    if backend_id == "diamond" || backend_id == "radiant" {
+        // Both Diamond (pnmainc) and Radiant (radiantc) are Lattice tools that
+        // need the `foundry` env var pointing to the directory containing cae_library/.
+        // Find it by walking up from the actual binary location.
+        let (lattice_bin_path, lattice_install_dir) = if backend_id == "diamond" {
+            let d = crate::backend::diamond::DiamondBackend::new();
+            (d.pnmainc_path_public(), d.install_dir().map(|p| p.to_path_buf()))
+        } else {
+            let r = crate::backend::radiant::RadiantBackend::new();
+            (r.radiantc_path_public(), r.install_dir().map(|p| p.to_path_buf()))
+        };
+
+        if let Some(ref install_dir) = lattice_install_dir {
+            if backend_id == "diamond" {
+                env_vars.insert(
+                    "LSC_DIAMOND".into(),
+                    wsl_to_windows_path(install_dir),
+                );
+            } else {
+                env_vars.insert(
+                    "LSC_RADIANT".into(),
+                    wsl_to_windows_path(install_dir),
+                );
+            }
+        }
+
+        // Walk up from the binary to find the directory containing cae_library/
+        // e.g., pnmainc at .../lscc/diamond/3.14/bin/nt64/pnmainc.exe
+        // cae_library could be at any ancestor level
+        let mut foundry_set = false;
+        if let Some(ref bin_path) = lattice_bin_path {
+            let mut dir = bin_path.parent();
+            for _ in 0..6 {
+                match dir {
+                    Some(d) => {
+                        if d.join("cae_library").exists() {
+                            env_vars.insert("foundry".into(), wsl_to_windows_path(d));
+                            foundry_set = true;
+                            break;
+                        }
+                        dir = d.parent();
+                    }
+                    None => break,
+                }
+            }
+        }
+        // Fallback: also check from install_dir upward if binary walk didn't find it
+        if !foundry_set {
+            if let Some(ref install_dir) = lattice_install_dir {
+                let mut dir = Some(install_dir.as_path());
+                for _ in 0..4 {
+                    match dir {
+                        Some(d) => {
+                            if d.join("cae_library").exists() {
+                                env_vars.insert("foundry".into(), wsl_to_windows_path(d));
+                                foundry_set = true;
+                                break;
+                            }
+                            dir = d.parent();
+                        }
+                        None => break,
                     }
                 }
             }
-            // Add Diamond bin to PATH for DLL resolution
-            let bin_dir = if install_dir.starts_with("/mnt/") {
-                install_dir.join("bin").join("nt64")
-            } else if cfg!(target_os = "windows") {
-                install_dir.join("bin").join("nt64")
-            } else {
-                install_dir.join("bin").join("lin64")
-            };
-            let win_bin = wsl_to_windows_path(&bin_dir);
-            let existing_path = std::env::var("PATH").unwrap_or_default();
-            env_vars.insert("PATH".into(), format!("{};{}", win_bin, existing_path));
         }
-        if let Some(lic_path) = diamond.find_license() {
+        let _ = foundry_set; // may be unused if both search paths fail
+
+        // Add bin dir to PATH for DLL resolution
+        if let Some(ref bin_path) = lattice_bin_path {
+            if let Some(bin_dir) = bin_path.parent() {
+                let win_bin = wsl_to_windows_path(bin_dir);
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                env_vars.insert("PATH".into(), format!("{};{}", win_bin, existing_path));
+            }
+        }
+
+        // License file
+        let lic_path = if backend_id == "diamond" {
+            crate::backend::diamond::DiamondBackend::new().find_license()
+        } else {
+            crate::backend::radiant::RadiantBackend::new().find_license()
+        };
+        if let Some(lic) = lic_path {
             env_vars.insert(
                 "LM_LICENSE_FILE".into(),
-                wsl_to_windows_path(&lic_path),
-            );
-        }
-    } else if backend_id == "radiant" {
-        let radiant = crate::backend::radiant::RadiantBackend::new();
-        if let Some(lic_path) = radiant.find_license() {
-            // Convert WSL path to Windows path for the Windows-native radiantc.exe
-            env_vars.insert(
-                "LM_LICENSE_FILE".into(),
-                wsl_to_windows_path(&lic_path),
+                wsl_to_windows_path(&lic),
             );
         }
     } else if backend_id == "quartus" || backend_id == "quartus_pro" {
