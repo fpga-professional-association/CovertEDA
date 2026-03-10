@@ -160,9 +160,57 @@ impl DiamondBackend {
         }
     }
 
+    /// Public accessor for the pnmainc executable path.
+    pub fn pnmainc_path_public(&self) -> Option<PathBuf> {
+        self.tool_path()
+    }
+
     /// Public accessor for the install directory.
     pub fn install_dir(&self) -> Option<&Path> {
         self.install_dir.as_deref()
+    }
+
+    /// Find the Diamond license file.
+    pub fn find_license(&self) -> Option<PathBuf> {
+        // Check LM_LICENSE_FILE env var
+        if let Ok(lic) = std::env::var("LM_LICENSE_FILE") {
+            let p = PathBuf::from(&lic);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        // Check common locations relative to install parent
+        if let Some(install) = &self.install_dir {
+            if let Some(parent) = install.parent() {
+                // e.g., C:\lscc\license.dat or /opt/lscc/license.dat
+                let lic = parent.join("license.dat");
+                if lic.exists() {
+                    return Some(lic);
+                }
+                // Also check parent of parent (e.g., /mnt/c/lscc/ when install is /mnt/c/lscc/diamond/3.14)
+                if let Some(gp) = parent.parent() {
+                    let lic = gp.join("license.dat");
+                    if lic.exists() {
+                        return Some(lic);
+                    }
+                }
+            }
+        }
+        // Check home dir
+        if let Some(home) = std::env::var_os("HOME") {
+            let lic = PathBuf::from(home).join("license.dat");
+            if lic.exists() {
+                return Some(lic);
+            }
+        }
+        // Windows user profile
+        if let Some(profile) = std::env::var_os("USERPROFILE") {
+            let lic = PathBuf::from(profile).join("license.dat");
+            if lic.exists() {
+                return Some(lic);
+            }
+        }
+        None
     }
 
     /// Search for .ldf project files in the given directory and one level of subdirectories.
@@ -200,6 +248,67 @@ impl DiamondBackend {
         // Move exact match to front if present
         if let Some(pos) = results.iter().position(|p| p == &exact) {
             results.swap(0, pos);
+        }
+        results
+    }
+
+    /// Recursively scan for HDL source files (.v, .sv, .vhd, .vhdl) under a directory.
+    fn scan_sources(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.') || name == "impl1" || name == "build" || name == "synthesis" {
+                        continue;
+                    }
+                    results.extend(Self::scan_sources(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    match ext {
+                        "v" | "sv" | "vhd" | "vhdl" => {
+                            let stem = path.file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_lowercase();
+                            if stem.ends_with("_tb")
+                                || stem.ends_with("_test")
+                                || stem.ends_with("_testbench")
+                                || stem.starts_with("tb_")
+                                || stem.starts_with("test_")
+                                || stem == "testbench"
+                            {
+                                continue;
+                            }
+                            results.push(path);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        results
+    }
+
+    /// Scan for constraint files (.lpf, .sdc) under a directory.
+    fn scan_constraints(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.') || name == "impl1" || name == "build" {
+                        continue;
+                    }
+                    results.extend(Self::scan_constraints(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    match ext {
+                        "lpf" | "sdc" => results.push(path),
+                        _ => {}
+                    }
+                }
+            }
         }
         results
     }
@@ -321,41 +430,109 @@ impl FpgaBackend for DiamondBackend {
         project_dir: &Path,
         device: &str,
         top_module: &str,
-        _stages: &[String],
+        stages: &[String],
         options: &HashMap<String, String>,
     ) -> BackendResult<String> {
+        // Determine which stages to run (empty = all)
+        let run_stage = |id: &str| -> bool {
+            stages.is_empty() || stages.iter().any(|s| s == id)
+        };
+
+        let mut script = format!(
+            "# CovertEDA \u{2014} Diamond Build Script\n# Device: {device}\n# Top: {top_module}\n\n",
+        );
+
         // Resolve the .ldf project file:
         // 1. Explicit path from options (user-selected via UI)
         // 2. Auto-discover in project dir and subdirectories
-        // 3. Fall back to convention: {project_dir}/{top_module}.ldf
-        let ldf = if let Some(pf) = options.get("project_file") {
+        let resolved_ldf = if let Some(pf) = options.get("project_file") {
             let p = PathBuf::from(pf);
-            if p.is_absolute() {
-                p
-            } else {
-                project_dir.join(p)
-            }
+            let full = if p.is_absolute() { p } else { project_dir.join(p) };
+            if full.exists() { Some(full) } else { None }
         } else {
             let discovered = Self::find_project_files(project_dir, top_module);
             discovered.into_iter().next()
-                .unwrap_or_else(|| project_dir.join(format!("{}.ldf", top_module)))
         };
-        let ldf_tcl = super::to_tcl_path(&ldf);
-        Ok(format!(
-            r#"# CovertEDA — Diamond Build Script
-# Device: {device}
-# Top: {top_module}
 
-prj_project open "{ldf_tcl}"
-prj_run Synthesis -impl impl1 -forceOne
-prj_run Translate -impl impl1
-prj_run Map -impl impl1
-prj_run PAR -impl impl1
-prj_run Export -task Bitgen
-prj_run Export -task TimingSimFileVer
-prj_project close
-"#,
-        ))
+        if let Some(ldf) = resolved_ldf {
+            let ldf_tcl = super::to_tcl_path(&ldf);
+            script.push_str(&format!("prj_project open \"{}\"\n", ldf_tcl));
+        } else {
+            // No .ldf found — create project from scratch, scan for sources
+            // Determine device family for Diamond
+            let family = if device.starts_with("LCMXO3") {
+                "MachXO3LF"
+            } else if device.starts_with("LCMXO2") {
+                "MachXO2"
+            } else if device.starts_with("LFE5U") || device.starts_with("LFE5UM") {
+                "ECP5U"
+            } else if device.starts_with("LFE3") {
+                "ECP3"
+            } else {
+                "MachXO3LF"
+            };
+
+            script.push_str(&format!(
+                "prj_project new -name \"{}\" -impl \"impl1\" -dev {} -synthesis \"synplify\"\n",
+                top_module, device
+            ));
+
+            // Add source files
+            let sources = Self::scan_sources(project_dir);
+            if sources.is_empty() {
+                return Err(BackendError::ConfigError(format!(
+                    "No HDL source files (.v, .sv, .vhd) found in {}",
+                    project_dir.display()
+                )));
+            }
+            for src in &sources {
+                let src_tcl = super::to_tcl_path(src);
+                let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let lang = match ext {
+                    "vhd" | "vhdl" => "VHDL",
+                    "sv" => "SystemVerilog",
+                    _ => "Verilog",
+                };
+                script.push_str(&format!("prj_src add -format {} \"{}\"\n", lang, src_tcl));
+            }
+
+            // Add constraint files
+            let constraints = Self::scan_constraints(project_dir);
+            for constr in &constraints {
+                let constr_tcl = super::to_tcl_path(constr);
+                script.push_str(&format!("prj_src add \"{}\"\n", constr_tcl));
+            }
+
+            // Set top module and implementation
+            script.push_str(&format!(
+                "prj_impl option top \"{}\"\n", top_module
+            ));
+
+            let _ = family; // family is implicit in the device string
+        }
+
+        // Run build stages conditionally
+        if run_stage("synth") {
+            script.push_str("prj_run Synthesis -impl impl1 -forceOne\n");
+        }
+        if run_stage("translate") {
+            script.push_str("prj_run Translate -impl impl1\n");
+        }
+        if run_stage("map") {
+            script.push_str("prj_run Map -impl impl1\n");
+        }
+        if run_stage("par") {
+            script.push_str("prj_run PAR -impl impl1\n");
+        }
+        if run_stage("bitgen") {
+            script.push_str("prj_run Export -task Bitgen\n");
+        }
+        if run_stage("timing") {
+            script.push_str("prj_run Export -task TimingSimFileVer\n");
+        }
+
+        script.push_str("prj_project close\n");
+        Ok(script)
     }
 
     fn list_package_pins(&self, device: &str) -> BackendResult<Vec<super::PackagePin>> {
@@ -461,10 +638,24 @@ mod tests {
         assert_eq!(b.constraint_ext(), ".lpf");
     }
 
+    /// Create a temp dir with an .ldf file (for tests that need an existing project).
+    fn make_ldf_dir() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.ldf"), "<BaliProject></BaliProject>").unwrap();
+        tmp
+    }
+
+    /// Create a temp dir with source files but no .ldf (for create-from-scratch tests).
+    fn make_source_dir() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule").unwrap();
+        tmp
+    }
+
     #[test]
     fn test_diamond_build_script_contains_prj_run() {
-        let b = DiamondBackend::new();
-        let tmp = tempfile::tempdir().unwrap();
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
         ).unwrap();
@@ -476,19 +667,37 @@ mod tests {
 
     #[test]
     fn test_diamond_build_script_no_backslashes_in_paths() {
-        // Regression test for the TCL backslash escape bug:
-        // C:\Engr_CodeRepo\meg_hpm_fpga\top.ldf was interpreted by TCL as
-        // C:Engr_CodeRepomeg_hpm_fpga<TAB>op.ldf because \t is a tab escape.
-        let b = DiamondBackend::new();
-        let tmp = tempfile::tempdir().unwrap();
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
         ).unwrap();
-        // The prj_project open line must use forward slashes
         let open_line = script.lines().find(|l| l.contains("prj_project open")).unwrap();
         assert!(!open_line.contains('\\'),
             "TCL script must not contain backslashes in paths (causes escape issues): {}",
             open_line);
+    }
+
+    #[test]
+    fn test_diamond_build_script_creates_project_from_sources() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = make_source_dir();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_project new"), "Should create new project when no .ldf found");
+        assert!(script.contains("prj_src add"), "Should add scanned source files");
+        assert!(script.contains("top.v"), "Should include the Verilog source");
+    }
+
+    #[test]
+    fn test_diamond_build_script_no_sources_errors() {
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "top", &[], &std::collections::HashMap::new(),
+        );
+        assert!(result.is_err(), "Should error when no .ldf and no source files found");
     }
 
     #[test]
@@ -517,8 +726,12 @@ mod tests {
 
     #[test]
     fn test_build_script_uses_project_file_option() {
-        let b = DiamondBackend::new();
+        let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
         let tmp = tempfile::tempdir().unwrap();
+        // Create the project file so the "open existing" path is taken
+        let proj_dir = tmp.path().join("proj");
+        std::fs::create_dir(&proj_dir).unwrap();
+        std::fs::write(proj_dir.join("design.ldf"), "").unwrap();
         let mut opts = std::collections::HashMap::new();
         opts.insert("project_file".to_string(), "proj/design.ldf".to_string());
         let script = b.generate_build_script(
@@ -718,31 +931,26 @@ LOCATE COMP "rst_n" SITE "C3";
         }
     }
 
-    // ── Build script: stages parameter is ignored (Diamond always runs all) ──
+    // ── Build script respects stages parameter ──
 
     #[test]
-    fn test_build_script_ignores_stages_parameter() {
-        // Diamond's generate_build_script ignores the stages parameter and always
-        // runs all stages. This test verifies that behavior.
+    fn test_build_script_respects_stages_parameter() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let stages = vec!["synth".to_string()]; // request only synthesis
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &stages, &HashMap::new(),
         ).unwrap();
-        // Even though only "synth" was requested, Diamond runs everything
         assert!(script.contains("prj_run Synthesis"), "should contain Synthesis");
-        assert!(script.contains("prj_run Translate"), "should contain Translate");
-        assert!(script.contains("prj_run Map"), "should contain Map");
-        assert!(script.contains("prj_run PAR"), "should contain PAR");
-        assert!(script.contains("prj_run Export -task Bitgen"), "should contain Bitgen");
-        assert!(script.contains("prj_run Export -task TimingSimFileVer"), "should contain Timing");
+        assert!(!script.contains("prj_run Translate"), "should NOT contain Translate");
+        assert!(!script.contains("prj_run Map"), "should NOT contain Map");
+        assert!(!script.contains("prj_run PAR"), "should NOT contain PAR");
     }
 
     #[test]
     fn test_build_script_all_stages_with_empty_stages_slice() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
         ).unwrap();
@@ -756,7 +964,7 @@ LOCATE COMP "rst_n" SITE "C3";
     #[test]
     fn test_build_script_contains_device_in_header() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let device = "LCMXO3LF-6900C-5BG256C";
         let script = b.generate_build_script(
             tmp.path(), device, "top", &[], &HashMap::new(),
@@ -768,7 +976,7 @@ LOCATE COMP "rst_n" SITE "C3";
     #[test]
     fn test_build_script_contains_top_module_in_header() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "my_top_module", &[], &HashMap::new(),
         ).unwrap();
@@ -781,7 +989,7 @@ LOCATE COMP "rst_n" SITE "C3";
     #[test]
     fn test_build_script_contains_ldf_path() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
         ).unwrap();
@@ -795,6 +1003,7 @@ LOCATE COMP "rst_n" SITE "C3";
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
         let tmp = tempfile::tempdir().unwrap();
         let abs_path = tmp.path().join("my_project.ldf");
+        std::fs::write(&abs_path, "").unwrap(); // Create the file so it's found
         let mut opts = HashMap::new();
         opts.insert("project_file".to_string(), abs_path.display().to_string());
         let script = b.generate_build_script(
@@ -808,13 +1017,12 @@ LOCATE COMP "rst_n" SITE "C3";
     #[test]
     fn test_build_script_opens_and_closes_project() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = make_ldf_dir();
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &HashMap::new(),
         ).unwrap();
         assert!(script.contains("prj_project open"), "should open project");
         assert!(script.contains("prj_project close"), "should close project");
-        // open should come before close
         let open_pos = script.find("prj_project open").unwrap();
         let close_pos = script.find("prj_project close").unwrap();
         assert!(open_pos < close_pos, "open should come before close");
@@ -826,12 +1034,14 @@ LOCATE COMP "rst_n" SITE "C3";
     fn test_build_script_forward_slashes_with_project_file() {
         let b = DiamondBackend { version: "test".into(), install_dir: None, deferred: false };
         let tmp = tempfile::tempdir().unwrap();
+        let proj_dir = tmp.path().join("subdir");
+        std::fs::create_dir(&proj_dir).unwrap();
+        std::fs::write(proj_dir.join("my_project.ldf"), "").unwrap();
         let mut opts = HashMap::new();
         opts.insert("project_file".to_string(), "subdir/my_project.ldf".to_string());
         let script = b.generate_build_script(
             tmp.path(), "LCMXO3LF-6900C", "top", &[], &opts,
         ).unwrap();
-        // All lines containing paths should use forward slashes only
         for line in script.lines() {
             if line.contains("prj_project open") {
                 assert!(!line.contains('\\'),

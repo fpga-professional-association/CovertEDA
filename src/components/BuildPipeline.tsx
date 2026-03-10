@@ -65,6 +65,49 @@ const RADIANT_STAGE_OPTIONS: Record<string, StageOption[]> = {
   ],
 };
 
+const DIAMOND_STAGE_OPTIONS: Record<string, StageOption[]> = {
+  synth: [
+    { key: "syn_frequency", label: "Frequency (MHz)", type: "text", tier: "primary" },
+    { key: "syn_optimization", label: "Optimization Goal", type: "select", choices: ["Timing", "Balanced", "Area"], tier: "primary" },
+    { key: "syn_fsm_encoding", label: "FSM Encoding", type: "select", choices: ["Auto", "One-Hot", "Binary", "Gray", "Sequential"], tier: "advanced" },
+    { key: "syn_resource_sharing", label: "Resource Sharing", type: "boolean", tier: "advanced" },
+    { key: "syn_max_fanout", label: "Max Fanout", type: "text", tier: "advanced" },
+    { key: "syn_retiming", label: "Retiming", type: "boolean", tier: "advanced" },
+    { key: "syn_keep_hierarchy", label: "Keep Hierarchy", type: "select", choices: ["Auto", "Yes", "No"], tier: "advanced" },
+    { key: "syn_vhdl_std", label: "VHDL Standard", type: "select", choices: ["VHDL-93", "VHDL-2008"], tier: "advanced" },
+  ],
+  translate: [
+    { key: "trl_ngd_drc", label: "Run NGD DRC", type: "boolean", tier: "primary" },
+  ],
+  map: [
+    { key: "map_effort", label: "Map Effort", type: "select", choices: ["Standard", "High"], tier: "primary" },
+    { key: "map_io_insertion", label: "I/O Insertion", type: "boolean", tier: "primary" },
+    { key: "map_pack_logic", label: "Pack Logic", type: "boolean", tier: "advanced" },
+    { key: "map_area_opt", label: "Optimize for Area", type: "boolean", tier: "advanced" },
+    { key: "map_logic_opt", label: "Logic Optimization", type: "boolean", tier: "advanced" },
+    { key: "map_infer_gsr", label: "Infer GSR", type: "select", choices: ["Auto", "Yes", "No"], tier: "advanced" },
+  ],
+  par: [
+    { key: "par_effort", label: "PAR Effort", type: "select", choices: ["Standard", "High"], tier: "primary" },
+    { key: "par_path_based", label: "Path-Based Routing", type: "select", choices: ["OFF", "ON"], tier: "primary" },
+    { key: "par_timing_driven", label: "Timing-Driven", type: "boolean", tier: "primary" },
+    { key: "par_seed", label: "Placement Seed", type: "text", tier: "advanced" },
+    { key: "par_iterations", label: "Max Iterations", type: "text", tier: "advanced" },
+    { key: "par_multipass", label: "Multi-Pass", type: "boolean", tier: "advanced" },
+    { key: "par_exp_routing", label: "Explore Best Routing", type: "boolean", tier: "advanced" },
+  ],
+  bitgen: [
+    { key: "bit_compress", label: "Compress Bitstream", type: "boolean", tier: "primary" },
+    { key: "bit_spi_mode", label: "SPI Mode", type: "select", choices: ["Disabled", "1x", "2x", "4x"], tier: "primary" },
+    { key: "bit_jtag", label: "JTAG Config", type: "boolean", tier: "advanced" },
+    { key: "bit_security", label: "Security Bit", type: "boolean", tier: "advanced" },
+    { key: "bit_readback", label: "Readback", type: "boolean", tier: "advanced" },
+  ],
+  timing: [
+    { key: "tim_num_paths", label: "Report N Paths", type: "text", tier: "primary" },
+  ],
+};
+
 const QUARTUS_STAGE_OPTIONS: Record<string, StageOption[]> = {
   synth: [
     { key: "syn_optimization_mode", label: "Optimization Mode", type: "select", choices: ["Balanced", "High Performance", "High Power Effort", "Aggressive Area", "Aggressive Performance"], tier: "primary" },
@@ -649,8 +692,9 @@ function PStep({
 
   const STAGE_OPTIONS_MAP: Record<string, Record<string, StageOption[]>> = {
     radiant: RADIANT_STAGE_OPTIONS,
-    diamond: RADIANT_STAGE_OPTIONS,
+    diamond: DIAMOND_STAGE_OPTIONS,
     quartus: QUARTUS_STAGE_OPTIONS,
+    quartus_pro: QUARTUS_STAGE_OPTIONS,
     vivado: VIVADO_STAGE_OPTIONS,
     oss: ossOptions,
     opensource: ossOptions,

@@ -438,7 +438,56 @@ pub fn start_build(
 
     // Determine environment variables for vendor tools
     let mut env_vars: HashMap<String, String> = HashMap::new();
-    if backend_id == "radiant" {
+    if backend_id == "diamond" {
+        let diamond = crate::backend::diamond::DiamondBackend::new();
+        if let Some(install_dir) = diamond.install_dir() {
+            // LSC_DIAMOND points to the version directory (e.g., C:\lscc\diamond\3.14)
+            env_vars.insert(
+                "LSC_DIAMOND".into(),
+                wsl_to_windows_path(install_dir),
+            );
+            // foundry = the cae_library parent. Diamond expects <parent>/cae_library/
+            // The cae_library is a sibling of the "diamond" directory:
+            //   C:\lscc\cae_library\   (sibling of C:\lscc\diamond\)
+            // OR inside the version dir:
+            //   C:\lscc\diamond\3.14\cae_library\
+            // Check both and set the correct foundry path.
+            let cae_in_version = install_dir.join("cae_library");
+            if cae_in_version.exists() {
+                // cae_library is inside the version dir
+                env_vars.insert("foundry".into(), wsl_to_windows_path(install_dir));
+            } else if let Some(diamond_parent) = install_dir.parent() {
+                // install_dir = .../diamond/3.14, parent = .../diamond
+                if let Some(lscc_root) = diamond_parent.parent() {
+                    // lscc_root = .../lscc — cae_library should be here
+                    let cae_at_root = lscc_root.join("cae_library");
+                    if cae_at_root.exists() {
+                        env_vars.insert("foundry".into(), wsl_to_windows_path(lscc_root));
+                    } else {
+                        // Best guess: use install parent
+                        env_vars.insert("foundry".into(), wsl_to_windows_path(diamond_parent));
+                    }
+                }
+            }
+            // Add Diamond bin to PATH for DLL resolution
+            let bin_dir = if install_dir.starts_with("/mnt/") {
+                install_dir.join("bin").join("nt64")
+            } else if cfg!(target_os = "windows") {
+                install_dir.join("bin").join("nt64")
+            } else {
+                install_dir.join("bin").join("lin64")
+            };
+            let win_bin = wsl_to_windows_path(&bin_dir);
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            env_vars.insert("PATH".into(), format!("{};{}", win_bin, existing_path));
+        }
+        if let Some(lic_path) = diamond.find_license() {
+            env_vars.insert(
+                "LM_LICENSE_FILE".into(),
+                wsl_to_windows_path(&lic_path),
+            );
+        }
+    } else if backend_id == "radiant" {
         let radiant = crate::backend::radiant::RadiantBackend::new();
         if let Some(lic_path) = radiant.find_license() {
             // Convert WSL path to Windows path for the Windows-native radiantc.exe
@@ -447,7 +496,7 @@ pub fn start_build(
                 wsl_to_windows_path(&lic_path),
             );
         }
-    } else if backend_id == "quartus" {
+    } else if backend_id == "quartus" || backend_id == "quartus_pro" {
         let quartus = crate::backend::quartus::QuartusBackend::new();
         // QUARTUS_ROOTDIR is critical — without it, the DDM (Device Data Manager)
         // crashes on startup with "Cannot identify the client"
@@ -479,27 +528,34 @@ pub fn start_build(
         }
     }
 
-    // For Quartus on WSL, use a batch file wrapper to ensure environment
+    // For Windows vendor tools on WSL, use a batch file wrapper to ensure environment
     // variables reach the Windows process. Command.env() doesn't work reliably
-    // for WSL→Windows process interop — the DDM crashes without QUARTUS_ROOTDIR.
-    let bat_wrapper_path: Option<String> = if backend_id == "quartus" && executable.contains(".exe") {
+    // for WSL→Windows process interop.
+    let needs_bat_wrapper = executable.contains(".exe") &&
+        matches!(backend_id.as_str(), "diamond" | "radiant" | "quartus" | "quartus_pro");
+    let bat_wrapper_path: Option<String> = if needs_bat_wrapper {
         let bat_path = project_path.join(".coverteda_build.bat");
         let win_exe = wsl_to_windows_path(&PathBuf::from(&executable));
         let mut bat = String::from("@echo off\r\n");
         for (key, val) in &env_vars {
             if key == "PATH" {
                 // For PATH, extract only Windows-style paths and prepend to %PATH%
-                let quartus_paths: Vec<&str> = val.split(';')
+                let win_paths: Vec<&str> = val.split(';')
                     .filter(|p| !p.starts_with('/')) // Skip WSL paths
                     .collect();
-                if !quartus_paths.is_empty() {
-                    bat.push_str(&format!("set \"PATH={};%PATH%\"\r\n", quartus_paths.join(";")));
+                if !win_paths.is_empty() {
+                    bat.push_str(&format!("set \"PATH={};%PATH%\"\r\n", win_paths.join(";")));
                 }
             } else {
                 bat.push_str(&format!("set \"{}={}\"\r\n", key, val));
             }
         }
-        bat.push_str(&format!("\"{}\" -t \"{}\"\r\n", win_exe, &script_arg));
+        // Backend-specific CLI flags
+        let cli_flags = match backend_id.as_str() {
+            "quartus" | "quartus_pro" => " -t",
+            _ => "", // Diamond/Radiant: pnmainc/radiantc take bare script arg
+        };
+        bat.push_str(&format!("\"{}\"{} \"{}\"\r\n", win_exe, cli_flags, &script_arg));
         std::fs::write(&bat_path, &bat)
             .map_err(|e| format!("Failed to write batch wrapper: {}", e))?;
         Some(wsl_to_windows_path(&bat_path))
@@ -2106,6 +2162,13 @@ fn parse_license_date(s: &str) -> Option<chrono::NaiveDate> {
 /// Checks the backend's detected installation path first, then falls back to PATH.
 fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
     match backend_id {
+        "diamond" => {
+            let diamond = crate::backend::diamond::DiamondBackend::new();
+            if let Some(path) = diamond.pnmainc_path_public() {
+                return path.display().to_string();
+            }
+            cli_tool.to_string()
+        }
         "radiant" => {
             let radiant = crate::backend::radiant::RadiantBackend::new();
             if let Some(path) = radiant.radiantc_path_public() {
@@ -2113,8 +2176,12 @@ fn resolve_cli_executable(cli_tool: &str, backend_id: &str) -> String {
             }
             cli_tool.to_string()
         }
-        "quartus" => {
-            let quartus = crate::backend::quartus::QuartusBackend::new();
+        "quartus" | "quartus_pro" => {
+            let quartus = if backend_id == "quartus_pro" {
+                crate::backend::quartus::QuartusBackend::new_pro()
+            } else {
+                crate::backend::quartus::QuartusBackend::new()
+            };
             if let Some(path) = quartus.quartus_sh_path_public() {
                 return path.display().to_string();
             }
