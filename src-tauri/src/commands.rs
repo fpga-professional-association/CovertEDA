@@ -2491,25 +2491,28 @@ mod tests {
 pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String, String> {
     let project_path = PathBuf::from(&project_dir);
 
-    // Search in vendor output dirs and OSS build/ directory
+    // Search in vendor output dirs, OSS build/ directory, and project root
+    // (Quartus may place reports directly in the project directory)
     let search_dirs: Vec<PathBuf> = vec![
-        project_path.join("impl1"),
         project_path.join("output_files"),
+        project_path.join("impl1"),
         project_path.join("build"),
+        project_path.join("output"),
+        project_path.clone(),
     ];
 
     // Map report type to file extensions/patterns
     // Includes vendor-specific patterns and OSS log file names
     let patterns: Vec<&str> = match report_type.as_str() {
-        "synth" => vec!["srr", "srp", "syn.rpt", "synth.log"],
+        "synth" => vec!["srr", "srp", "syn.rpt", "map.rpt", "synth.log"],
         "map" => vec!["mrp", "map.rpt", "fit.rpt", "synth.log"],
         "par" => vec!["par", "fit.rpt", "pnr.log"],
-        "bitstream" => vec!["bgn", "bitstream.log"],
+        "bitstream" => vec!["bgn", "asm.rpt", "bitstream.log"],
         "timing" => vec!["twr", "sta.rpt"],
         "fit" => vec!["fit.rpt", "par"],
         "sta" => vec!["sta.rpt", "twr"],
         "asm" => vec!["asm.rpt", "bgn"],
-        "flow" => vec!["flow.rpt"],
+        "flow" => vec!["flow.rpt", "flow_summary.rpt"],
         _ => return Err(format!("Unknown report type: {}", report_type)),
     };
 

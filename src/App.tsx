@@ -763,6 +763,8 @@ export default function App() {
         setStageResults((prev) => ({ ...prev, [data.stage_idx]: result }));
         if (result === "success") {
           setBStep(data.stage_idx + 1);
+          // Reload reports after each successful stage so tabs update incrementally
+          loadReportsFromDisk(projectDir, B.name);
         }
         setActiveStage(data.stage_idx);
       }
@@ -1692,6 +1694,7 @@ export default function App() {
                   projectDir={projectDir}
                   building={building}
                   onSendToAi={(content) => { setPendingAiMessage(content); navClick("ai"); }}
+                  backendId={bid}
                 />
               </div>
             )}

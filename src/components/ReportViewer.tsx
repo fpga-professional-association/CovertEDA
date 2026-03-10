@@ -169,6 +169,27 @@ interface ReportViewerProps {
   projectDir: string;
   building?: boolean;
   onSendToAi?: (content: string) => void;
+  backendId?: string;
+}
+
+/** Map backend IDs to their vendor-specific output directory names */
+function vendorOutputDir(backendId?: string): string {
+  switch (backendId) {
+    case "quartus":
+    case "quartus_pro":
+      return "output_files/";
+    case "vivado":
+      return "*.runs/";
+    case "opensource":
+      return "build/";
+    case "ace":
+      return "output/";
+    case "diamond":
+    case "radiant":
+      return "impl1/";
+    default:
+      return "output/";
+  }
 }
 
 function NoData({ label }: { label: string }) {
@@ -324,7 +345,7 @@ function RawLogDrawer({ projectDir, reportType }: { projectDir: string; reportTy
 }
 
 /** Stage log panel with filter buttons, counts, AI send, and fullscreen */
-function StageLogPanel({ projectDir, reportType, onSendToAi }: { projectDir: string; reportType: string; onSendToAi?: (content: string) => void }) {
+function StageLogPanel({ projectDir, reportType, onSendToAi, backendId }: { projectDir: string; reportType: string; onSendToAi?: (content: string) => void; backendId?: string }) {
   const { C, MONO } = useTheme();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -383,7 +404,7 @@ function StageLogPanel({ projectDir, reportType, onSendToAi }: { projectDir: str
           {stageNames[reportType] ?? reportType}
         </span>
         <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
-          Raw vendor output from impl1/
+          Raw vendor output from {vendorOutputDir(backendId)}
         </span>
         <div style={{ flex: 1 }} />
         {content && (
@@ -824,6 +845,7 @@ export default function ReportViewer({
   projectDir,
   building,
   onSendToAi,
+  backendId,
 }: ReportViewerProps) {
   const { C, MONO } = useTheme();
   const REPORTS = reports;
@@ -1519,7 +1541,7 @@ export default function ReportViewer({
 
         {/* ════════════════ STAGE LOG TABS ════════════════ */}
         {(rptTab === "synth" || rptTab === "map" || rptTab === "par" || rptTab === "bitstream") && (
-          <StageLogPanel projectDir={projectDir} reportType={rptTab} onSendToAi={onSendToAi} />
+          <StageLogPanel projectDir={projectDir} reportType={rptTab} onSendToAi={onSendToAi} backendId={backendId} />
         )}
 
         {/* ════════════════ REPORT FILES ════════════════ */}

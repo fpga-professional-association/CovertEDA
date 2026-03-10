@@ -188,13 +188,23 @@ impl QuartusBackend {
         }
 
         // 3. Fallback: find quartus_sh on PATH (cross-platform)
+        // Only match if the resolved path matches the requested edition:
+        // Pro installs live under directories containing "pro" (e.g. intelFPGA_pro, altera_pro)
         if let Ok(bin_path) = which::which("quartus_sh") {
             // quartus_sh is at <install>/quartus/bin64/quartus_sh — go up 3 levels
             if let Some(install) = bin_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                let ver = install.file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "unknown".to_string());
-                return (ver, Some(install.to_path_buf()));
+                let path_lower = install.to_string_lossy().to_lowercase();
+                let is_pro_path = path_lower.contains("_pro") || path_lower.contains("pro/");
+                let edition_matches = match edition {
+                    QuartusEdition::Pro => is_pro_path,
+                    QuartusEdition::Standard => !is_pro_path,
+                };
+                if edition_matches {
+                    let ver = install.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    return (ver, Some(install.to_path_buf()));
+                }
             }
         }
 
@@ -425,6 +435,77 @@ impl QuartusBackend {
         }
         results
     }
+
+    /// Recursively scan for HDL source files (.v, .sv, .vhd, .vhdl) under a directory.
+    fn scan_sources(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.')
+                        || name == "output_files"
+                        || name == "db"
+                        || name == "incremental_db"
+                        || name == "qdb"
+                        || name == "dni"
+                    {
+                        continue;
+                    }
+                    results.extend(Self::scan_sources(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    match ext {
+                        "v" | "sv" | "svh" | "vhd" | "vhdl" => {
+                            // Skip testbench files
+                            let stem = path.file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_lowercase();
+                            if stem.ends_with("_tb")
+                                || stem.ends_with("_test")
+                                || stem.ends_with("_testbench")
+                                || stem.starts_with("tb_")
+                                || stem.starts_with("test_")
+                                || stem == "testbench"
+                            {
+                                continue;
+                            }
+                            results.push(path);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        results
+    }
+
+    /// Recursively scan for constraint files (.sdc) under a directory.
+    fn scan_constraints(dir: &Path) -> Vec<PathBuf> {
+        let mut results = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if name.starts_with('.')
+                        || name == "output_files"
+                        || name == "db"
+                        || name == "incremental_db"
+                    {
+                        continue;
+                    }
+                    results.extend(Self::scan_constraints(&path));
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if ext == "sdc" {
+                        results.push(path);
+                    }
+                }
+            }
+        }
+        results
+    }
 }
 
 impl FpgaBackend for QuartusBackend {
@@ -549,33 +630,50 @@ set_global_assignment -name TOP_LEVEL_ENTITY {top_module}
 "#,
         );
 
-        // Add source files
-        script.push_str(&format!(
-            r#"
-# Auto-add source files
-foreach f [glob -nocomplain {project_path_tcl}/*.v {project_path_tcl}/*.sv {project_path_tcl}/*.vhd {project_path_tcl}/source/*.v {project_path_tcl}/source/*.sv] {{
-    set_global_assignment -name VERILOG_FILE $f
-}}
+        // Add source files — scan recursively with correct file type assignments
+        let sources = Self::scan_sources(project_dir);
+        if !sources.is_empty() {
+            script.push_str("\n# Source files\n");
+            for src in &sources {
+                let src_tcl = super::to_tcl_path(src);
+                let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let assignment = match ext {
+                    "vhd" | "vhdl" => "VHDL_FILE",
+                    "sv" | "svh" => "SYSTEMVERILOG_FILE",
+                    _ => "VERILOG_FILE",
+                };
+                script.push_str(&format!(
+                    "set_global_assignment -name {} \"{}\"\n", assignment, src_tcl
+                ));
+            }
+        }
 
-# Add constraint files (or generate default clock constraints if none found)
-set sdc_files [glob -nocomplain {project_path_tcl}/*.sdc]
-if {{[llength $sdc_files] > 0}} {{
-    foreach f $sdc_files {{
-        set_global_assignment -name SDC_FILE $f
-    }}
-}} else {{
-    set default_sdc "{project_path_tcl}/.coverteda_default.sdc"
-    set fh [open $default_sdc w]
-    puts $fh {{# Auto-generated by CovertEDA - default clock constraints}}
-    puts $fh {{# Replace with a proper .sdc file for accurate timing analysis}}
-    puts $fh {{derive_clocks -period "10.000"}}
-    puts $fh {{derive_pll_clocks}}
-    close $fh
-    set_global_assignment -name SDC_FILE $default_sdc
-    puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constraints"
-}}
+        // Add constraint files (or generate default clock constraints if none found)
+        let sdc_files = Self::scan_constraints(project_dir);
+        if !sdc_files.is_empty() {
+            script.push_str("\n# Constraint files\n");
+            for sdc in &sdc_files {
+                let sdc_tcl = super::to_tcl_path(sdc);
+                script.push_str(&format!(
+                    "set_global_assignment -name SDC_FILE \"{}\"\n", sdc_tcl
+                ));
+            }
+        } else {
+            script.push_str(&format!(
+                r#"
+# No .sdc files found - using auto-derived clock constraints
+set default_sdc "{project_path_tcl}/.coverteda_default.sdc"
+set fh [open $default_sdc w]
+puts $fh {{# Auto-generated by CovertEDA - default clock constraints}}
+puts $fh {{# Replace with a proper .sdc file for accurate timing analysis}}
+puts $fh {{derive_clocks -period "10.000"}}
+puts $fh {{derive_pll_clocks}}
+close $fh
+set_global_assignment -name SDC_FILE $default_sdc
+puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constraints"
 "#,
-        ));
+            ));
+        }
 
         // Apply options
         if let Some(effort) = options.get("fit_effort") {
