@@ -298,7 +298,7 @@ export default function StartScreen({
         <span style={{ fontSize: 18, fontWeight: 700, color: C.t1, fontFamily: SANS }}>
           CovertEDA
         </span>
-        <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.1.0</span>
+        <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.2.3</span>
         <div style={{ flex: 1 }} />
         <span
           onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")}
