@@ -62,7 +62,7 @@ pub fn scan_directory(project_dir: &Path) -> Result<Vec<FileEntry>, std::io::Err
     Ok(entries)
 }
 
-fn classify_file(name: &str, _path: &Path) -> FileType {
+pub fn classify_file(name: &str, _path: &Path) -> FileType {
     let lower = name.to_lowercase();
     if lower.ends_with(".v") || lower.ends_with(".sv") || lower.ends_with(".vhd") || lower.ends_with(".vhdl") {
         if lower.starts_with("tb_") || lower.contains("_tb.") || lower.contains("testbench") {

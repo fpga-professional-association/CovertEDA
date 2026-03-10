@@ -4,7 +4,7 @@ import { useTheme } from "./context/ThemeContext";
 import { Btn, NavBtn } from "./components/shared";
 import {
   Chip, Zap, Doc, Box, Brain, Link, MapIcon, Pin, Term, Key, Settings,
-  Play, Stop, Search, Clock, Download, Git,
+  Play, Stop, Search, Clock, Download, Git, Server,
 } from "./components/Icons";
 import GitStatusBar from "./components/GitStatusBar";
 import FileTree from "./components/FileTree";
@@ -28,6 +28,7 @@ const Documentation = lazy(() => import("./components/Documentation"));
 const KeyboardShortcuts = lazy(() => import("./components/KeyboardShortcuts"));
 const IpCatalogSection = lazy(() => import("./components/IpCatalogSection"));
 const GitPanel = lazy(() => import("./components/GitPanel"));
+const SshPanel = lazy(() => import("./components/SshPanel"));
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -1195,6 +1196,7 @@ export default function App() {
     { label: "License Status", category: "View", desc: "FlexLM license info", action: () => navClick("license") },
     { label: "AI Assistant", category: "View", desc: "FPGA design help", action: () => navClick("ai") },
     { label: "Git", category: "View", desc: "Branches, tags, commit log, push/pull", action: () => navClick("git") },
+    { label: "SSH Build Server", category: "View", desc: "Configure remote build server", action: () => navClick("ssh") },
     // Zoom
     { label: "Zoom In", category: "Zoom", desc: `Current: ${Math.round(scaleFactor * 100)}%`, action: () => {
       const next = Math.min(3.0, scaleFactor + 0.1);
@@ -1391,6 +1393,7 @@ export default function App() {
             <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
             <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
             <NavBtn icon={<Git />} label="Git" active={sec === "git"} onClick={() => navClick("git")} accent={C.ok} tooltip="Git — branches, tags, commit log, push/pull" badge={gitState?.behind ? true : undefined} />
+            <NavBtn icon={<Server />} label="SSH" active={sec === "ssh"} onClick={() => navClick("ssh")} accent={C.cyan} tooltip="SSH Build Server — run builds on remote machines" />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
@@ -1906,6 +1909,20 @@ export default function App() {
                     setLogs((p) => [...p, { t, m: msg }]);
                   }}
                 />
+              </div>
+            )}
+
+            {/* SSH Build Server */}
+            {visitedSecs.has("ssh") && (
+              <div style={{ display: sec === "ssh" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <Suspense fallback={null}>
+                  <SshPanel
+                    onLog={(msg, type) => {
+                      const t = type === "ok" ? "ok" : type === "err" ? "err" : type === "warn" ? "warn" : "info";
+                      setLogs((p) => [...p, { t, m: msg }]);
+                    }}
+                  />
+                </Suspense>
               </div>
             )}
 

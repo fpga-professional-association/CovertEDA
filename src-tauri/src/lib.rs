@@ -8,6 +8,7 @@ pub mod parser;
 pub mod process;
 pub mod programmer;
 pub mod project;
+pub mod ssh;
 pub mod types;
 
 use tauri::Manager;
@@ -108,6 +109,14 @@ pub fn run() {
             commands::verify_device_part,
             commands::scan_project_files,
             commands::open_url,
+            commands::ssh_test_connection,
+            commands::ssh_save_config,
+            commands::ssh_load_config,
+            commands::ssh_detect_tools,
+            commands::ssh_set_password,
+            commands::ssh_get_password,
+            commands::ssh_remote_file_tree,
+            commands::ssh_read_remote_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

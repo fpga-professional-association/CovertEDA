@@ -1298,3 +1298,60 @@ export async function getSystemStats(): Promise<SystemStats | null> {
     diskWritePct: r.disk_write_pct,
   };
 }
+
+// ── SSH Remote Build ──
+
+import type { SshConfig, SshConnectionInfo, RemoteToolInfo } from "../types";
+
+export async function sshTestConnection(
+  host: string,
+  port: number,
+  user: string,
+  tool: string,
+  keyPath?: string,
+  customSsh?: string,
+  customScp?: string,
+): Promise<SshConnectionInfo> {
+  if (!isTauri) return { ok: false, error: "Not running in Tauri" };
+  return invoke<SshConnectionInfo>("ssh_test_connection", {
+    host, port, user, tool,
+    keyPath: keyPath ?? null,
+    customSsh: customSsh ?? null,
+    customScp: customScp ?? null,
+  });
+}
+
+export async function sshSaveConfig(config: SshConfig): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("ssh_save_config", { config });
+}
+
+export async function sshLoadConfig(): Promise<SshConfig | null> {
+  if (!isTauri) return null;
+  return invoke<SshConfig | null>("ssh_load_config");
+}
+
+export async function sshDetectTools(): Promise<RemoteToolInfo[]> {
+  if (!isTauri) return [];
+  return invoke<RemoteToolInfo[]>("ssh_detect_tools");
+}
+
+export async function sshSetPassword(password: string): Promise<void> {
+  if (!isTauri) return;
+  return invoke<void>("ssh_set_password", { password });
+}
+
+export async function sshGetPassword(): Promise<string | null> {
+  if (!isTauri) return null;
+  return invoke<string | null>("ssh_get_password");
+}
+
+export async function sshRemoteFileTree(): Promise<unknown[]> {
+  if (!isTauri) return [];
+  return invoke<unknown[]>("ssh_remote_file_tree");
+}
+
+export async function sshReadRemoteFile(path: string): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("ssh_read_remote_file", { path });
+}

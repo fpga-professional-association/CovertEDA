@@ -275,7 +275,40 @@ export type Section =
   | "history"
   | "programmer"
   | "docs"
-  | "git";
+  | "git"
+  | "ssh";
+
+// ── SSH Remote Build Types ──
+export type SshToolKind = "openssh" | "plink" | "custom";
+export type SshAuthMethod = "key" | "agent" | "password";
+
+export interface SshConfig {
+  enabled: boolean;
+  tool: SshToolKind;
+  customSshPath?: string;
+  customScpPath?: string;
+  host: string;
+  port: number;
+  user: string;
+  auth: SshAuthMethod;
+  keyPath?: string;
+  remoteProjectDir: string;
+  remoteToolPaths: Record<string, string>;
+}
+
+export interface SshConnectionInfo {
+  ok: boolean;
+  hostname?: string;
+  os?: string;
+  error?: string;
+}
+
+export interface RemoteToolInfo {
+  backendId: string;
+  name: string;
+  path: string;
+  available: boolean;
+}
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream" | "files";
 

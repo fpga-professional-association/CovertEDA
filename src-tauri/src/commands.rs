@@ -11,6 +11,7 @@ pub struct AppState {
     pub registry: Mutex<BackendRegistry>,
     pub active_build: Mutex<Option<BuildHandle>>,
     pub current_project: Mutex<Option<(PathBuf, ProjectConfig)>>,
+    pub ssh_config: Mutex<Option<crate::ssh::SshConfig>>,
 }
 
 /// Handle for a running build process — stored so we can cancel it.
@@ -24,10 +25,13 @@ impl Default for AppState {
     fn default() -> Self {
         // Use deferred registry — zero filesystem I/O at startup.
         // Backends are detected lazily when detect_tools is first called.
+        // Load SSH config from AppConfig if available.
+        let ssh = crate::config::AppConfig::load().ssh;
         Self {
             registry: Mutex::new(BackendRegistry::new_deferred()),
             active_build: Mutex::new(None),
             current_project: Mutex::new(None),
+            ssh_config: Mutex::new(ssh),
         }
     }
 }
@@ -4214,4 +4218,127 @@ pub fn scan_project_files(
                 .unwrap_or_else(|_| p.display().to_string())
         })
         .collect())
+}
+
+// ── SSH Remote Build Commands ──
+
+#[tauri::command]
+pub async fn ssh_test_connection(
+    host: String,
+    port: u16,
+    user: String,
+    tool: String,
+    key_path: Option<String>,
+    custom_ssh: Option<String>,
+    custom_scp: Option<String>,
+) -> Result<crate::ssh::SshConnectionInfo, String> {
+    let tool_kind = match tool.as_str() {
+        "plink" => crate::ssh::SshToolKind::Plink,
+        "custom" => crate::ssh::SshToolKind::Custom,
+        _ => crate::ssh::SshToolKind::OpenSsh,
+    };
+    let auth = if key_path.is_some() {
+        crate::ssh::SshAuthMethod::Key
+    } else {
+        crate::ssh::SshAuthMethod::Agent
+    };
+    let cfg = crate::ssh::SshConfig {
+        enabled: true,
+        tool: tool_kind,
+        custom_ssh_path: custom_ssh,
+        custom_scp_path: custom_scp,
+        host,
+        port,
+        user,
+        auth,
+        key_path,
+        remote_project_dir: String::new(),
+        remote_tool_paths: std::collections::HashMap::new(),
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::test_connection(&cfg))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn ssh_save_config(
+    state: State<'_, AppState>,
+    config: crate::ssh::SshConfig,
+) -> Result<(), String> {
+    // Save to AppConfig TOML
+    let mut app_config = crate::config::AppConfig::load();
+    app_config.ssh = Some(config.clone());
+    app_config.save().map_err(|e| e.to_string())?;
+
+    // Update in-memory state
+    let mut guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+    *guard = Some(config);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_load_config(
+    state: State<'_, AppState>,
+) -> Result<Option<crate::ssh::SshConfig>, String> {
+    let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+    Ok(guard.clone())
+}
+
+#[tauri::command]
+pub async fn ssh_detect_tools(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::ssh::RemoteToolInfo>, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::detect_remote_tools(&cfg))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn ssh_set_password(
+    state: State<'_, AppState>,
+    password: String,
+) -> Result<(), String> {
+    let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+    let cfg = guard.as_ref().ok_or("No SSH config")?;
+    crate::ssh::save_ssh_password(&cfg.user, &cfg.host, &password)
+}
+
+#[tauri::command]
+pub fn ssh_get_password(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+    let cfg = guard.as_ref().ok_or("No SSH config")?;
+    Ok(crate::ssh::load_ssh_password(&cfg.user, &cfg.host))
+}
+
+#[tauri::command]
+pub async fn ssh_remote_file_tree(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::types::FileEntry>, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_remote_file_tree(&cfg))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ssh_read_remote_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<String, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_read_file(&cfg, &path))
+        .await
+        .map_err(|e| e.to_string())?
 }

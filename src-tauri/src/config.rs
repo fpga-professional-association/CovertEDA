@@ -35,6 +35,9 @@ pub struct AppConfig {
     /// User-preferred external editor path (e.g. "/usr/bin/code", "notepad++.exe")
     #[serde(default)]
     pub preferred_editor: Option<String>,
+    /// SSH remote build server configuration
+    #[serde(default)]
+    pub ssh: Option<crate::ssh::SshConfig>,
 }
 
 fn default_scale() -> f64 {
@@ -86,6 +89,7 @@ impl Default for AppConfig {
             ai_base_url: None,
             selected_versions: HashMap::new(),
             preferred_editor: None,
+            ssh: None,
         }
     }
 }
