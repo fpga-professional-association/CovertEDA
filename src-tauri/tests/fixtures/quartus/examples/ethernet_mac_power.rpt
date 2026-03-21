@@ -1,0 +1,67 @@
+PowerPlay Power Analyzer Report
+Quartus II 15.1 Build 185 SJ
+Fri Mar 21 16:16:45 2026
+
+Design Name: eth_top
+Device: 5CGXFC7C7F23C8
+Device Grade: C (Industrial)
+Board Thermal Model: NONE (CONSERVATIVE)
+
+
+; Total Power Summary
+; ===================
+Total Power                            312.45 mW
+    Core Dynamic Power                 198.34 mW  (63.5%)
+    Core Static Power                  67.89 mW   (21.7%)
+    I/O Dynamic Power                  35.67 mW   (11.4%)
+    I/O Static Power                   10.55 mW   (3.4%)
+
+
+; Thermal Summary
+; ===============
+TJ (Junction Temperature)              71.5°C
+
+
+; Voltage Rail Summary
+; ====================
+VCC (0.9V)                             198.34 mW
+VCC_IO (3.3V)                          46.22 mW
+GND                                    312.45 mW
+
+
+; Power by Logic Block Type
+; ==========================
+Logic Block Type          Dynamic Power   Static Power   Total Power
+Combinatorial Logic       56.23 mW        19.45 mW       75.68 mW
+Sequential Logic          98.12 mW        31.23 mW       129.35 mW
+Block RAM                 23.45 mW        8.67 mW        32.12 mW
+DSP Blocks                0.00 mW         0.00 mW        0.00 mW
+
+
+; Power by Entity
+; ===============
+Entity Name               Type          Dynamic Power   Static Power   Total
+eth_top                   User Logic    167.89 mW       54.23 mW       222.12 mW
+MAC TX                    Module        45.67 mW        12.34 mW       58.01 mW
+MAC RX                    Module        42.34 mW        11.23 mW       53.57 mW
+I/O Block                 GPIO          35.67 mW        10.55 mW       46.22 mW
+
+
+; Per-Pin Power Breakdown
+; =======================
+Pin Name          Direction   I/O Standard     Usage    Dynamic Power
+clk_125m          Input       3.3V LVCMOS      Clock    2.34 mW
+rst_n             Input       3.3V LVCMOS      Signal   0.45 mW
+mii_txd[0-3]      Output      3.3V LVCMOS      Signal   8.34 mW
+mii_tx_en         Output      3.3V LVCMOS      Signal   2.13 mW
+mii_rxd[0-3]      Input       3.3V LVCMOS      Signal   4.56 mW
+mii_rx_dv         Input       3.3V LVCMOS      Signal   1.23 mW
+tx_data[0-7]      Input       3.3V LVCMOS      Signal   6.78 mW
+rx_data[0-7]      Output      3.3V LVCMOS      Signal   7.34 mW
+
+
+; Design Assumptions
+; ==================
+Assume Junction Temperature (TJ): 25°C
+Assume Ambient Temperature (TA): 25°C
+Total Device Power Dissipation: 312.45 mW

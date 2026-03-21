@@ -1,0 +1,141 @@
+
+================================================================================
+*                           TIMING SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: mem_top
+* Device: xc7a200tfbg676-2
+* Speed Grade: -2
+* Compiled on: Wed Jan 15 17:08:21 2025
+*
+================================================================================
+
+1. Design Timing Summary
+================================================================================
+
+   WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints      WPWS(ns)      TPWS(ns)
+----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- ----------------------- ----------- -----------
+    0.234      0.000                 0                    45678        0.123        0.000                 0                    45678        1.856        0.000
+
+All user specified timing constraints are met. (Tight timing)
+
+================================================================================
+2. Timing Details (High-Speed 200 MHz)
+================================================================================
+
+Static Timing Analysis on clock domains: sys_clk_200
+
+Worst slack in design: 0.234 ns (TIGHT)
+
+Timing constraint: freq_MHz = 200.0 (PERIOD = 5.000 ns)
+
+Path: traffic_gen/addr_cnt_reg[25]/C to traffic_gen/addr_cnt_reg[26]/D
+  SLICE_X145Y98.CLK                   0.000        0.000  r
+  SLICE_X145Y98/O6                    Comb         0.089        0.089  r
+  SLICE_X146Y98/C2                    Net          0.234        0.323  r
+  SLICE_X146Y98/LUT6                  Comb         0.064        0.387  r
+  SLICE_X146Y98/CMUX                  Comb         0.076        0.463  r
+  SLICE_X147Y99/C1                    Net          0.145        0.608  r
+  SLICE_X147Y99/CARRY8                Comb         0.039        0.647  r
+  SLICE_X148Y99/D2                    Net          0.189        0.836  r
+  SLICE_X148Y99/FDRE/D                Net          0.098        0.934  r
+  clock uncertainty                              -0.342        0.592
+  clock arrival                                  5.000         5.000
+  data required time                                        5.000
+  data arrival time                                        0.934
+  slack                                                    4.066 ns
+
+Setup Slack Details (Worst 5):
+
+Slack: 0.234 ns (PASS - Tight)
+  Source: traffic_gen/addr_cnt_reg[26]/C
+  Destination: pattern_checker/expected_data[31]/D
+  Data Path Delay: 4.612 ns
+
+Slack: 0.156 ns (PASS - Tight)
+  Source: mem_top/state_reg[0]/C
+  Destination: traffic_gen/addr_cnt_reg[0]/D
+  Data Path Delay: 4.690 ns
+
+Slack: 0.089 ns (PASS - Tight)
+  Source: pattern_checker/error_count[15]/C
+  Destination: pattern_checker/error_count[16]/D
+  Data Path Delay: 4.757 ns
+
+Slack: 0.045 ns (PASS - Tight)
+  Source: traffic_gen/word_cnt[8]/C
+  Destination: traffic_gen/word_cnt[9]/D
+  Data Path Delay: 4.801 ns
+
+Slack: 0.023 ns (PASS - Very Tight)
+  Source: mem_top/ddr3_ck_p_reg/C
+  Destination: ddr3_ck_p
+  Data Path Delay: 4.823 ns
+
+================================================================================
+3. Hold Timing
+================================================================================
+
+Worst Slack: 0.123 ns
+
+Slack: 0.123 ns (PASS)
+  Source: traffic_gen/addr_cnt_reg[8]/C
+  Destination: traffic_gen/addr_cnt_reg[9]/D
+
+Slack: 0.098 ns (PASS)
+  Source: mem_top/clk_200_in
+  Destination: mem_top/ddr3_ck_p
+
+Slack: 0.067 ns (PASS)
+  Source: pattern_checker/error_count[10]/C
+  Destination: pattern_checker/error_count[11]/D
+
+================================================================================
+4. DDR3 Interface Timing
+================================================================================
+
+DDR3 Critical Paths (200 MHz):
+
+Slack: 0.156 ns (PASS - Critical)
+  Path: ddr3_ck_p_reg/C to ddr3_addr[0]
+  Data Path Delay: 4.690 ns
+  Clock Uncertainty: 0.342 ns
+  Slack: 0.156 ns
+
+Slack: 0.123 ns (PASS - Critical)
+  Path: ddr3_ck_p_reg/C to ddr3_dq[31]
+  Data Path Delay: 4.723 ns
+
+Slack: 0.089 ns (PASS - Critical)
+  Path: traffic_gen/word_cnt[3]/C to ddr3_ba[0]
+  Data Path Delay: 4.757 ns
+
+================================================================================
+5. Clock to Output
+================================================================================
+
+Slack: 0.512 ns (PASS)
+  Source: mem_top/test_busy_reg/C
+  Destination: test_busy/O
+  Data Path Delay: 4.344 ns
+
+Slack: 0.467 ns (PASS)
+  Source: mem_top/test_passed_reg/C
+  Destination: test_passed/O
+  Data Path Delay: 4.389 ns
+
+Slack: 0.423 ns (PASS)
+  Source: mem_top/test_failed_reg/C
+  Destination: test_failed/O
+  Data Path Delay: 4.433 ns
+
+================================================================================
+6. Pulse Width
+================================================================================
+
+Slack: 1.856 ns (PASS)
+  Source: sys_clk_200 (rising edge at 0.000 ns)
+  Pulse Width: 2.500 ns
+  Low Pulse Width Slack: 1.856 ns
+
+End of Timing Report

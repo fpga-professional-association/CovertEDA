@@ -1,0 +1,82 @@
+Fitter Report for ddc_top
+Quartus II 11.0 Build 147 SJ
+Fri Mar 21 16:41:12 2026
+
+; Fitter Resource Usage Summary
+; ==============================
+
+; Design Summary
+; ==============
+DEVICE                                    EP2AGX125EF29C5 Arria II GX
+
+; Resource Usage by Entity
+; =========================
+Entity Name              ALMs         Registers   Memory Bits
+root_module              5678         4321        0
+ddc_top                  3456         2789        0
+nco_inst                 456          234         0
+cic_filter               1267         1045        0
+fir_decimate             499          253         0
+
+
+; Total ALM Usage
+; ===============
+Total ALMs                             5678 (out of 57600) (9.9%)
+    - Logic only                       3456
+    - Combinatorial                   2222
+    - Sequential                      3456
+
+
+; Total Memory Usage
+; ==================
+Total Block Memory                     0 bits (out of 6,912 M bits)
+    M9K RAM/ROM Blocks                 0 (out of 768)
+    M144K RAM/ROM Blocks               0 (out of 12)
+
+
+; Total DSP Blocks
+; ================
+Total DSP Blocks                       32 (out of 384)
+    Fixed Point 18x18                 32
+
+
+; Total GPIOs
+; ===========
+Total I/O Pins                         105 (out of 316)
+    Input Pins                         48
+    Output Pins                        57
+    Bidir Pins                         0
+
+
+; Pin Usage
+; =========
+Dedicated Clock Pins                   1
+Dedicated Input Pins                   1
+Regular I/O Pins                       105
+
+
+; Dedicated Routing Resources
+; =============================
+Global Clock Networks                  2
+Dedicated Clocking Buffers Used        3
+
+
+; Logic Element Depth Distribution
+; ==================================
+Depth 1 : 234
+Depth 2 : 567
+Depth 3 : 1123
+Depth 4 : 1678
+Depth 5+: 2076
+
+
+; Fit Time Statistics
+; ====================
+Placement Time                 0.789 seconds
+Routing Time                   1.456 seconds
+Total Fitting Time             2.245 seconds
+
+
+; Design Connectivity Status
+; ===========================
+Quartus II Connected to EDA Tool: N/A

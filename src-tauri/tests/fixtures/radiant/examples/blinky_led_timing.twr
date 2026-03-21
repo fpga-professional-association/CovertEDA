@@ -1,0 +1,148 @@
+================================================================================
+                        Lattice Radiant Timing Report
+                            blinky_led Project
+================================================================================
+
+Design       : blinky_top
+Device       : LIFCL-40-7BG400I
+Speed Grade  : 7
+Date         : 2026-03-21 14:32:15
+Report Style : Detailed
+
+================================================================================
+                         PERFORMANCE SUMMARY
+================================================================================
+
+Device: LIFCL-40 (7BG400I)
+Constraint: create_clock -name clk_sys -period 40.0 [get_ports clk]
+
+Timing Summary:
+  Fmax            : 312.5 MHz (at 1.1V, 25C, Slow Process)
+  Period          : 3.2 ns
+  Requested       : 40.0 ns (25 MHz)
+  WNS (Worst Negative Slack) : +4.32 ns (Met)
+  TNS (Total Negative Slack)  : 0.0 ns
+
+Setup Time Budget:
+  Clock Period    : 40.0 ns
+  Data Path Delay : 32.17 ns
+  Clock Skew      : 2.51 ns
+  Setup Time      : 1.00 ns
+  Total Slack     : 4.32 ns ✓ PASS
+
+Hold Time Budget:
+  Clock Skew      : -1.23 ns
+  Hold Time       : 0.75 ns
+  Data Path Delay : 31.86 ns
+  Total Slack     : 3.88 ns ✓ PASS
+
+================================================================================
+                      CLOCK DOMAIN SUMMARY
+================================================================================
+
+Clock Domain: clk_sys
+  Clock Source: clk
+  Derived from: Primary I/O
+  Frequency: 25.0 MHz
+  Period: 40.0 ns
+  Uncertainty: 0.5 ns (setup), 0.3 ns (hold)
+
+  Logic Paths: 1
+  Sequential Paths: 3
+  Total Paths Analyzed: 4
+
+================================================================================
+                    CRITICAL PATH ANALYSIS
+================================================================================
+
+Path 1: SETUP (Worst)
+  From: counter[23] / Q
+  To: counter[23] / D
+  Slack: 4.32 ns
+  Delay: 35.68 ns
+  Logic Levels: 2
+
+  Timing nodes:
+    counter[23]/Q          (FF output) : 0.00 ns
+    mux_g[0]               (LUT4)      : 1.23 ns
+    add_n.g[0]             (LUT4)      : 2.04 ns
+    counter[23]/D          (FF input)  : 0.41 ns
+
+  Clock arrival time: 40.00 ns
+  Clock-to-Q delay:   0.95 ns
+  Setup time:         1.00 ns
+
+Path 2: SETUP
+  From: led_shift[2] / Q
+  To: led_shift[2] / D
+  Slack: 5.12 ns
+  Delay: 34.88 ns
+  Logic Levels: 1
+
+  Path 3: SETUP
+  From: counter_done
+  To: led_shift[3] / D
+  Slack: 6.44 ns
+  Delay: 33.56 ns
+  Logic Levels: 2
+
+Path 4: HOLD
+  From: counter[15] / Q
+  To: counter[14] / D
+  Slack: 3.88 ns
+  Delay: 4.63 ns (negative skew)
+  Logic Levels: 1
+
+================================================================================
+                      TIMING CONSTRAINTS SUMMARY
+================================================================================
+
+Primary Clock: clk_sys
+  Period: 40.0 ns (Requested)
+  Period: 3.2 ns (Achievable - Fmax: 312.5 MHz)
+  Total margin available: 36.8 ns
+
+Asynchronous Reset: rst_n
+  Reset Assertion: 2.1 ns (max)
+  Reset Release: 3.4 ns (max)
+
+Input Delays:
+  rst_n      : Max 3.5 ns, Min 1.5 ns ✓ Met
+
+Output Delays:
+  led[3:0]   : Max 5.0 ns, Min 2.0 ns ✓ Met
+
+================================================================================
+                      TIMING STATISTICS
+================================================================================
+
+Total Nets:              48
+Total Cells:             51
+Total Sequential Cells:  28 (FFs)
+Total Combinational:     23 (LUTs)
+
+Clock Paths:
+  Critical paths (0 violations): 0
+  Near critical (>90% period):   0
+  Slack margin (4-5 ns):         2
+  Slack margin (5+ ns):          2
+
+Worst Setup Slack:   +4.32 ns (Path: counter[23] <- counter[23])
+Worst Hold Slack:    +3.88 ns (Path: counter[15] <- counter[14])
+
+Data Path Type    | Count | Worst Delay | Worst Slack | Status
+------------------|-------|-------------|-------------|--------
+Combinational     | 3     | 2.14 ns     | N/A         | ✓ OK
+Sequential setup  | 4     | 35.68 ns    | +4.32 ns    | ✓ OK
+Sequential hold   | 4     | 4.63 ns     | +3.88 ns    | ✓ OK
+
+================================================================================
+                      SIGNAL INTEGRITY ANALYSIS
+================================================================================
+
+Cross-talk Violations: 0
+Maximum Cross-talk Delay Increase: 0.04 ns (0.1% of period)
+
+================================================================================
+End of Timing Report
+================================================================================

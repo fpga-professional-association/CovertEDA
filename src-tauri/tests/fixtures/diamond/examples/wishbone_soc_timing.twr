@@ -1,0 +1,172 @@
+
+                    Lattice Timing Report (TWR)
+                   Design: wishbone_soc
+                   Device: LFE5U-85F-6BG554I
+                   Generated: 2026-03-21 14:56:18 UTC
+                   Timing Grade: 6 (Speed Grade 6)
+
+=================================================================================
+                        TIMING CONSTRAINTS SUMMARY
+=================================================================================
+
+  Requested      Actual       Slack
+  Period         Period       (MET)
+  ------         ------       -----
+  20.000 ns      8.002 ns     11.998 ns  [clk_50m]
+
+
+=================================================================================
+                        CLOCK DOMAIN ANALYSIS
+=================================================================================
+
+Clock Domain: clk_50m (frequency: 50.0 MHz; period: 20.000 ns)
+  Rising edges at: 0.000 ns, 20.000 ns, 40.000 ns ...
+  Falling edges at: 10.000 ns, 30.000 ns, 50.000 ns ...
+  Source: P4 (IOB_IBUF)
+
+Number of paths: 5,632
+    Critical paths: 0
+    Non-critical paths: 5,632
+
+
+=================================================================================
+                        CRITICAL PATHS
+=================================================================================
+
+ No critical paths found. All timing constraints met with good margin.
+
+
+=================================================================================
+                        SETUP ANALYSIS (Setup Slack)
+=================================================================================
+
+Path Group: Wishbone Bus (Master to SRAM)
+  Paths: 1,456
+  Minimum slack: 8.234 ns (PASSED)
+  Maximum slack: 18.456 ns (PASSED)
+
+Path Group: GPIO Logic (Input to Output)
+  Paths: 234
+  Minimum slack: 10.123 ns (PASSED)
+  Maximum slack: 16.789 ns (PASSED)
+
+Path Group: Timer Counter
+  Paths: 512
+  Minimum slack: 9.567 ns (PASSED)
+  Maximum slack: 19.234 ns (PASSED)
+
+Path Group: Interrupt Logic
+  Paths: 384
+  Minimum slack: 11.234 ns (PASSED)
+  Maximum slack: 18.900 ns (PASSED)
+
+Path Group: Address Decoding
+  Paths: 1,024
+  Minimum slack: 12.456 ns (PASSED)
+  Maximum slack: 19.876 ns (PASSED)
+
+Path Group: Data Multiplexing
+  Paths: 912
+  Minimum slack: 13.234 ns (PASSED)
+  Maximum slack: 20.123 ns (PASSED)
+
+
+=================================================================================
+                        HOLD ANALYSIS (Hold Slack)
+=================================================================================
+
+All paths have positive hold slack.
+  Minimum hold slack: 1.876 ns
+
+
+=================================================================================
+                        MAXIMUM FREQUENCY ESTIMATE
+=================================================================================
+
+  Fmax (estimated): 125.0 MHz
+  Margin: 2.5x over required frequency
+
+
+=================================================================================
+                        TIMING ANALYSIS BY CONSTRAINT
+=================================================================================
+
+Constraint: FREQUENCY PORT "clk_50m" 50.0 MHz
+  Status: PASSED
+  Computed frequency: 125.0 MHz
+  Slack: 75.0 MHz (2.5x margin)
+
+Constraint: WB_SETUP 10.0 ns
+  Status: PASSED
+  Actual setup time: 8.002 ns
+  Slack: 1.998 ns
+
+Constraint: WB_HOLD 2.0 ns
+  Status: PASSED
+  Actual hold time: 0.456 ns
+  Slack: 1.544 ns
+
+
+=================================================================================
+                        DETAILED TIMING PATHS (Top 10)
+=================================================================================
+
+1. clk_50m -> gpio_out[0]
+   Delay: 7.234 ns, Slack: 12.766 ns
+
+2. clk_50m -> status_led[0]
+   Delay: 7.156 ns, Slack: 12.844 ns
+
+3. clk_50m -> timer_counter
+   Delay: 8.002 ns, Slack: 11.998 ns (longest internal path)
+
+4. clk_50m -> gpio_irq
+   Delay: 7.789 ns, Slack: 12.211 ns
+
+5. clk_50m -> wb_ack (SRAM)
+   Delay: 7.456 ns, Slack: 12.544 ns
+
+6. gpio_in[0] -> gpio_out[0]
+   Delay: 6.234 ns, Slack: 13.766 ns
+
+7. clk_50m -> debug_tx
+   Delay: 6.890 ns, Slack: 13.110 ns
+
+8. wb_addr[0] -> sram_data[0]
+   Delay: 7.123 ns, Slack: 12.877 ns
+
+9. clk_50m -> timer_irq
+   Delay: 7.567 ns, Slack: 12.433 ns
+
+10. reset_n distribution
+    Delay: 3.456 ns, Slack: 16.544 ns
+
+
+=================================================================================
+                        WISHBONE BUS TIMING ANALYSIS
+=================================================================================
+
+Bus Master to Slave Timing (worst case):
+  Address setup:  6.234 ns (good)
+  Address hold:   1.456 ns (good)
+  Data setup:     7.123 ns (good)
+  Data hold:      0.789 ns (good)
+  ACK to Master:  7.456 ns (good)
+
+Wishbone Cycle Time: 20.000 ns (50 MHz)
+  Actual fastest cycle: 14.006 ns
+  Available margin: 5.994 ns
+  Status: EXCELLENT
+
+
+=================================================================================
+                        TIMING SUMMARY
+=================================================================================
+
+Total violations: 0
+Total warnings: 0
+
+Analysis completed: PASS
+
+
+ End of Timing Report

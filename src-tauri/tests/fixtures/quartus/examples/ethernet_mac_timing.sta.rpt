@@ -1,0 +1,68 @@
+TimeQuest Timing Analyzer Report for eth_top
+Fri Mar 21 16:15:45 2026
+
+Version 15.1 Build 185 SJ
+Device: 5CGXFC7C7F23C8
+Design File: eth.qpf
+
+
+; Fmax Summary
+;-----------
+Fmax                                           156.25 MHz ( period = 6.4 ns)
+
+
+; Setup Time Summary
+;-------------------
+Slack           Start Node           End Node
++6.23 ns        clk_125m             mii_txd[0]
++6.12 ns        clk_125m             mii_tx_en
++5.98 ns        clk_125m             rx_data[7]
++5.84 ns        clk_125m             rx_valid
++5.76 ns        mii_tx_clk           state[2]
++5.64 ns        mii_rx_clk           byte_data[7]
+
+
+; Hold Time Summary
+;------------------
+Slack           Start Node           End Node
++0.456 ns       clk_125m             mii_txd[0]
++0.423 ns       clk_125m             mii_tx_en
++0.389 ns       clk_125m             rx_data[7]
++0.356 ns       clk_125m             rx_valid
++0.312 ns       mii_tx_clk           state[2]
++0.287 ns       mii_rx_clk           byte_data[7]
+
+
+; Recovery Time Summary
+;----------------------
+Slack           Start Node           End Node
++7.45 ns        rst_n                mii_txd[0]
++7.32 ns        rst_n                mii_tx_en
++7.18 ns        rst_n                state[0]
+
+
+; Clock Domain Analysis
+;-----------------------
+
+Clock Domain: clk_125m (125.00 MHz)
+Clocks in Domain: clk_125m
+Clocks in Other Domains: mii_tx_clk, mii_rx_clk
+
+Datapath Delay Summary:
+; Path Type               Maximum Path Delay
+; ==========================================
+; Any Path               11.234 ns
+; Register to Register   8.456 ns
+; Combinational          2.778 ns
+
+
+Clock Domain Crossings:
+From clk_125m to mii_tx_clk: Paths are asynchronous
+From clk_125m to mii_rx_clk: Paths are asynchronous
+
+
+; Design Summary
+;---------------
+Total Paths Analyzed: 3456
+Paths Meeting Timing: 3456 (100.0%)
+Paths Not Meeting Timing: 0 (0.0%)

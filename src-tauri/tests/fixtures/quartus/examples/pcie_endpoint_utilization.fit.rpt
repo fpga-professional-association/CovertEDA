@@ -1,0 +1,85 @@
+Fitter Report for pcie_top
+Quartus Pro 17.1 Build 213 SJ
+Fri Mar 21 16:29:12 2026
+
+; Fitter Resource Usage Summary
+; ==============================
+
+; Design Summary
+; ==============
+DEVICE                                    10AX115S2F45I1SG Arria 10
+
+; Resource Usage by Entity
+; =========================
+Entity Name              ALMs         Registers   Memory Bits
+root_module              12456        8901        0
+pcie_top                 8934         6234        0
+pcie_core_inst           2156         1567        0
+tlp_handler              987          756         0
+bar_decoder              379          344         0
+
+
+; Total ALM Usage
+; ===============
+Total ALMs                             12456 (out of 427200) (2.9%)
+    - Logic only                       7834
+    - Combinatorial                   4622
+    - Sequential                      7834
+
+
+; Total Memory Usage
+; ==================
+Total Block Memory                     0 bits (out of 93,184 M bits)
+    M20K RAM/ROM Blocks                0 (out of 2016)
+    HPS Embedded Memory                0 bits
+
+
+; Total DSP Blocks
+; ================
+Total DSP Blocks                       16 (out of 1518)
+    Fixed Point 18x18                 0
+    Floating Point Operations         16
+
+
+; Total GPIOs
+; ===========
+Total I/O Pins                         58 (out of 1008)
+    Input Pins                         28
+    Output Pins                        20
+    Bidir Pins                         10
+    LVDS Pins                          4 (for PCIe differential)
+
+
+; Pin Usage
+; =========
+Dedicated Clock Pins                   2
+Dedicated Input Pins                   1
+High Speed Serial Pins                 8 (PCIe lanes)
+Regular I/O Pins                       58
+
+
+; Dedicated Routing Resources
+; =============================
+Global Clock Networks                  2
+Dedicated Clocking Buffers Used        8
+
+
+; Logic Element Depth Distribution
+; ==================================
+Depth 1 : 1234
+Depth 2 : 2156
+Depth 3 : 3245
+Depth 4 : 3678
+Depth 5+: 2143
+
+
+; Fit Time Statistics
+; ====================
+Placement Time                 1.234 seconds
+Routing Time                   2.567 seconds
+Total Fitting Time             3.801 seconds
+
+
+; Design Connectivity Status
+; ===========================
+Quartus Pro Connected to EDA Tool: N/A

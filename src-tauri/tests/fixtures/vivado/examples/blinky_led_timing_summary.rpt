@@ -1,0 +1,195 @@
+
+********************************************************************************
+*                           TIMING SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Compiled on: Wed Jan 15 14:32:41 2025
+*
+* CPU: AMD Ryzen 7 5800X @ 3.80 GHz, #CPU's=16
+* Memory: 32.0 GB
+* Total REAL time: 127.00 s
+* Total CPU time: 1240.00 s
+*
+* Design: blinky_top
+* Device: xc7a35tcpg236-1
+* Speed Grade: -1
+* Temperature Grade: C
+*
+********************************************************************************
+
+TABLE OF CONTENTS
+1. Design Timing Summary
+2. Timing Details
+3. Intra 'sys_clk' Paths
+4. Intra 'sys_clk' Paths
+5. Clock to Output
+6. Asynchronous Paths
+
+================================================================================
+1. Design Timing Summary
+================================================================================
+
+   WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints      WPWS(ns)      TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints
+----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- -----------------------
+    5.123      0.000                 0                    12847        0.089        0.000                 0                    12847        3.500        0.000                 0                     2412
+
+All user specified timing constraints are met.
+
+================================================================================
+2. Timing Details
+================================================================================
+
+Static Timing Analysis is performed on clock domains:
+    sys_clk
+
+Run Period Analysis
+
+ Worst slack in design: 5.123 ns
+
+ Timing constraint: freq_MHz = 100.0 (PERIOD = 10.000 ns)
+
+Path 1: FDRE cell blinky_top/prescaler_cnt_reg[24]/C to FDRE cell blinky_top/prescaler_cnt_reg[25]/D
+  Location                                   Delay type                Incr(ns)      Path(ns)
+  ------------------------------------------------
+  SLICE_X10Y20.CLBLL_LL_CK                                  0.000        0.000  r
+  SLICE_X10Y20/O6                            Combinational             0.098        0.098  r
+  SLICE_X10Y21.A2                            Net                       0.312        0.410  r
+  SLICE_X10Y21/LUT6                          Combinational             0.064        0.474  r
+  SLICE_X10Y21/O6                            Net                       0.289        0.763  r
+  SLICE_X11Y21.D1                            Net                       0.156        0.919  r
+  SLICE_X11Y21/CARRY8                        Combinational             0.039        0.958  r
+  SLICE_X11Y22.D2                            Net                       0.267        1.225  r
+  SLICE_X11Y22/O6                            Net                       0.078        1.303  r
+  SLICE_X11Y23.A1                            Net                       0.098        1.401  r
+  SLICE_X11Y23/MUXCY                         Combinational             0.062        1.463  r
+  SLICE_X11Y24.D5                            Net                       0.312        1.775  r
+  SLICE_X11Y24/O6                            Net                       0.076        1.851  r
+  SLICE_X12Y24.C2                            Net                       0.156        2.007  r
+  SLICE_X12Y24/XORCY                         Combinational             0.061        2.068  r
+  SLICE_X12Y25.D3                            Net                       0.289        2.357  r
+  SLICE_X12Y25/O6                            Net                       0.078        2.435  r
+  SLICE_X13Y25.B1                            Net                       0.098        2.533  r
+  SLICE_X13Y25/MUXCY                         Combinational             0.062        2.595  r
+  SLICE_X13Y26.C4                            Net                       0.312        2.907  r
+  SLICE_X13Y26/LUT6                          Combinational             0.064        2.971  r
+  SLICE_X13Y26/O6                            Net                       0.156        3.127  r
+  SLICE_X14Y26.A2                            Net                       0.076        3.203  r
+  SLICE_X14Y26/XORCY                         Combinational             0.061        3.264  r
+  SLICE_X14Y27.D3                            Net                       0.289        3.553  r
+  SLICE_X14Y27/O6                            Net                       0.078        3.631  r
+  SLICE_X15Y27.B1                            Net                       0.098        3.729  r
+  SLICE_X15Y27/LUT5                          Combinational             0.064        3.793  r
+  SLICE_X15Y27/O6                            Net                       0.312        4.105  r
+  SLICE_X16Y27.C2                            Net                       0.156        4.261  r
+  SLICE_X16Y27/FDRE/D                        Net                       0.076        4.337  r
+  SLICE_X16Y27.CLBLL_CK                                    0.000        4.337  r
+  clock uncertainty                                       -0.214        4.123
+  clock uncertainty (pre-layout)                          -0.050        4.073
+  clock arrival                              max          10.000       10.000
+  ------------------------------------------------
+  destination delta_clk arrival               max                      10.000
+  source clk arrival                          max                       0.000
+  data required time                                                   10.000
+  data arrival time                                                    4.337
+  slack                                                                5.663 ns
+
+Timing Detail in Slack > 0 Paths (worst 5):
+
+Slack: 5.123 ns (PASS)
+  Source: blinky_top/prescaler_cnt_reg[24]/C
+  Destination: blinky_top/prescaler_cnt_reg[25]/D
+  Data Path Delay: 4.337 ns
+  Clock Uncertainty: [+0.540 ns]
+  Source Clock: sys_clk (period = 10.000 ns) rise
+  Destination Clock: sys_clk (period = 10.000 ns) rise
+
+Slack: 4.892 ns (PASS)
+  Source: blinky_top/prescaler_cnt_reg[18]/C
+  Destination: blinky_top/prescaler_cnt_reg[19]/D
+  Data Path Delay: 4.568 ns
+
+Slack: 4.567 ns (PASS)
+  Source: blinky_top/prescaler_cnt_reg[12]/C
+  Destination: blinky_top/prescaler_cnt_reg[13]/D
+  Data Path Delay: 4.893 ns
+
+Slack: 4.234 ns (PASS)
+  Source: blinky_top/prescaler_cnt_reg[6]/C
+  Destination: blinky_top/prescaler_cnt_reg[7]/D
+  Data Path Delay: 5.226 ns
+
+Slack: 3.901 ns (PASS)
+  Source: blinky_top/prescaler_cnt_reg[0]/C
+  Destination: blinky_top/prescaler_cnt_reg[1]/D
+  Data Path Delay: 5.559 ns
+
+================================================================================
+3. Hold Timing
+================================================================================
+
+Worst Slack:  0.089 ns
+
+Slack: 0.089 ns (PASS)
+  Source: blinky_top/led_reg[2]/C
+  Destination: blinky_top/led_reg[3]/D
+
+Slack: 0.078 ns (PASS)
+  Source: blinky_top/mode_reg[1]/C
+  Destination: blinky_top/mode_reg[0]/D
+
+Slack: 0.067 ns (PASS)
+  Source: blinky_top/btn_sync_rr[0]/C
+  Destination: blinky_top/btn_sync_r[1]/D
+
+================================================================================
+4. Pulse Width
+================================================================================
+
+Worst Slack: 3.500 ns
+
+Slack: 3.500 ns (PASS)
+  Source: sys_clk (rising edge at 0.000 ns)
+  Pulse Width: 5.000 ns
+  High Pulse Width: 5.000 ns
+  Low Pulse Width: 5.000 ns
+  Low Pulse Width Slack: 3.500 ns
+
+Slack: 3.500 ns (PASS)
+  Source: sys_clk (rising edge at 0.000 ns)
+  Pulse Width: 5.000 ns
+  High Pulse Width: 5.000 ns
+  Low Pulse Width: 5.000 ns
+  Low Pulse Width Slack: 3.500 ns
+
+================================================================================
+5. Clock to Output
+================================================================================
+
+Slack: 1.234 ns (PASS)
+  Source: blinky_top/led_reg[0]/C
+  Destination: led_out[0]
+  Data Path Delay: 7.766 ns (Levels of Logic = 0)
+  Clock Uncertainty: [+0.540 ns]
+
+Slack: 1.089 ns (PASS)
+  Source: blinky_top/led_reg[1]/C
+  Destination: led_out[1]
+  Data Path Delay: 7.911 ns
+
+Slack: 0.945 ns (PASS)
+  Source: blinky_top/led_reg[2]/C
+  Destination: led_out[2]
+  Data Path Delay: 8.055 ns
+
+Slack: 0.801 ns (PASS)
+  Source: blinky_top/led_reg[3]/C
+  Destination: led_out[3]
+  Data Path Delay: 8.199 ns
+
+================================================================================
+6. Asynchronous Paths
+================================================================================
+
+No asynchronous paths found.
+
+End of Timing Report

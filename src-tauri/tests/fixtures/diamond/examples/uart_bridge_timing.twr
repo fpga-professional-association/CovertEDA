@@ -1,0 +1,153 @@
+
+                    Lattice Timing Report (TWR)
+                   Design: uart_bridge
+                   Device: LFE5U-45F-8BG381C
+                   Generated: 2026-03-21 14:35:22 UTC
+                   Timing Grade: 8 (Speed Grade 8)
+
+=================================================================================
+                        TIMING CONSTRAINTS SUMMARY
+=================================================================================
+
+  Requested      Actual       Slack
+  Period         Period       Slack
+  ------         ------       -----
+  20.833 ns      13.333 ns    7.500 ns  [clk_48m]
+
+
+=================================================================================
+                        CLOCK DOMAIN ANALYSIS
+=================================================================================
+
+Clock Domain: clk_48m (frequency: 48.0 MHz; period: 20.833 ns)
+  Rising edges at: 0.000 ns, 20.833 ns, 41.667 ns ...
+  Falling edges at: 10.417 ns, 31.250 ns, 52.083 ns ...
+  Source: J4 (IOB_IBUF)
+
+Number of paths: 1,248
+    Critical paths: 1
+    Non-critical paths: 1,247
+
+
+=================================================================================
+                        CRITICAL PATHS
+=================================================================================
+
+Path 1: UART RX Data Path (CRITICAL)
+  Source: uart_rx (J3)
+  Destination: rx_data[0] register
+  Data path delay:  8.234 ns
+  Clock to Q:       1.815 ns
+  Setup time:       3.284 ns
+  Total path delay: 13.333 ns
+  Slack:            7.500 ns (PASSED - MARGINAL)
+
+
+=================================================================================
+                        SETUP ANALYSIS (Setup Slack)
+=================================================================================
+
+Path Group: UART RX (RX Synchronizer)
+  Paths: 256
+  Minimum slack: 6.234 ns (PASSED)
+  Maximum slack: 12.456 ns (PASSED)
+
+Path Group: USB TX (Data Output)
+  Paths: 128
+  Minimum slack: 8.123 ns (PASSED)
+  Maximum slack: 15.678 ns (PASSED)
+
+Path Group: FIFO Operations
+  Paths: 512
+  Minimum slack: 7.456 ns (PASSED)
+  Maximum slack: 14.234 ns (PASSED)
+
+Path Group: Control Logic
+  Paths: 352
+  Minimum slack: 9.234 ns (PASSED)
+  Maximum slack: 16.789 ns (PASSED)
+
+
+=================================================================================
+                        HOLD ANALYSIS (Hold Slack)
+=================================================================================
+
+All paths have positive hold slack.
+  Minimum hold slack: 1.562 ns
+
+
+=================================================================================
+                        MAXIMUM FREQUENCY ESTIMATE
+=================================================================================
+
+  Fmax (estimated): 156.0 MHz
+  Margin: 3.25x over required frequency
+
+
+=================================================================================
+                        TIMING ANALYSIS BY CONSTRAINT
+=================================================================================
+
+Constraint: FREQUENCY PORT "clk_48m" 48.0 MHz
+  Status: PASSED
+  Computed frequency: 156.0 MHz
+  Slack: 108.0 MHz (3.25x margin)
+
+Constraint: UART_TX_SETUP 5.0 ns (user-defined)
+  Status: PASSED
+  Actual setup time: 3.284 ns
+  Slack: 1.716 ns
+
+Constraint: UART_RX_SETUP 5.0 ns (user-defined)
+  Status: PASSED
+  Actual setup time: 4.125 ns
+  Slack: 0.875 ns
+
+
+=================================================================================
+                        DETAILED TIMING PATHS (Top 10)
+=================================================================================
+
+1. clk_48m -> usb_data_out[0]
+   Delay: 12.456 ns, Slack: 8.377 ns
+
+2. clk_48m -> usb_data_out[1]
+   Delay: 12.389 ns, Slack: 8.444 ns
+
+3. clk_48m -> usb_data_out[2]
+   Delay: 12.412 ns, Slack: 8.421 ns
+
+4. clk_48m -> usb_data_out[3]
+   Delay: 12.367 ns, Slack: 8.466 ns
+
+5. uart_rx -> rx_data[0]
+   Delay: 13.333 ns, Slack: 7.500 ns (CRITICAL)
+
+6. uart_rx -> rx_data[1]
+   Delay: 13.289 ns, Slack: 7.544 ns
+
+7. uart_rx -> rx_data[2]
+   Delay: 13.301 ns, Slack: 7.532 ns
+
+8. clk_48m -> status_led[0]
+   Delay: 11.234 ns, Slack: 9.599 ns
+
+9. clk_48m -> status_led[1]
+   Delay: 11.198 ns, Slack: 9.635 ns
+
+10. clk_48m -> status_led[2]
+    Delay: 11.156 ns, Slack: 9.677 ns
+
+
+=================================================================================
+                        TIMING SUMMARY
+=================================================================================
+
+Total violations: 0
+Total warnings: 1
+  Warning: Path uart_rx -> rx_data[0] has slack < 8ns (marginal timing)
+
+Analysis completed: PASS (with marginal timing warning)
+
+
+ End of Timing Report

@@ -1,0 +1,226 @@
+
+           Lattice Diamond Design Rule Check Report
+           Design: blinky_led
+           Device: LFE5U-25F-6BG256C
+           Date: 2026-03-21 14:26:15 UTC
+
+=================================================================================
+                        DRC SUMMARY
+=================================================================================
+
+Total Violations:       0
+Total Warnings:        0
+Total Errors:          0
+
+DRC Status: PASSED
+
+
+=================================================================================
+                        RULE CHECKS PERFORMED
+=================================================================================
+
+[PASS] DRC001: I/O Port Drive Strength
+        All outputs have valid drive strength specifications.
+        Outputs scanned: 4
+        Status: PASSED
+
+[PASS] DRC002: Bidirectional I/O Pin Configuration
+        No bidirectional pins configured. Check not applicable.
+        Status: PASSED
+
+[PASS] DRC003: Clock Timing Constraints
+        Clock constraint applied to port "clk" at 25.0 MHz
+        Constraint is valid for device speed grade 6
+        Status: PASSED
+
+[PASS] DRC004: Reset/Async Signal Distribution
+        Reset signal "reset_n" is properly distributed
+        Async path: 2.1 ns (within 5 ns limit)
+        Status: PASSED
+
+[PASS] DRC005: Voltage Rail Compatibility
+        All I/O configured as LVCMOS33 on 3.3V rail
+        Voltage configuration is consistent
+        Status: PASSED
+
+[PASS] DRC006: PLL Configuration
+        No PLL blocks instantiated
+        Check not applicable
+        Status: PASSED
+
+[PASS] DRC007: SERDES Configuration
+        No SERDES blocks instantiated
+        Check not applicable
+        Status: PASSED
+
+[PASS] DRC008: Memory Block Usage
+        No Memory blocks instantiated
+        Check not applicable
+        Status: PASSED
+
+[PASS] DRC009: Unused I/O Banks
+        Banks: A5, B5, C5, D5, E5 are unpowered and disabled
+        Leakage current minimized
+        Status: PASSED
+
+[PASS] DRC010: Decoupling Capacitor Placement
+        Recommended decoupling caps: 10x 100nF, 2x 10uF per bank
+        This is a hardware concern, not a device routing concern
+        Status: NOTED
+
+[PASS] DRC011: Differential Signal Routing
+        No differential signals in design
+        Check not applicable
+        Status: PASSED
+
+[PASS] DRC012: High-Speed Signal Integrity
+        All signals < 100 MHz
+        No signal integrity constraints violated
+        Status: PASSED
+
+[PASS] DRC013: Net Connection Verification
+        All nets properly connected
+        No floating pins detected
+        Status: PASSED
+
+[PASS] DRC014: LVDS Pair Matching
+        No LVDS interfaces configured
+        Check not applicable
+        Status: PASSED
+
+[PASS] DRC015: I/O Termination
+        Termination not required for LVCMOS33
+        Status: PASSED
+
+
+=================================================================================
+                        NETLIST VERIFICATION
+=================================================================================
+
+Module: blinky_top
+  Input ports:   2 (clk, reset_n)
+  Output ports:  4 (led_out[0:3])
+  Internal nets: 42
+  Floating nets: 0
+  Status: OK
+
+Port Connectivity:
+  P3 (clk)          -> blinky_top.clk
+  T14 (reset_n)     -> blinky_top.reset_n
+  B2 (led_out[0])   -> blinky_top.led_out[0]
+  C2 (led_out[1])   -> blinky_top.led_out[1]
+  A2 (led_out[2])   -> blinky_top.led_out[2]
+  B1 (led_out[3])   -> blinky_top.led_out[3]
+
+All connections verified: OK
+
+
+=================================================================================
+                        PIN ASSIGNMENT VERIFICATION
+=================================================================================
+
+Bank A (3.3V):
+  P3 (clk)         - LVCMOS33 Input, Slew=FAST, Drive=N/A
+  T14 (reset_n)    - LVCMOS33 Input, Slew=FAST, Drive=N/A
+  Status: OK
+
+Bank B (3.3V):
+  B2 (led_out[0])  - LVCMOS33 Output, Slew=FAST, Drive=12mA
+  C2 (led_out[1])  - LVCMOS33 Output, Slew=FAST, Drive=12mA
+  A2 (led_out[2])  - LVCMOS33 Output, Slew=FAST, Drive=12mA
+  B1 (led_out[3])  - LVCMOS33 Output, Slew=FAST, Drive=12mA
+  Status: OK
+
+
+=================================================================================
+                        RESOURCE CONFLICT DETECTION
+=================================================================================
+
+[PASS] Slice/LUT Conflicts
+        9 slices allocated, 1,271 available
+        No conflicts detected
+
+[PASS] I/O Bank Saturation
+        5 of 104 I/O blocks used
+        Bank A: 2/13 (15%)
+        Bank B: 4/13 (31%)
+        No saturation detected
+
+[PASS] Clock Tree Conflicts
+        1 clock domain managed
+        No clock tree conflicts
+
+[PASS] Global Routing Resources
+        6 global signals routed
+        No global routing exhaustion
+
+[PASS] Local Routing Resources
+        180 local routing tracks used
+        Utilization: 8.2% (safe margin)
+
+
+=================================================================================
+                        TIMING RULE VERIFICATION
+=================================================================================
+
+[PASS] Setup Slack
+        Minimum slack: 36.528 ns
+        All paths have positive slack
+
+[PASS] Hold Slack
+        Minimum slack: 1.234 ns
+        All paths have positive slack
+
+[PASS] Clock Synchronization
+        Clock frequency: 25.0 MHz (constraint)
+        Actual Fmax: 287.5 MHz
+        Margin: 11.5x (excellent)
+
+[PASS] Async Reset Distribution
+        Reset path delay: 2.1 ns
+        Maximum delay to registers: 2.8 ns
+
+
+=================================================================================
+                        DETAILED DRC RESULTS
+=================================================================================
+
+Input Signals:
+  clk      - No violations, proper drive strength
+  reset_n  - Properly asynchronous routed, no setup time critical path
+
+Output Signals:
+  led_out[0] - 12mA drive capable of driving standard LEDs
+  led_out[1] - 12mA drive capable of driving standard LEDs
+  led_out[2] - 12mA drive capable of driving standard LEDs
+  led_out[3] - 12mA drive capable of driving standard LEDs
+
+Control Signals:
+  No differential control signals
+  No high-speed serial interfaces
+  All signals properly constrained
+
+
+=================================================================================
+                        RECOMMENDATIONS
+=================================================================================
+
+1. Add pull-up resistors on reset_n in schematic (10k to VCCIO)
+2. Add 100nF bypass capacitors on VCORE and VCCIO at package
+3. Keep clock routing away from high-speed signals (not applicable here)
+4. Consider adding power-down logic if device enters standby mode
+
+No critical recommendations for functional operation.
+
+
+=================================================================================
+                        FINAL STATUS
+=================================================================================
+
+Design DRC Status: PASSED
+All checks completed successfully.
+Ready for place and route.
+
+
+                     End of DRC Report
+

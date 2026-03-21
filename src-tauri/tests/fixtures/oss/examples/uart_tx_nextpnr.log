@@ -1,0 +1,33 @@
+nextpnr -- Next Generation Place and Route
+
+Version: nextpnr-ice40 -- Version 0.6
+
+Device: iCE40UP5K
+
+Importing design into nextpnr...
+
+Read constraints from uart.pcf...
+
+Info: Placed 156 cells based on constraints.
+Info: Running main placement...
+Info: Executing constraint propagation...
+Info: Running detailed placement for 52 cells.
+Info: Routed 156 nets using 1546 wires (201 full).
+
+Info: Device utilisation:
+Info:
+Info: ICESTORM_LC:   52/5280 (0.98%)
+Info: SB_IO:         13/99 (13.13%)
+Info: SB_GB_IO:      1/8  (12.50%)
+Info:
+Info: ICESTORM_HFOSC: 0/1 (0%)
+Info: ICESTORM_LFOSC: 0/1 (0%)
+Info: SB_GB:         0/8  (0%)
+Info: ICESTORM_RAM:  0/30 (0%)
+
+Info: Placed 52 ICESTORM_LC cells.
+Info: Longest critical path: 8.42 ns
+
+Info: Max frequency for clock 'clk': 48 MHz
+
+Info: Timing analysis complete! (real time: 0.12s)

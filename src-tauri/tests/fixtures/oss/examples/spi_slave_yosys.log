@@ -1,0 +1,51 @@
+
+ /\___/\
+/     \  Yosys Open SYnthesis Suite
+\     /
+ /___/\
+
+Yosys 0.35
+
+-- Running Verilog-2005 frontend ...
+
+Parsing Verilog input from `spi_top.v' ...
+Module `spi_top' defined.
+Parsing Verilog input from `spi_slave.v' ...
+Module `spi_slave' defined.
+Parsing Verilog input from `reg_bank.v' ...
+Module `reg_bank' defined.
+
+=== design hierarchy ===
+
+   spi_top                                              0
+     spi_slave                                          1
+     reg_bank                                           1
+
+
+=== design statistics ===
+
+   Number of wires:               67
+   Number of wire bits:          234
+   Number of public wires:        14
+   Number of public wire bits:    40
+   Number of memories:             0
+   Number of memory bits:          0
+   Number of processes:            0
+   Number of cells:              345
+
+     LUT4                       187
+     DFF                        158
+
+=== optimizing design ===
+
+Optimizing module `reg_bank'.
+Optimizing module `spi_slave'.
+Optimizing module `spi_top'.
+
+=== optimized design statistics ===
+
+   Number of cells:              345
+   LUT4                       187
+   DFF                        158
+
+===== Verilog to netlist conversion finished =====

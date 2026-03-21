@@ -1,0 +1,105 @@
+
+================================================================================
+*                         POWER SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: dma_top
+* Device: xc7k325tffg900-2
+*
+================================================================================
+
+1. Summary
+-----------
+
++--------------------------+---------+
+| Total On-Chip Power (W)  |  1.567  |
+| Design Static Power (W)  |  1.123  |
+| Design Dynamic Power (W) |  0.444  |
++--------------------------+---------+
+
+2. Dynamic Power Summary by Clock Domains
+-------------------------------------------
+
++---------------------------+-------+-------+-------+
+| Clock Domain              | Freq  | Dyn   | Total |
+|                           | (MHz) | (mW)  | (mW)  |
++---------------------------+-------+-------+-------+
+| clk_250                   | 250.0 |289.34 |444.12 |
++---------------------------+-------+-------+-------+
+
+3. Dynamic Power Summary by Resource Type
+-------------------------------------------
+
++---------------------------+--------+-------+
+| Resource Type             | Power  | Util% |
+|                           | (mW)   |       |
++---------------------------+--------+-------+
+| Slice Register            |123.45  | 1.53  |
+| Slice LUT                 | 98.76  | 4.37  |
+| Block RAM                 | 67.89  | 3.56  |
+| IOPAD                     | 23.45  | 0.38  |
+| Clock                     | 78.34  | 4.69  |
+| DSP Blocks                | 34.56  | 0.48  |
+| MMCM                      | 17.67  | 10.00 |
++---------------------------+--------+-------+
+| Total Dynamic Power       |444.12  | ---   |
++---------------------------+--------+-------+
+
+4. On-Chip Power Summary
+------------------------
+
++----------------------------+-------+
+| Power Domain               | Power |
+|                            | (mW)  |
++----------------------------+-------+
+| Vccint                     | 892.34|
+| Vccaux                     | 456.78|
+| Vccbram                    | 218.67|
++----------------------------+-------+
+| Total On-Chip Power        |1567.00|
++----------------------------+-------+
+
+5. Thermal Summary
+-------------------
+
++----------------------------+-------+
+| Thermal Metric             | Value |
++----------------------------+-------+
+| Junction Temperature (C)   | 54.2  |
+| Ambient Temperature (C)    | 25.0  |
+| Theta JA (C/W)             | 0.34  |
++----------------------------+-------+
+
+6. Power Distribution
+----------------------
+
+AXI DMA Logic Power:
+  Read Path (ADC):          156.78 mW
+  Write Path (DAC):         145.67 mW
+  Scatter-Gather:           89.23 mW
+  Descriptor Cache:          45.12 mW
+  Total Logic:              436.80 mW
+
+Memory Power:
+  Block RAM (DMA Buffers):   67.89 mW
+  Total Memory:              67.89 mW
+
+Clock Distribution:
+  Main Clock Buffer:         78.34 mW
+  PLL/MMCM:                  17.67 mW
+  Total Clock:               95.01 mW
+
+High-Speed I/O Power:
+  AXI Master Interface:      23.45 mW
+
+7. Power Scaling vs Frequency
+------------------------------
+
+Estimated power at different frequencies:
+  100 MHz:  0.456 W
+  150 MHz:  0.734 W
+  200 MHz:  1.089 W
+  250 MHz:  1.567 W (current)
+  300 MHz:  2.123 W (estimated)
+
+End of POWER SUMMARY REPORT

@@ -1,0 +1,86 @@
+
+================================================================================
+*                         POWER SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: uart_top
+* Device: xc7a100tcsg324-1
+*
+================================================================================
+
+1. Summary
+-----------
+
++--------------------------+---------+
+| Total On-Chip Power (W)  |  0.156  |
+| Design Static Power (W)  |  0.132  |
+| Design Dynamic Power (W) |  0.024  |
++--------------------------+---------+
+
+2. Dynamic Power Summary by Clock Domains
+-------------------------------------------
+
++---------------------------+-------+-------+-------+
+| Clock Domain              | Freq  | Dyn   | Total |
+|                           | (MHz) | (mW)  | (mW)  |
++---------------------------+-------+-------+-------+
+| sys_clk                   | 100.0 | 16.23 | 24.32 |
++---------------------------+-------+-------+-------+
+
+3. Dynamic Power Summary by Resource Type
+-------------------------------------------
+
++---------------------------+--------+-------+
+| Resource Type             | Power  | Util% |
+|                           | (mW)   |       |
++---------------------------+--------+-------+
+| Slice Register            | 12.45  | 0.69  |
+| Slice LUT                 | 5.67   | 1.99  |
+| Block RAM                 | 3.45   | 4.00  |
+| IOPAD                     | 2.89   | 3.33  |
+| Clock                     | 2.34   | 3.13  |
+| Others                    | 0.78   | ---   |
++---------------------------+--------+-------+
+| Total Dynamic Power       | 27.58  | ---   |
++---------------------------+--------+-------+
+
+4. On-Chip Power Summary
+------------------------
+
++----------------------------+-------+
+| Power Domain               | Power |
+|                            | (mW)  |
++----------------------------+-------+
+| Vccint                     | 23.12 |
+| Vccaux                     | 5.67  |
+| Vccbram                    | 3.45  |
++----------------------------+-------+
+| Total On-Chip Power        | 156.00|
++----------------------------+-------+
+
+5. Thermal Summary
+-------------------
+
++----------------------------+-------+
+| Thermal Metric             | Value |
++----------------------------+-------+
+| Junction Temperature (C)   | 27.3  |
+| Ambient Temperature (C)    | 25.0  |
+| Theta JA (C/W)             | 0.47  |
++----------------------------+-------+
+
+6. Power Distribution
+----------------------
+
+Clock Power (mW):
+  Signals clocking Sequential:    2.34
+  Signals clocking Logic:         0.89
+  Signals clocking Others:        0.12
+
+IO Power (mW):
+  LVCMOS33 I/O:                   2.89
+
+BRAM Power (mW):
+  Block RAM Access:               3.45
+
+End of POWER SUMMARY REPORT

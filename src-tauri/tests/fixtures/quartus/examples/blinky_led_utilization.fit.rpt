@@ -1,0 +1,81 @@
+Fitter Report for blinky_top
+Quartus II 13.1 Build 162 SJ
+Fri Mar 21 15:48:12 2026
+
+; Fitter Resource Usage Summary
+; ==============================
+
+; Design Summary
+; ==============
+DEVICE                                    EP4CE6E22C8 Cyclone IV E
+
+; Resource Usage by Entity
+; =========================
+Entity Name              Logic Elements  Registers   Memory Bits
+root_module              31              18          0
+blinky_top               31              18          0
+
+
+; Total Logic Elements by Mode
+; =============================
+Total Logic Elements               31 (out of 6272) (0.5%)
+    - Combinatorial                13
+    - Sequential                   18
+
+
+; Total Memory Usage
+; ==================
+Total Block Memory                 0 bits (out of 276480 bits)
+    M9K RAM/ROM Blocks             0 (out of 48)
+
+
+; Total PLLs
+; ==========
+Total PLLs                         1 (out of 2)
+    PLL blocks used for global clocks: 1
+
+
+; Total GPIOs
+; ===========
+Total I/O Pins                     5 (out of 92)
+    Input Pins                     2
+    Output Pins                    4
+    Bidir Pins                     0
+
+
+; Pin Usage
+; =========
+Dedicated Clock Pins               1
+Dedicated Input Pins               0
+Regular I/O Pins                   5
+
+
+; Dedicated Routing Resources
+; =============================
+Global Clock Networks              1
+Dedicated Clocking Buffers Used    2
+
+
+; Fit Time Statistics
+; ====================
+Placement Time                 0.001 seconds
+Routing Time                   0.003 seconds
+Total Fitting Time             0.004 seconds
+
+
+; Logic Element Depth Distribution
+; ==================================
+Depth 1 : 15
+Depth 2 : 8
+Depth 3 : 6
+Depth 4 : 2
+
+
+; Unroutable Modules
+; ==================
+N/A
+
+
+; Design Connectivity Status
+; ===========================
+Quartus II Connected to EDA Tool: N/A

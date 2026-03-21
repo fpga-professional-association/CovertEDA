@@ -1,0 +1,190 @@
+
+                    Lattice Timing Report (TWR)
+                   Design: video_scaler
+                   Device: LFE5U-85F-8BG756C
+                   Generated: 2026-03-21 15:08:44 UTC
+                   Timing Grade: 8C (Speed Grade 8, Commercial)
+
+=================================================================================
+                        TIMING CONSTRAINTS SUMMARY
+=================================================================================
+
+  Requested      Actual       Slack
+  Period         Period       (MET)
+  ------         ------       -----
+  6.734 ns       6.047 ns     0.687 ns  [pixel_clk]  (148.5 MHz)
+
+
+=================================================================================
+                        CLOCK DOMAIN ANALYSIS
+=================================================================================
+
+Clock Domain: pixel_clk (frequency: 148.5 MHz; period: 6.734 ns)
+  Rising edges at: 0.000 ns, 6.734 ns, 13.468 ns ...
+  Falling edges at: 3.367 ns, 10.101 ns, 16.835 ns ...
+  Source: J2 (IOB_IBUF)
+
+Number of paths: 12,456
+    Critical paths: 1
+    Non-critical paths: 12,455
+
+
+=================================================================================
+                        CRITICAL PATHS
+=================================================================================
+
+Path 1: Video Pixel Pipeline (CRITICAL)
+  Source: pixel_in[0] (input register)
+  Destination: pixel_out[0] (output register)
+  Data path delay:  4.234 ns
+  Clock to Q:       1.813 ns
+  Setup time:       0.000 ns
+  Total path delay: 6.047 ns
+  Slack:            0.687 ns (PASSED - TIGHT for 148.5 MHz)
+
+
+=================================================================================
+                        SETUP ANALYSIS (Setup Slack - High Speed Video)
+=================================================================================
+
+Path Group: Pixel Pipeline (Input to Output)
+  Paths: 3,456
+  Minimum slack: 0.687 ns (CRITICAL - at limit)
+  Maximum slack: 2.123 ns (PASSED)
+
+Path Group: Line Buffer Access
+  Paths: 2,048
+  Minimum slack: 1.234 ns (PASSED)
+  Maximum slack: 3.456 ns (PASSED)
+
+Path Group: Interpolator Logic
+  Paths: 2,816
+  Minimum slack: 1.567 ns (PASSED)
+  Maximum slack: 4.123 ns (PASSED)
+
+Path Group: Sync Signal Generation
+  Paths: 2,134
+  Minimum slack: 2.456 ns (PASSED)
+  Maximum slack: 5.234 ns (PASSED)
+
+Path Group: Pixel Counter
+  Paths: 2,002
+  Minimum slack: 1.890 ns (PASSED)
+  Maximum slack: 4.789 ns (PASSED)
+
+
+=================================================================================
+                        HOLD ANALYSIS (Hold Slack)
+=================================================================================
+
+All paths have positive hold slack.
+  Minimum hold slack: 0.234 ns (video pixel path)
+  Maximum hold slack: 1.876 ns
+
+
+=================================================================================
+                        MAXIMUM FREQUENCY ESTIMATE
+=================================================================================
+
+  Fmax (estimated): 165.3 MHz
+  Margin: 1.11x over required frequency
+
+
+=================================================================================
+                        TIMING ANALYSIS BY CONSTRAINT
+=================================================================================
+
+Constraint: FREQUENCY PORT "pixel_clk" 148.5 MHz
+  Status: PASSED
+  Computed frequency: 165.3 MHz
+  Slack: 16.8 MHz (1.11x margin - marginal for high-speed video)
+
+Constraint: VIDEO_PIXEL_SKEW 50 ps
+  Status: PASSED
+  Actual pixel skew: 34.2 ps
+  Margin: 15.8 ps
+
+Constraint: VIDEO_SYNC_JITTER 100 ps
+  Status: PASSED
+  Actual sync jitter: 78.6 ps
+  Margin: 21.4 ps
+
+
+=================================================================================
+                        VIDEO PIPELINE TIMING ANALYSIS
+=================================================================================
+
+Pixel Path Timing (worst case):
+  Input register delay:       1.234 ns
+  Line buffer access time:    2.045 ns
+  Interpolator logic:         1.456 ns
+  Output register:            1.312 ns
+  Total pixel latency:        6.047 ns
+  Tolerance:                  0.687 ns (MARGINAL)
+
+Sync Signal Timing:
+  VSYNC propagation:          3.456 ns
+  HSYNC propagation:          3.234 ns
+  Valid bit propagation:      2.890 ns
+
+Horizontal Counter Timing:
+  Counter increment:          2.567 ns
+  Address decoder:            1.234 ns
+  Mux select:                 0.890 ns
+  Total H-address delay:      4.691 ns
+
+Vertical Counter Timing:
+  Counter increment:          2.345 ns
+  Comparator:                 1.678 ns
+  Frame end logic:            1.123 ns
+  Total V-address delay:      5.146 ns
+
+
+=================================================================================
+                        DETAILED TIMING PATHS (Top 10 - High Speed Critical)
+=================================================================================
+
+1. pixel_in[0] -> pixel_out[0] (CRITICAL)
+   Delay: 6.047 ns, Slack: 0.687 ns
+
+2. pixel_in[1] -> pixel_out[1]
+   Delay: 6.023 ns, Slack: 0.711 ns
+
+3. pixel_in[2] -> pixel_out[2]
+   Delay: 6.056 ns, Slack: 0.678 ns
+
+4. line_buffer read -> interpolator
+   Delay: 5.234 ns, Slack: 1.500 ns
+
+5. interpolator output -> pixel_out[23]
+   Delay: 5.891 ns, Slack: 0.843 ns
+
+6. valid_in -> valid_out
+   Delay: 4.567 ns, Slack: 2.167 ns
+
+7. hsync_in -> hsync_out
+   Delay: 3.234 ns, Slack: 3.500 ns
+
+8. vsync_in -> vsync_out
+   Delay: 3.456 ns, Slack: 3.278 ns
+
+9. pixel_clk -> h_count increment
+   Delay: 5.123 ns, Slack: 1.611 ns
+
+10. pixel_clk -> v_count increment
+    Delay: 5.345 ns, Slack: 1.389 ns
+
+
+=================================================================================
+                        TIMING SUMMARY
+=================================================================================
+
+Total violations: 0
+Total warnings: 2
+  Warning 1: Pixel pipeline slack < 1ns (at speed limit for 148.5 MHz)
+  Warning 2: Consider pipelining for Fmax improvement to >200 MHz
+
+Analysis completed: PASS (but tight timing)
+
+
+ End of Timing Report

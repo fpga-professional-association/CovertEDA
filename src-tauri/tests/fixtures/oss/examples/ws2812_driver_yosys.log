@@ -1,0 +1,55 @@
+
+ /\___/\
+/     \  Yosys Open SYnthesis Suite
+\     /
+ /___/\
+
+Yosys 0.35
+
+-- Running Verilog-2005 frontend ...
+
+Parsing Verilog input from `ws2812_top.v' ...
+Module `ws2812_top' defined.
+Parsing Verilog input from `ws2812_tx.v' ...
+Module `ws2812_tx' defined.
+Parsing Verilog input from `color_rom.v' ...
+Module `color_rom' defined.
+Parsing Verilog input from `gamma_lut.v' ...
+Module `gamma_lut' defined.
+
+=== design hierarchy ===
+
+   ws2812_top                                           0
+     ws2812_tx                                          1
+     color_rom                                          1
+     gamma_lut                                          1
+
+
+=== design statistics ===
+
+   Number of wires:               67
+   Number of wire bits:          432
+   Number of public wires:         8
+   Number of public wire bits:    42
+   Number of memories:             2
+   Number of memory bits:       12288
+   Number of processes:            0
+   Number of cells:              567
+
+     ICESTORM_LC                 387
+     ICESTORM_RAM                180
+
+=== optimizing design ===
+
+Optimizing module `gamma_lut'.
+Optimizing module `color_rom'.
+Optimizing module `ws2812_tx'.
+Optimizing module `ws2812_top'.
+
+=== optimized design statistics ===
+
+   Number of cells:              567
+   ICESTORM_LC                 387
+   ICESTORM_RAM                180
+
+===== Verilog to netlist conversion finished =====

@@ -1,0 +1,84 @@
+Fitter Report for nios_top
+Quartus II 13.1 Build 162 SJ
+Fri Mar 21 16:03:12 2026
+
+; Fitter Resource Usage Summary
+; ==============================
+
+; Design Summary
+; ==============
+DEVICE                                    EP4CE115F29C7 Cyclone IV E
+
+; Resource Usage by Entity
+; =========================
+Entity Name              Logic Elements  Registers   Memory Bits
+root_module              4523            3201        0
+nios_top                 2456            1834        0
+system_pll               234             0           0
+gpio_ctrl                156             123         0
+Altera Megafunctions     1677            1244        32M
+
+
+; Total Logic Elements by Mode
+; =============================
+Total Logic Elements               4523 (out of 114600) (3.9%)
+    - Combinatorial                1322
+    - Sequential                   3201
+
+
+; Total Memory Usage
+; ==================
+Total Block Memory                 32 M bits (out of 3,840 M bits)
+    M9K RAM/ROM Blocks             32 (out of 432)
+    NIOS II instruction cache      16M (8 blocks)
+    NIOS II data cache             16M (8 blocks)
+
+
+; Total PLLs
+; ==========
+Total PLLs                         1 (out of 4)
+    PLL blocks used for global clocks: 1
+
+
+; Total GPIOs
+; ===========
+Total I/O Pins                     24 (out of 622)
+    Input Pins                     8
+    Output Pins                    8
+    Bidir Pins                     8
+    Clock Pins                     1
+    Reset Pins                     1
+
+
+; Pin Usage
+; =========
+Dedicated Clock Pins               1
+Dedicated Input Pins               0
+Regular I/O Pins                   24
+
+
+; Dedicated Routing Resources
+; =============================
+Global Clock Networks              2
+Dedicated Clocking Buffers Used    3
+
+
+; Logic Element Depth Distribution
+; ==================================
+Depth 1 : 234
+Depth 2 : 567
+Depth 3 : 823
+Depth 4 : 1156
+Depth 5+: 1743
+
+
+; Fit Time Statistics
+; ====================
+Placement Time                 0.234 seconds
+Routing Time                   0.567 seconds
+Total Fitting Time             0.801 seconds
+
+
+; Design Connectivity Status
+; ===========================
+Quartus II Connected to EDA Tool: N/A

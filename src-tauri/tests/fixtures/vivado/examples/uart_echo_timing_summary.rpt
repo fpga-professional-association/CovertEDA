@@ -1,0 +1,138 @@
+
+================================================================================
+*                           TIMING SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: uart_top
+* Device: xc7a100tcsg324-1
+* Speed Grade: -1
+* Compiled on: Wed Jan 15 15:47:23 2025
+*
+================================================================================
+
+TABLE OF CONTENTS
+1. Design Timing Summary
+2. Timing Details
+3. Intra-clock Paths
+4. Clock to Output
+5. Async Paths
+
+================================================================================
+1. Design Timing Summary
+================================================================================
+
+   WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints      WPWS(ns)      TPWS(ns)
+----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- ----------------------- ----------- -----------
+    2.456      0.000                 0                    18392        0.156        0.000                 0                    18392        2.890        0.000
+
+All user specified timing constraints are met.
+
+================================================================================
+2. Timing Details
+================================================================================
+
+Static Timing Analysis on clock domains: sys_clk
+
+Worst slack in design: 2.456 ns
+
+Timing constraint: freq_MHz = 100.0 (PERIOD = 10.000 ns)
+
+Path: sync_fifo/wr_ptr_reg[9]/C to sync_fifo/mem_reg[2][7]/D
+  SLICE_X45Y82.CLK                    0.000        0.000  r
+  SLICE_X45Y82/O6                     Comb         0.098        0.098  r
+  SLICE_X46Y82/A1                     Net          0.412        0.510  r
+  SLICE_X46Y82/LUT6                   Comb         0.064        0.574  r
+  SLICE_X46Y82/AMUX                   Comb         0.076        0.650  r
+  SLICE_X47Y83/B5                     Net          0.289        0.939  r
+  SLICE_X47Y83/LUT5                   Comb         0.061        1.000  r
+  SLICE_X47Y83/BMUX                   Comb         0.045        1.045  r
+  SLICE_X48Y84/D2                     Net          0.178        1.223  r
+  SLICE_X48Y84/FDRE/D                 Net          0.098        1.321  r
+  clock uncertainty                              -0.289        1.032
+  clock arrival                                  10.000       10.000
+  data required time                                       10.000
+  data arrival time                                        1.321
+  slack                                                    8.679 ns
+
+Setup Slack Details (Worst 5):
+
+Slack: 2.456 ns (PASS)
+  Source: fifo/wr_ptr_reg[8]/C
+  Destination: fifo/mem_reg[3][5]/D
+  Data Path Delay: 7.089 ns
+
+Slack: 2.234 ns (PASS)
+  Source: uart_rx/shift_reg[6]/C
+  Destination: fifo/mem_reg[1][6]/D
+  Data Path Delay: 7.311 ns
+
+Slack: 2.012 ns (PASS)
+  Source: uart_rx/bit_cnt[2]/C
+  Destination: uart_tx/shift_reg[2]/D
+  Data Path Delay: 7.533 ns
+
+Slack: 1.834 ns (PASS)
+  Source: fifo/rd_ptr_reg[7]/C
+  Destination: fifo/dout[4]/O
+  Data Path Delay: 7.711 ns
+
+Slack: 1.789 ns (PASS)
+  Source: uart_tx/sample_cnt[3]/C
+  Destination: uart_tx/uart_tx/O
+  Data Path Delay: 7.756 ns
+
+================================================================================
+3. Hold Timing
+================================================================================
+
+Worst Slack: 0.156 ns
+
+Slack: 0.156 ns (PASS)
+  Source: fifo/wr_ptr_reg[5]/C
+  Destination: fifo/mem_reg[0]/D
+
+Slack: 0.145 ns (PASS)
+  Source: uart_rx/sample_cnt[1]/C
+  Destination: uart_rx/state_reg[2]/D
+
+Slack: 0.134 ns (PASS)
+  Source: uart_tx/state_reg[0]/C
+  Destination: uart_tx/bit_cnt_reg[0]/D
+
+================================================================================
+4. Clock to Output
+================================================================================
+
+Slack: 2.123 ns (PASS)
+  Source: fifo/dout_reg[7]/C
+  Destination: fifo/dout[7]/O
+  Data Path Delay: 7.342 ns
+
+Slack: 2.089 ns (PASS)
+  Source: status_reg[0]/C
+  Destination: status_led[0]/O
+  Data Path Delay: 7.376 ns
+
+Slack: 1.956 ns (PASS)
+  Source: status_reg[1]/C
+  Destination: status_led[1]/O
+  Data Path Delay: 7.509 ns
+
+Slack: 1.823 ns (PASS)
+  Source: status_reg[3]/C
+  Destination: status_led[3]/O
+  Data Path Delay: 7.642 ns
+
+================================================================================
+5. Asynchronous Paths
+================================================================================
+
+Async Reset (False Path):
+  From: rst_n port
+  Status: N/A (false path)
+
+Async UART (False Path):
+  From: uart_rx port
+  Status: N/A (false path)
+
+End of Timing Report

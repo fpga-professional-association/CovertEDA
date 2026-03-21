@@ -1,0 +1,435 @@
+================================================================================
+                      Lattice Radiant Pad Report
+                            blinky_led Project
+================================================================================
+
+Design: blinky_top
+Device: LIFCL-40-7BG400I
+Package: BG400 (23x23mm BGA)
+Date: 2026-03-21 14:33:45
+Report Type: Pin Assignment Summary
+
+================================================================================
+                         PIN ASSIGNMENT SUMMARY
+================================================================================
+
+Total Assigned Pins: 6 / 160 available
+Utilization: 3.75%
+
+Pins by Type:
+  Input:  2 (CLK, RST)
+  Output: 4 (LED[3:0])
+  I/O:    0
+  Power:  48 (4x VDD, 4x VSS per supply rail)
+
+Pins by Voltage:
+  3.3V LVCMOS: 6
+  1.0V Core:   Internal (not on pads)
+
+Pins by Bank:
+  Bank 1 (North): 2 pins (CLK, RST)
+  Bank 2 (East):  0 pins
+  Bank 3 (South): 4 pins (LED[3:0])
+
+================================================================================
+                      PIN CONFIGURATION DETAILS
+================================================================================
+
+Pin 1: H3 (CLK - System Clock)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     clk
+  Pin Type:        Input
+  I/O Standard:    LVCMOS33
+  Bank:            1 (North)
+  Pull Type:       None
+  Slew Rate:       N/A (input)
+  Current Limit:   None
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 1 (North)
+    Column: 3
+    BGA Ball: H3
+    Package Pad: 1
+
+  Signal Characteristics:
+    Frequency: 25 MHz
+    Duty Cycle: 50%
+    Jitter: <50 ps (typical)
+
+Pin 2: H4 (RST_N - Active-Low Reset)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     rst_n
+  Pin Type:        Input
+  I/O Standard:    LVCMOS33
+  Bank:            1 (North)
+  Pull Type:       Pull-up (internal)
+  Pull Value:      10 kΩ (typical)
+  Slew Rate:       N/A (input)
+  Current Limit:   None
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 1 (North)
+    Column: 4
+    BGA Ball: H4
+    Package Pad: 2
+
+  Signal Characteristics:
+    Signal Type: Asynchronous reset
+    Active Level: Low (asserted when pulled to ground)
+    Debounce Time: 10 µs (recommended)
+
+Pin 3: G17 (LED[0] - LED Output 0)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     led[0]
+  Pin Type:        Output
+  I/O Standard:    LVCMOS33
+  Bank:            3 (South)
+  Drive Strength:  8 mA (typical)
+  Current Limit:   12 mA (max)
+  Slew Rate:       4 ns (typical)
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 17 (South)
+    Column: 7
+    BGA Ball: G17
+    Package Pad: 3
+
+  Signal Characteristics:
+    Output Type: Logic 1H (totem-pole)
+    Frequency: 1 Hz (slow toggle)
+    Capacitive Load: ~15 pF
+
+Pin 4: H17 (LED[1] - LED Output 1)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     led[1]
+  Pin Type:        Output
+  I/O Standard:    LVCMOS33
+  Bank:            3 (South)
+  Drive Strength:  8 mA (typical)
+  Current Limit:   12 mA (max)
+  Slew Rate:       4 ns (typical)
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 17 (South)
+    Column: 8
+    BGA Ball: H17
+    Package Pad: 4
+
+  Signal Characteristics:
+    Output Type: Logic 1H (totem-pole)
+    Frequency: 1 Hz (slow toggle)
+    Capacitive Load: ~15 pF
+
+Pin 5: G16 (LED[2] - LED Output 2)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     led[2]
+  Pin Type:        Output
+  I/O Standard:    LVCMOS33
+  Bank:            3 (South)
+  Drive Strength:  8 mA (typical)
+  Current Limit:   12 mA (max)
+  Slew Rate:       4 ns (typical)
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 16 (South)
+    Column: 7
+    BGA Ball: G16
+    Package Pad: 5
+
+  Signal Characteristics:
+    Output Type: Logic 1H (totem-pole)
+    Frequency: 1 Hz (slow toggle)
+    Capacitive Load: ~15 pF
+
+Pin 6: H16 (LED[3] - LED Output 3)
+  ─────────────────────────────────────────────────────────
+  Assigned To:     led[3]
+  Pin Type:        Output
+  I/O Standard:    LVCMOS33
+  Bank:            3 (South)
+  Drive Strength:  8 mA (typical)
+  Current Limit:   12 mA (max)
+  Slew Rate:       4 ns (typical)
+  Voltage Rail:    3.3V
+  Status:          OK
+
+  Pin Location Details:
+    Row: 16 (South)
+    Column: 8
+    BGA Ball: H16
+    Package Pad: 6
+
+  Signal Characteristics:
+    Output Type: Logic 1H (totem-pole)
+    Frequency: 1 Hz (slow toggle)
+    Capacitive Load: ~15 pF
+
+================================================================================
+                      POWER AND GROUND DISTRIBUTION
+================================================================================
+
+Power Supply Pins (VDD - 1.0V Core):
+  Total VDD Pins: 24
+  Assigned Pins: 24
+  Recommended: 20 minimum (provided: 24 - OK)
+
+Ground Pins (VSS):
+  Total VSS Pins: 24
+  Assigned Pins: 24
+  Recommended: 20 minimum (provided: 24 - OK)
+
+3.3V Supply Pins (VDDIO):
+  Total VDDIO Pins: 4
+  Assigned Pins: 4
+  Recommended: 2 minimum (provided: 4 - OK)
+
+3.3V Ground Pins (VSS_IO):
+  Total VSS_IO Pins: 4
+  Assigned Pins: 4
+  Recommended: 2 minimum (provided: 4 - OK)
+
+Power Distribution Quality: Excellent
+  - All VSS pads routed to solid ground plane
+  - All VDD pads have ≤2.5cm trace length
+  - Power plane: Uniform distribution
+  - Ground plane: Continuous (no splits under device)
+
+================================================================================
+                      BANK VOLTAGE SUMMARY
+================================================================================
+
+Bank 1 (North - I/O):
+  Voltage:           3.3V
+  I/O Standard:      LVCMOS33
+  Pins Assigned:     2 (CLK, RST)
+  VDD: H3.VDD        : 3.3V
+  VSS: H4.VSS        : GND
+
+Bank 3 (South - I/O):
+  Voltage:           3.3V
+  I/O Standard:      LVCMOS33
+  Pins Assigned:     4 (LED[3:0])
+  VDD: G17.VDD       : 3.3V
+  VSS: H17.VSS       : GND
+
+Bank 2 (East - I/O):
+  Voltage:           3.3V (available, not used)
+  I/O Standard:      LVCMOS33 (available)
+  Pins Assigned:     0
+
+Bank 0 (West - I/O):
+  Voltage:           3.3V (available, not used)
+  I/O Standard:      LVCMOS33 (available)
+  Pins Assigned:     0
+
+================================================================================
+                      PIN STATISTICS BY TYPE
+================================================================================
+
+Clock Inputs:
+  Count: 1
+  Pins: H3
+  Frequency: 25 MHz
+  Purpose: System clock
+
+Reset Inputs:
+  Count: 1
+  Pins: H4
+  Type: Asynchronous, active-low
+  Purpose: System reset
+
+General Inputs:
+  Count: 0
+
+General Outputs:
+  Count: 4
+  Pins: G17, H17, G16, H16
+  Speed: 1 Hz
+  Load per pin: 2 LEDs (typical)
+  Total current: 32 mA max (4 LEDs × 8 mA)
+
+Differential Pairs:
+  Count: 0
+
+High-Speed I/O:
+  Count: 0
+
+================================================================================
+                      ELECTRICAL SPECIFICATIONS
+================================================================================
+
+Input Pin Specifications (CLK, RST):
+  Voltage Thresholds:
+    VIL (Low):   0.0 - 0.9V
+    VIH (High):  2.0 - 3.3V
+    Hysteresis:  Typical 0.2V
+
+  Input Capacitance:
+    Typical: 3 pF
+    Total input load: 6 pF
+
+  Input Current:
+    Leakage current: <1 µA
+    Total input leakage: <2 µA
+
+Output Pin Specifications (LED[3:0]):
+  Voltage Output:
+    VOL (Low):   <0.4V @ 8 mA
+    VOH (High):  >2.9V @ -8 mA
+    Noise margin: >0.5V
+
+  Output Impedance:
+    Typical: 35 Ω
+    Rise/Fall time: 4 ns @ 15 pF
+
+  Output Drivers:
+    Type: CMOS totem-pole
+    Drive strength: 8 mA (standard)
+    Short-circuit current: <50 mA
+
+Slew Rate Control:
+  CLK input: N/A (input)
+  RST input: N/A (input)
+  LED[3:0]: 4 ns (standard slew)
+  EMI consideration: Good
+
+================================================================================
+                      RECOMMENDED EXTERNAL COMPONENTS
+================================================================================
+
+Clock Input (H3):
+  Decoupling: 0.1 µF ceramic (close to pin)
+  Series resistor: 100 Ω (optional, for ESD protection)
+  Source impedance: <50 Ω recommended
+
+Reset Input (H4):
+  Pull-up resistor: 10 kΩ (internal - no external needed)
+  Debounce capacitor: 0.1 µF (optional, external)
+  Reset circuit: Active-low pushbutton to ground
+
+LED Outputs (G17, H17, G16, H16):
+  Current-limiting resistors: 220 Ω @ 5V (external LEDs)
+  Or: 100 Ω @ 3.3V direct drive
+  Decoupling: 0.1 µF ceramic near each LED driver
+
+Power Supply Decoupling:
+  1.0V Rail (Core):
+    Bulk: 10 µF, 10V ceramic
+    Bypass: 0.1 µF × 4 (distributed around device)
+    ESR: <100 mΩ
+
+  3.3V Rail (I/O):
+    Bulk: 10 µF, 10V ceramic
+    Bypass: 0.1 µF × 2 (distributed around device)
+    ESR: <100 mΩ
+
+Trace Routing:
+  VDD to pad: <2.5 cm
+  VSS to plane: Direct
+  Impedance controlled: No (25 MHz, not needed)
+
+================================================================================
+                      DESIGN RULE CHECKS
+================================================================================
+
+Pin Assignment DRC: PASS
+  ✓ No pin conflicts
+  ✓ All assignments valid for LIFCL-40-7BG400I
+  ✓ Voltage compatibility verified
+
+Bank Configuration: PASS
+  ✓ Bank 1 (North): Valid 3.3V configuration
+  ✓ Bank 3 (South): Valid 3.3V configuration
+  ✓ No bank voltage conflicts
+
+Power Distribution: PASS
+  ✓ Adequate VDD pins (24 vs 20 minimum)
+  ✓ Adequate VSS pins (24 vs 20 minimum)
+  ✓ VDDIO and VSS_IO correctly assigned
+
+Signal Integrity: PASS
+  ✓ No cross-talk issues
+  ✓ Clock routing optimized
+  ✓ Reset properly distributed
+
+================================================================================
+                      PIN ASSIGNMENT SUMMARY TABLE
+================================================================================
+
+Pin No | BGA | Port     | Dir | Type    | Bank | Voltage | Status
+-------|-----|----------|-----|---------|------|---------|--------
+1      | H3  | clk      | In  | CLK     | 1    | 3.3V    | OK
+2      | H4  | rst_n    | In  | RST     | 1    | 3.3V    | OK
+3      | G17 | led[0]   | Out | LVCMOS33| 3    | 3.3V    | OK
+4      | H17 | led[1]   | Out | LVCMOS33| 3    | 3.3V    | OK
+5      | G16 | led[2]   | Out | LVCMOS33| 3    | 3.3V    | OK
+6      | H16 | led[3]   | Out | LVCMOS33| 3    | 3.3V    | OK
+
+Power Pins:
+VDD     | 24  | Power   | -   | 1.0V    | -    | 1.0V    | OK
+VDDIO   | 4   | Power   | -   | 3.3V    | -    | 3.3V    | OK
+VSS     | 24  | Ground  | -   | GND     | -    | GND     | OK
+
+Total Assigned: 6 signal pins (3.75% of device)
+Total Power:    28 pins (24 VDD + 4 VDDIO + 24 VSS)
+
+================================================================================
+                      CONSTRAINTS VERIFICATION
+================================================================================
+
+Constraint File: blinky.pdc
+
+All set_io statements verified:
+  ✓ clk H3        - Valid, assigned to clock input
+  ✓ rst_n H4      - Valid, assigned to reset input
+  ✓ led[0] G17    - Valid, assigned to output
+  ✓ led[1] H17    - Valid, assigned to output
+  ✓ led[2] G16    - Valid, assigned to output
+  ✓ led[3] H16    - Valid, assigned to output
+
+Constraint File: blinky.sdc
+
+Timing constraints verified:
+  ✓ create_clock -period 40.0ns - Valid (25 MHz)
+  ✓ Input delay constraints - Valid
+  ✓ Output delay constraints - Valid
+  ✓ False path to reset - Valid
+
+================================================================================
+                      PIN RECOMMENDATIONS
+================================================================================
+
+Current Assignment: OPTIMAL
+
+Recommendations:
+  1. Keep current pin assignments - they follow BGA standard layout
+  2. Ensure proper PCB trace lengths from FPGA to connectors
+  3. Add series resistors on LED outputs for ESD protection
+  4. Consider adding RC debounce on reset input
+  5. Route VSS planes continuously under and around device
+  6. Keep VDD/VSS vias within 2.5cm of respective pads
+
+Alternative Pin Assignments:
+  - Clock could use H2, H1 (still on Bank 1)
+  - Reset could use H5, H6 (still on Bank 1)
+  - LEDs could use adjacent pins (G15, G18, etc.)
+
+Recommended PCB Layout:
+  - Place FPGA in center of board
+  - Route power planes on inner layers
+  - Place decoupling capacitors within 1cm of device
+  - Keep clock signal short and away from signal returns
+
+================================================================================
+End of Pad Report
+================================================================================

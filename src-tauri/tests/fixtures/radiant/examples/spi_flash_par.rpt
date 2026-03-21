@@ -1,0 +1,84 @@
+================================================================================
+                      Lattice Radiant Place and Route Report
+                          spi_flash Project
+================================================================================
+
+Design: spi_top
+Device: LIFCL-40-9BG400C
+Date: 2026-03-21 14:37:58
+PAR Tool Version: 3.2.10
+
+================================================================================
+                         PLACEMENT SUMMARY
+================================================================================
+
+Placement Statistics:
+  Total Placements Attempted: 1
+  Successful Placements: 1
+  Placement Time: 1.24 seconds
+  Routing Time: 2.18 seconds
+  Total PAR Time: 3.42 seconds
+
+Device Utilization:
+  CLB Slices Used: 152 / 640 (23.8%)
+  Logic Cells: 612 (LUTs)
+  Sequential Cells: 384 DFFs
+  Dedicated Hardware: 1 PLL, 2 EBR, 0 DSP
+
+================================================================================
+                      ROUTING SUMMARY
+================================================================================
+
+Routing Statistics:
+  Total Nets to Route: 248
+  Nets Successfully Routed: 248 (100%)
+  Failed Nets: 0
+  Routing Iterations: 1
+
+Wire Utilization:
+  Local Wires: 618 / 2048 (30.2%)
+  Global Wires: 52 / 256 (20.3%)
+  Long Lines: 38 / 128 (29.7%)
+
+Routing Congestion: Low to moderate
+Maximum Channel Congestion: 74% (acceptable)
+
+================================================================================
+                      CRITICAL PATH ANALYSIS
+================================================================================
+
+Critical Path: SPI shift register [shift_reg_tx[7] -> shift_reg_tx[6]]
+  Slack: +2.45 ns (Met)
+  Delay: 7.55 ns
+  Logic Levels: 2
+
+================================================================================
+                      TIMING CLOSURE
+================================================================================
+
+Setup Time Closure:
+  Target Period: 10.0 ns
+  Achieved Fmax: 100.0 MHz
+  Margin: +2.45 ns (very tight)
+  Status: PASSED ✓
+
+Hold Time Closure:
+  Worst Hold Slack: +7.88 ns
+  Status: PASSED ✓
+
+Timing Violations: NONE
+
+================================================================================
+                      DESIGN STATISTICS
+================================================================================
+
+Total Design Time: 5.8 seconds
+  Synthesis: 2.2s
+  PAR: 3.4s
+  Analysis: 0.2s
+
+Peak Memory Usage: 518 MB
+
+================================================================================
+End of Place and Route Report
+================================================================================

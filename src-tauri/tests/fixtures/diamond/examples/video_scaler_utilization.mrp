@@ -1,0 +1,249 @@
+
+     Lattice Diamond Map Report
+     Design Summary for video_scaler
+     Target Device: LFE5U-85F-8BG756C
+     Date: 2026-03-21 15:09:51 UTC
+
+=================================================================================
+                        DESIGN STATISTICS
+=================================================================================
+
+Number of Slices:           2,456 of 7,680 (31.9%)
+  LUT4:                     5,678 of 30,720 (18.5%)
+  DFF:                      4,123 of 30,720 (13.4%)
+  Latch:                        0 of 30,720 (0.0%)
+
+Number of IO Blocks:          60 of 266 (22.6%)
+  IB:                         32
+  OB:                         28
+  IBUF:                       32
+  OBUF:                       28
+
+Number of SERDES:              0 of 8 (0.0%)
+
+Number of Memory Blocks:      32 of 432 (7.4%)
+  EBR:                        32 (line buffers + work memory)
+  SPRAM:                       0
+
+Number of DSP Blocks:           8 of 240 (3.3%)
+  Multiplier:                  8 (for interpolation)
+  Accumulator:                 0
+
+Number of PLL Blocks:           0 of 4 (0.0%)
+
+Number of Oscillators:          1
+
+
+=================================================================================
+                        DETAILED RESOURCE UTILIZATION
+=================================================================================
+
+Logic Cells Used:
+  Total Logic Cells:      5,678
+  Used for: Logic:       5,234
+  Used for: Routing:      444
+  Unused Logic Cells:   25,042
+
+Flip-Flops:
+  Total FFs Used:        4,123
+  D FFs:                 4,123
+  Set/Reset FFs:         2,456
+  Asynchronous Set:      1,234
+  Asynchronous Reset:    2,456
+
+LUT4 Distribution:
+  2-input LUTs:           789
+  3-input LUTs:         1,456
+  4-input LUTs:         3,433
+
+Memory Resources:
+  Embedded RAM Blocks (EBR): 32 of 432 (7.4%)
+    Line Buffer 1 (1280x24): 2 EBR blocks
+    Line Buffer 2 (1280x24): 2 EBR blocks
+    Interpolation work:     8 EBR blocks
+    Debug/Status buffers:  20 EBR blocks
+    Total capacity:        512 Kbits
+
+DSP Blocks:
+  Multipliers:                8 of 240 (3.3%)
+    RGB interpolation (x8):   8 multipliers
+    18x18 multiplication:     2.1 mW per block
+
+I/O Cell Distribution:
+  LVCMOS33:               8 pins (sync/control)
+  LVDS25:                52 pins (video data - high speed)
+  Special I/O:            0
+
+Clock Tree:
+  Clock buffers:          2 (pixel clock + duty cycle)
+  Global clock routing:   OPTIMAL (0 LVDS)
+  Clock domains:          1 (148.5 MHz pixel clock)
+
+
+=================================================================================
+                        CONNECTIVITY
+=================================================================================
+
+Signal Distribution:
+  Local routing:        18,234 tracks
+  Global routing:           16 tracks
+  Long routing:             52 routes
+  Video data routing:       352 routes (wide parallel)
+
+Slice Routing:
+  Average per slice:       7.4 routes
+  Maximum per slice:       48 routes
+  Minimum per slice:        1 route
+
+Video Signal Routing:
+  Input pixel bus (24-bit):  8.6 mm average length
+  Output pixel bus (24-bit): 9.2 mm average length
+  Sync signals:              4.3 mm average length
+
+
+=================================================================================
+                        POWER ANALYSIS
+=================================================================================
+
+Estimated Power Dissipation:
+  Static Power:            28.3 mW
+  Dynamic Power:          206.2 mW
+  Total Power:            234.5 mW
+
+Leakage Power:             12.1 mW
+Junction Temperature:      72.4°C
+
+
+=================================================================================
+                        TIMING PERFORMANCE
+=================================================================================
+
+Fmax (computed):           165.3 MHz
+Critical Path Delay:        6.047 ns
+Slack:                      0.687 ns (TIGHT - at speed limit)
+
+
+=================================================================================
+                        DEVICE UTILIZATION SUMMARY
+=================================================================================
+
+Resources Used          Total Resources     Percentage
+-----------             ---------------     ----------
+Logic Slices                2,456               31.9%
+LUT4                        5,678               18.5%
+DFF                         4,123               13.4%
+IO Blocks                     60               22.6%
+Memory Blocks (EBR)          32                 7.4%
+DSP Blocks                     8                 3.3%
+PLL Blocks                     0                 0.0%
+
+
+=================================================================================
+                        PERFORMANCE METRICS
+=================================================================================
+
+Design Size:                Large (31.9% resources)
+Logic Density:              2.31 cells/slice
+Routing Congestion:         Moderate
+Clock Distribution:         Optimal (global routing efficient)
+Video throughput:           1920x1080 @ 60Hz = 2.97 Gbps pixel throughput
+
+Fmax: 165.3 MHz (1.11x margin over 148.5 MHz)
+
+
+=================================================================================
+                        VIDEO SCALER ARCHITECTURE ANALYSIS
+=================================================================================
+
+Input Video Specifications:
+  Format: 1280x720 @ 60Hz (720p)
+  Pixel clock: 74.25 MHz (DDR interpolated as 148.5 MHz)
+  Pixel bandwidth: 1.78 Gbps
+
+Output Video Specifications:
+  Format: 1920x1080 @ 60Hz (1080p)
+  Pixel clock: 148.5 MHz
+  Pixel bandwidth: 2.97 Gbps
+  Scaling ratio: 1.5x vertical (720 to 1080 lines)
+
+Processing Pipeline:
+  Input register stage:     1 cycle
+  Line buffer access:       variable (1-2 cycles)
+  Interpolation:            2 cycles (bilinear)
+  Output register:          1 cycle
+  Total latency:            4-5 lines
+
+Line Buffer Utilization:
+  720p input line:          1280 pixels x 24-bit = 30.72 Kbits
+  Storage needed:           2 lines (for interpolation) = 61.44 Kbits
+  Allocated:                4 EBR blocks = 72 Kbits
+  Utilization:             85.3%
+
+Interpolation Resources:
+  Operations per pixel:     8 multiplications (RGB x3 channels + blending)
+  DSP blocks used:          8 x 18x18 multipliers
+  Throughput:               1 pixel/cycle @ 148.5 MHz = 148.5 Mpixel/s
+
+
+=================================================================================
+                        COMPILE TIME STATISTICS
+=================================================================================
+
+Peak Memory Usage:           1.8 GB
+Time to Generate Report:      5.2 seconds
+Optimization Passes:          6
+Place & Route Time:          34.6 seconds
+Total Compile Time:          46.8 seconds
+
+Route Effort: High (timing closure at limit)
+  Routing iterations: 8
+  Reroute attempts: 12
+  Success rate: 94% (tight timing)
+
+
+=================================================================================
+                        CRITICAL DESIGN NOTES
+=================================================================================
+
+High-Speed Video Design Considerations:
+  1. Pixel clock at 148.5 MHz requires careful PCB layout
+  2. LVDS differential pairs for video data reduce EMI
+  3. Timing slack is only 0.687 ns - very tight for production
+  4. Line buffers consume significant EBR resources (4 blocks)
+
+Optimization Opportunities:
+  1. Register pipelining can improve Fmax to 200+ MHz
+  2. Dedicated DSP blocks for interpolation are efficient
+  3. Can support higher resolution with register insertions
+  4. Unused DSP blocks (232) available for future expansion
+
+Production Concerns:
+  1. Timing closure is marginal - requires careful implementation
+  2. Thermal management important at 234.5 mW dissipation
+  3. Recommend extensive timing analysis before tape-out
+  4. Temperature derating analysis needed (up to 125°C operation)
+
+
+=================================================================================
+                        RECOMMENDATIONS
+=================================================================================
+
+For Timing Improvement:
+  1. Add register stage after line buffer for Fmax → 200+ MHz
+     Cost: +2 pipeline stages (acceptable for 60Hz video)
+  2. Optimize interpolator logic with retiming
+  3. Use dedicated routing resources for video buses
+
+For Power Reduction:
+  1. Reduce I/O drive strength where possible
+  2. Implement clock gating for interpolator during sync blanking
+  3. Optimize DSP block utilization
+
+For Scalability:
+  1. Design supports 4Kx2K with register insertion
+  2. Can pipeline for real-time effects (color correction, etc.)
+  3. Spare DSP blocks available for motion estimation
+
+
+                     End of Map Report
+

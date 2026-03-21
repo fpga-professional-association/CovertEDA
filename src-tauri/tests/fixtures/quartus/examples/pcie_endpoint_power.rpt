@@ -1,0 +1,68 @@
+PowerPlay Power Analyzer Report
+Quartus Pro 17.1 Build 213 SJ
+Fri Mar 21 16:29:45 2026
+
+Design Name: pcie_top
+Device: 10AX115S2F45I1SG
+Device Grade: C5 (Industrial)
+Board Thermal Model: HEAT SINK WITH 31 CFM AIRFLOW
+
+
+; Total Power Summary
+; ===================
+Total Power                            2340.56 mW
+    Core Dynamic Power                 1456.78 mW  (62.2%)
+    Core Static Power                  567.34 mW   (24.2%)
+    I/O Dynamic Power                  234.56 mW   (10.0%)
+    I/O Static Power                   81.88 mW    (3.5%)
+
+
+; Thermal Summary
+; ===============
+TJ (Junction Temperature)              85.3°C
+
+
+; Voltage Rail Summary
+; ====================
+VCC (0.9V)                             1456.78 mW
+VCC_IO (1.2V)                          234.56 mW
+VCC_SENSE (1.8V)                       81.88 mW
+GND                                    2340.56 mW
+
+
+; Power by Logic Block Type
+; ==========================
+Logic Block Type          Dynamic Power   Static Power   Total Power
+Combinatorial Logic       345.67 mW       156.23 mW      501.90 mW
+Sequential Logic          678.34 mW       267.89 mW      946.23 mW
+Block RAM                 156.78 mW       89.12 mW       245.90 mW
+DSP Blocks                234.56 mW       45.67 mW       280.23 mW
+HPS                       41.43 mW        8.43 mW        49.86 mW
+
+
+; Power by Entity
+; ===============
+Entity Name               Type          Dynamic Power   Static Power   Total
+pcie_core                 IP Block      834.56 mW       267.89 mW      1102.45 mW
+tlp_handler               User Logic    345.67 mW       123.45 mW      469.12 mW
+bar_decoder               User Logic    123.45 mW       56.78 mW       180.23 mW
+Clock Distribution        Global        152.10 mW       119.22 mW      271.32 mW
+I/O Block                 GPIO          234.56 mW       81.88 mW       316.44 mW
+
+
+; Per-Pin Power Breakdown
+; =======================
+Pin Name          Direction   I/O Standard     Usage    Dynamic Power
+clk_250m          Input       1.8V LVCMOS      Clock    3.45 mW
+rst_n             Input       1.2V LVCMOS      Signal   0.89 mW
+pcie_tx[0-3]      Output      LVDS             Signal   45.67 mW
+pcie_rx[0-3]      Input       LVDS             Signal   38.45 mW
+app_data_in[*]    Input       1.2V LVCMOS      Signal   12.34 mW
+app_data_out[*]   Output      1.2V LVCMOS      Signal   18.56 mW
+
+
+; Design Assumptions
+; ==================
+Assume Junction Temperature (TJ): 25°C
+Assume Ambient Temperature (TA): 25°C
+Total Device Power Dissipation: 2340.56 mW

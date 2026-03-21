@@ -1,0 +1,107 @@
+
+================================================================================
+*                           TIMING SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: pwm_top
+* Device: xc7z020clg400-1
+* Compiled on: Wed Jan 15 16:12:44 2025
+*
+================================================================================
+
+1. Design Timing Summary
+================================================================================
+
+   WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints      WPWS(ns)      TPWS(ns)
+----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- ----------------------- ----------- -----------
+    6.789      0.000                 0                    6234        0.234        0.000                 0                    6234        8.900        0.000
+
+All user specified timing constraints are met.
+
+================================================================================
+2. Timing Details
+================================================================================
+
+Worst slack in design: 6.789 ns
+
+Timing constraint: freq_MHz = 50.0 (PERIOD = 20.000 ns)
+
+Path: pwm_counter_reg[6]/C to pwm_counter_reg[7]/D
+  SLICE_X23Y45.CLK                    0.000        0.000  r
+  SLICE_X23Y45/O6                     Comb         0.098        0.098  r
+  SLICE_X24Y45/B1                     Net          0.245        0.343  r
+  SLICE_X24Y45/LUT6                   Comb         0.064        0.407  r
+  SLICE_X24Y45/DMUX                   Comb         0.076        0.483  r
+  SLICE_X25Y46/D2                     Net          0.178        0.661  r
+  SLICE_X25Y46/FDRE/D                 Net          0.098        0.759  r
+  clock uncertainty                              -0.264        0.495
+  clock arrival                                  20.000       20.000
+  data required time                                       20.000
+  data arrival time                                        0.759
+  slack                                                   19.241 ns
+
+Setup Slack (Worst 5):
+
+Slack: 6.789 ns (PASS)
+  Source: axi_top/axi_wvalid
+  Destination: red_duty[4]
+  Data Path Delay: 13.145 ns
+
+Slack: 6.456 ns (PASS)
+  Source: axi_top/axi_rdata[7]
+  Destination: pwm_green_reg
+  Data Path Delay: 13.478 ns
+
+Slack: 6.234 ns (PASS)
+  Source: axi_top/axi_bresp
+  Destination: blue_duty[2]
+  Data Path Delay: 13.700 ns
+
+Slack: 5.912 ns (PASS)
+  Source: pwm_counter_reg[5]/C
+  Destination: pwm_counter_reg[6]/D
+  Data Path Delay: 14.022 ns
+
+Slack: 5.623 ns (PASS)
+  Source: pwm_red
+  Destination: pwm_counter_reg[0]
+  Data Path Delay: 14.311 ns
+
+================================================================================
+3. Hold Timing
+================================================================================
+
+Worst Slack: 0.234 ns
+
+Slack: 0.234 ns (PASS)
+  Source: red_duty[1]/C
+  Destination: axi_top/reg0[1]/D
+
+Slack: 0.198 ns (PASS)
+  Source: green_duty[3]/C
+  Destination: axi_top/reg1[3]/D
+
+Slack: 0.167 ns (PASS)
+  Source: blue_duty[5]/C
+  Destination: axi_top/reg2[5]/D
+
+================================================================================
+4. Clock to Output
+================================================================================
+
+Slack: 4.567 ns (PASS)
+  Source: pwm_counter_reg[0]/C
+  Destination: pwm_red/O
+  Data Path Delay: 15.378 ns
+
+Slack: 4.234 ns (PASS)
+  Source: pwm_counter_reg[1]/C
+  Destination: pwm_green/O
+  Data Path Delay: 15.711 ns
+
+Slack: 3.901 ns (PASS)
+  Source: pwm_counter_reg[2]/C
+  Destination: pwm_blue/O
+  Data Path Delay: 16.044 ns
+
+End of Timing Report

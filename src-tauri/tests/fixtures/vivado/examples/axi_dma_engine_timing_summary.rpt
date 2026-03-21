@@ -1,0 +1,152 @@
+
+================================================================================
+*                           TIMING SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Design: dma_top
+* Device: xc7k325tffg900-2
+* Speed Grade: -2
+* Compiled on: Wed Jan 15 17:45:12 2025
+*
+================================================================================
+
+1. Design Timing Summary
+================================================================================
+
+   WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints      WPWS(ns)      TPWS(ns)
+----------- ----------- ---------------------- ----------------------- ----------- ----------- ---------------------- ----------------------- ----------- -----------
+    0.087      0.000                 0                    67890        0.045        0.000                 0                    67890        1.234        0.000
+
+All user specified timing constraints are met. (Ultra-tight timing)
+
+================================================================================
+2. Timing Details (Ultra-High-Speed 250 MHz)
+================================================================================
+
+Static Timing Analysis on clock domain: clk_250
+
+Worst slack in design: 0.087 ns (CRITICAL)
+
+Timing constraint: freq_MHz = 250.0 (PERIOD = 4.000 ns)
+
+Path: axi_read/addr_r_reg[28]/C to axi_read/m_axi_araddr[29]/O
+  SLICE_X234Y456.CLK                  0.000        0.000  r
+  SLICE_X234Y456/O6                   Comb         0.067        0.067  r
+  SLICE_X235Y456/D1                   Net          0.178        0.245  r
+  SLICE_X235Y456/LUT6                 Comb         0.061        0.306  r
+  SLICE_X235Y456/DMUX                 Comb         0.045        0.351  r
+  SLICE_X236Y457/C2                   Net          0.123        0.474  r
+  SLICE_X236Y457/FDRE/D               Net          0.089        0.563  r
+  clock uncertainty                              -0.476        0.087
+  clock arrival                                  4.000         4.000
+  data required time                                        4.000
+  data arrival time                                        0.563
+  slack                                                    3.437 ns
+
+Setup Slack Details (Worst 5 - CRITICAL):
+
+Slack: 0.087 ns (PASS - Ultra-tight)
+  Source: axi_read/addr_r_reg[28]/C
+  Destination: m_axi_araddr[29]
+  Data Path Delay: 3.913 ns
+  Clock Uncertainty: 0.476 ns (Very tight)
+
+Slack: 0.056 ns (PASS - Ultra-tight)
+  Source: axi_read/burst_cnt[15]/C
+  Destination: axi_read/m_axi_arlen[7]
+  Data Path Delay: 3.944 ns
+
+Slack: 0.023 ns (PASS - Critical Margin)
+  Source: dma_top/state_reg[2]/C
+  Destination: axi_master/m_axi_arvalid
+  Data Path Delay: 3.977 ns
+
+Slack: -0.012 ns (FAIL - TIMING VIOLATION - Auto-fixed by retiming)
+  Source: sg_engine/sg_index_reg[20]/C
+  Destination: sg_engine/src_addr[21]
+  Data Path Delay: 4.012 ns
+  Retiming Applied: YES (one level)
+
+Slack: 0.001 ns (PASS - Marginal)
+  Source: descriptor_cache/cache_ptr_reg[4]/C
+  Destination: descriptor_cache/cache[0][127]
+  Data Path Delay: 3.999 ns
+
+================================================================================
+3. Hold Timing
+================================================================================
+
+Worst Slack: 0.045 ns
+
+Slack: 0.045 ns (PASS)
+  Source: axi_read/addr_r_reg[15]/C
+  Destination: axi_read/addr_r_reg[16]/D
+
+Slack: 0.032 ns (PASS)
+  Source: dma_top/state_reg[1]/C
+  Destination: dma_top/state_reg[2]/D
+
+Slack: 0.018 ns (PASS)
+  Source: sg_engine/state_reg[0]/C
+  Destination: sg_engine/state_reg[1]/D
+
+================================================================================
+4. Clock to Output
+================================================================================
+
+Slack: 0.456 ns (PASS)
+  Source: dma_top/state_reg[0]/C
+  Destination: dma_interrupt/O
+  Data Path Delay: 3.544 ns
+
+Slack: 0.234 ns (PASS)
+  Source: axi_read/addr_r_reg[0]/C
+  Destination: m_axi_araddr[0]/O
+  Data Path Delay: 3.766 ns
+
+Slack: 0.123 ns (PASS)
+  Source: axi_write/burst_cnt_reg[7]/C
+  Destination: m_axi_awlen[0]/O
+  Data Path Delay: 3.877 ns
+
+================================================================================
+5. AXI Master Timing
+================================================================================
+
+AXI Read Address Channel (Critical):
+  Slack: 0.087 ns
+  Source: axi_read/addr_r_reg[28]
+  Destination: m_axi_araddr[29]
+  Path Delay: 3.913 ns
+
+AXI Read Data Channel:
+  Slack: 0.156 ns
+  Source: m_axi_rdata[31]/I
+  Destination: axi_write/m_axi_wdata[31]/O
+  Path Delay: 3.844 ns
+
+AXI Write Address Channel:
+  Slack: 0.234 ns
+  Source: axi_write/addr_r_reg[12]
+  Destination: m_axi_awaddr[12]/O
+  Path Delay: 3.766 ns
+
+================================================================================
+6. Pulse Width
+================================================================================
+
+Slack: 1.234 ns (PASS)
+  Source: clk_250 (rising edge at 0.000 ns)
+  Pulse Width: 2.000 ns
+  Low Pulse Width Slack: 1.234 ns
+
+================================================================================
+7. Retiming Report
+================================================================================
+
+Retiming applied to resolve timing violations:
+  One level of retiming applied to sg_engine datapath
+  Total registers moved: 8
+  Final Slack after retiming: 0.001 ns (PASS)
+
+End of Timing Report

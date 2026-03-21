@@ -1,0 +1,33 @@
+nextpnr -- Next Generation Place and Route
+
+Version: nextpnr-ecp5 -- Version 0.6
+
+Device: LFE5U-25F-6
+
+Importing design...
+
+Read constraints from spi.lpf...
+
+Info: Device utilisation:
+Info:
+Info: LUT: 345/33120 (1.04%)
+Info: FF: 234/33120 (0.71%)
+Info: CARRY: 0/39525 (0.00%)
+Info: DCC: 0/2 (0.00%)
+Info: IOLOGIC: 0/320 (0.00%)
+Info: SIOLOGIC: 0/68 (0.00%)
+Info: RAMW: 0/320 (0.00%)
+Info: RAMX: 0/40 (0.00%)
+Info: PFU: 0/39525 (0.00%)
+Info: BRAM36K: 0/74 (0.00%)
+Info: BRAM18K: 0/148 (0.00%)
+
+Info: Placed 345 cells based on constraints.
+Info: Running main placement...
+Info: Executing constraint propagation...
+Info: Running detailed placement for 345 cells.
+Info: Routed 345 nets.
+
+Info: Max frequency for clock 'clk': 100 MHz
+
+Info: Timing analysis complete! (real time: 0.34s)

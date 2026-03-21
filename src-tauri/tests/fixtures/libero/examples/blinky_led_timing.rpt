@@ -1,0 +1,89 @@
+===============================================================================
+                      SmartTime - Timing Analysis Report
+===============================================================================
+
+Device: MPF300T-1FCG484I
+Design: blinky_top
+Tool Version: Libero SoC 2024.2
+Date: 2026-03-21
+Time: 14:32:15
+
+===============================================================================
+                              FMAX SUMMARY
+===============================================================================
+
+Clock Name          | Period (ns) | Frequency (MHz) | Slack (ns) | Status
+------------------+-------------+-----------------+-----------+----------
+sys_clk             | 2.86        | 350.0           | +8.2      | MET
+
+===============================================================================
+                           CLOCK DOMAIN ANALYSIS
+===============================================================================
+
+Clock: sys_clk
+  Fanout in domain:           156
+  Pins in domain:              23
+  Levels of logic:              4
+
+Analysis Type: Setup & Hold
+
+  Critical Path:
+    From: counter[0] (register)
+    To:   led_reg (register)
+    Delay: 2.86 ns
+    Slack: +8.2 ns (positive)
+    Path Delay Components:
+      Logic Delay: 1.2 ns
+      Route Delay: 1.66 ns
+
+  Hold Analysis:
+    Min Delay: 0.45 ns
+    Hold Slack: +0.15 ns (PASS)
+
+===============================================================================
+                         SETUP SLACK SUMMARY
+===============================================================================
+
+Clk Domain | Min Slack | Mean Slack | Max Path Delay | Num Paths
+-----------+-----------+------------+----------------+----------
+sys_clk    | +8.2 ns   | +12.1 ns   | 11.8 ns        | 245
+
+All constraints are met.
+
+===============================================================================
+                      TIMING SUMMARY BY EDGE TYPE
+===============================================================================
+
+Rising Edge:  Fmax = 350.0 MHz, Slack = +8.2 ns
+Falling Edge: Fmax = 350.0 MHz, Slack = +8.2 ns
+
+===============================================================================
+                         ACTIVE CLOCK PERIODS
+===============================================================================
+
+Clock    | Specified | Achieved | Slack
+---------+-----------+----------+--------
+sys_clk  | 20.0 ns   | 2.86 ns  | +8.2 ns
+
+===============================================================================
+                        DETAILED PATH ANALYSIS
+===============================================================================
+
+Starting Point: counter[24]_10 / CLK (rising edge)
+Ending Point: led_reg / D (DFF)
+Path Slack: +8.2 ns
+
+Segment                    | Cell Type    | Delay (ns)
+---------------------------+--------------+----------
+CLK to Q                   | DFF          | 0.32 ns
+Combinational Logic        | LUT4         | 0.58 ns
+Routing                    | Interconnect | 0.98 ns
+DFF Setup                  | DFF          | 0.21 ns
+                           |              |----------
+Total Path Delay           |              | 2.09 ns
+Required Time (20.0 ns)    |              |
+Slack                      |              | +8.2 ns
+
+===============================================================================
+                            END OF REPORT
+===============================================================================

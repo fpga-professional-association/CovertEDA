@@ -1,0 +1,113 @@
+================================================================================
+                        Lattice Radiant Timing Report
+                        uart_controller Project
+================================================================================
+
+Design       : uart_top
+Device       : LIFCL-40-7BG400I
+Speed Grade  : 7
+Date         : 2026-03-21 14:35:22
+
+================================================================================
+                         PERFORMANCE SUMMARY
+================================================================================
+
+Constraint: create_clock -name clk_sys -period 20.0 [get_ports clk]
+
+Timing Summary:
+  Fmax            : 156.25 MHz (at 1.1V, 25C, Slow Process)
+  Period          : 6.4 ns
+  Requested       : 20.0 ns (50 MHz)
+  WNS (Worst Negative Slack) : +11.48 ns (Met)
+  TNS (Total Negative Slack)  : 0.0 ns
+
+Setup Time Budget:
+  Clock Period    : 20.0 ns
+  Data Path Delay : 6.42 ns
+  Clock Skew      : 1.10 ns
+  Setup Time      : 1.00 ns
+  Total Slack     : 11.48 ns ✓ PASS
+
+Hold Time Budget:
+  Clock Skew      : -0.85 ns
+  Hold Time       : 0.75 ns
+  Data Path Delay : 6.18 ns
+  Total Slack     : 12.28 ns ✓ PASS
+
+================================================================================
+                      CLOCK DOMAIN SUMMARY
+================================================================================
+
+Clock Domain: clk_sys
+  Clock Source: clk (50 MHz)
+  Period: 20.0 ns
+  Uncertainty: 0.8 ns (setup), 0.5 ns (hold)
+  Logic Paths: 8
+  Sequential Paths: 12
+
+================================================================================
+                    CRITICAL PATH ANALYSIS
+================================================================================
+
+Path 1: SETUP (Worst)
+  From: shift_reg[7] / Q (uart_tx)
+  To: tx / D
+  Slack: 11.48 ns
+  Delay: 8.52 ns
+  Logic Levels: 2
+
+Path 2: SETUP
+  From: bit_count[3] / Q (uart_rx)
+  To: state[2] / D
+  Slack: 12.15 ns
+  Delay: 7.85 ns
+
+Path 3: HOLD
+  From: sample_count[2] / Q
+  To: sample_count[2] / D
+  Slack: 12.28 ns
+  Delay: 0.72 ns
+
+================================================================================
+                      TIMING CONSTRAINTS SUMMARY
+================================================================================
+
+Primary Clock: clk_sys
+  Period: 20.0 ns (Requested)
+  Period: 6.4 ns (Achievable - Fmax: 156.25 MHz)
+  Total margin: 13.6 ns
+
+Asynchronous Reset: rst_n
+  Reset Assertion: 2.8 ns (max)
+  Reset Release: 4.2 ns (max)
+
+Input Delays:
+  rx, rst_n      : Max 4.0 ns, Min 1.5 ns ✓ Met
+
+Output Delays:
+  tx, rx_valid, tx_ready : Max 5.5 ns, Min 2.5 ns ✓ Met
+
+================================================================================
+                      TIMING STATISTICS
+================================================================================
+
+Total Nets:              156
+Total Cells:             184
+Total Sequential Cells:  128 (FFs)
+Total Combinational:     56 (LUTs)
+
+Critical paths: 0 violations
+Slack margin: >10 ns
+
+Data Path Type    | Count | Worst Delay | Worst Slack | Status
+------------------|-------|-------------|-------------|--------
+Combinational     | 8     | 3.24 ns     | N/A         | ✓ OK
+Sequential setup  | 12    | 8.52 ns     | +11.48 ns   | ✓ OK
+Sequential hold   | 12    | 0.72 ns     | +12.28 ns   | ✓ OK
+
+Worst Setup Slack:   +11.48 ns
+Worst Hold Slack:    +12.28 ns
+
+================================================================================
+End of Timing Report
+================================================================================

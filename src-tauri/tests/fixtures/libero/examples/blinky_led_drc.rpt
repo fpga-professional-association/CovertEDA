@@ -1,0 +1,102 @@
+===============================================================================
+                    Design Rule Check (DRC) Report
+===============================================================================
+
+Device: MPF300T-1FCG484I
+Design: blinky_top
+Tool Version: Libero SoC 2024.2
+Date: 2026-03-21
+
+===============================================================================
+                         SUMMARY OF RESULTS
+===============================================================================
+
+Total Rules Checked: 145
+Rules Passed:       145
+Rules Failed:         0
+Rules Warnings:       0
+
+Status: ALL CHECKS PASSED
+
+===============================================================================
+                        TIMING DRC RESULTS
+===============================================================================
+
+Setup Time Violations:     0
+Hold Time Violations:      0
+Recovery Violations:       0
+Removal Violations:        0
+Data to Q Violations:      0
+Pulse Width Violations:    0
+
+===============================================================================
+                        PLACEMENT DRC RESULTS
+===============================================================================
+
+IO Placement Violations:      0
+Bank Voltage Conflicts:       0
+Differential Pair Errors:     0
+Pin Group Violations:         0
+Placement Restriction Errors: 0
+
+===============================================================================
+                       ROUTING DRC RESULTS
+===============================================================================
+
+Unrouted Nets:              0
+Routing Resource Overuse:   0
+Timing Critical Violations: 0
+Net Fanout Violations:      0
+
+===============================================================================
+                       DESIGN CONSTRAINT CHECKS
+===============================================================================
+
+Clock Constraint Violations:    0
+False Path Validations:         1 (PASSED)
+Multi-cycle Path Validations:   0
+Maximum Fanout Violations:      0
+
+Constraint Details:
+  - False path for rst_n: PASSED
+  - Output delay constraints: MET
+  - Input delay constraints: MET
+
+===============================================================================
+                      ELECTRICAL RULE CHECKS
+===============================================================================
+
+DC Operating Point Violations:  0
+Pull-Up/Pull-Down Violations:   0
+Tri-State Contention:           0
+Bus Contention:                 0
+Floating Node Violations:       0
+
+===============================================================================
+                        RESOURCE CONFLICTS
+===============================================================================
+
+Clock Domain Crossing Issues:  0
+Synchronization Chains:        1 (VALID)
+CDC Analysis:                  PASSED
+
+Reset Domain Information:
+  Asynchronous Reset: rst_n
+  Reset Synchronization: Not required (static reset)
+  Reset Cone: 128 registers
+
+===============================================================================
+                           WARNINGS
+===============================================================================
+
+No warnings generated.
+
+===============================================================================
+                         DETAILED RESULTS
+===============================================================================
+
+All design rules satisfied. The design is ready for implementation.
+
+===============================================================================
+                         END OF REPORT
+===============================================================================

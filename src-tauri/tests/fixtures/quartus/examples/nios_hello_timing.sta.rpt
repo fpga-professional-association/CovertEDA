@@ -1,0 +1,64 @@
+TimeQuest Timing Analyzer Report for nios_top
+Fri Mar 21 16:02:45 2026
+
+Version 13.1 Build 162 SJ
+Device: EP4CE115F29C7
+Design File: nios.qpf
+
+
+; Fmax Summary
+;-----------
+Fmax                                           125.4 MHz ( period = 7.973 ns)
+
+
+; Setup Time Summary
+;-------------------
+Slack           Start Node           End Node
++8.34 ns        clk_sys              nios_readdata[31]
++8.12 ns        clk_sys              led_ctrl[7]
++7.98 ns        clk_sys              seg_ctrl[6]
++7.84 ns        clk_sys              gpio_oe[5]
++7.76 ns        clk_sys              gpio_out[4]
++7.54 ns        clk_sys              data_in_sync[3]
+
+
+; Hold Time Summary
+;------------------
+Slack           Start Node           End Node
++0.312 ns       clk_sys              nios_readdata[31]
++0.287 ns       clk_sys              led_ctrl[7]
++0.264 ns       clk_sys              seg_ctrl[6]
++0.241 ns       clk_sys              gpio_oe[5]
++0.219 ns       clk_sys              gpio_out[4]
++0.198 ns       clk_sys              data_in_sync[3]
+
+
+; Recovery Time Summary
+;----------------------
+Slack           Start Node           End Node
++9.21 ns        rst_sys              led_ctrl[0]
++9.18 ns        rst_sys              seg_ctrl[0]
++9.14 ns        rst_sys              gpio_oe[0]
++9.11 ns        rst_sys              gpio_out[0]
+
+
+; Clock Domain Analysis
+;-----------------------
+
+Clock Domain: clk_sys (100.00 MHz)
+Clocks in Domain: clk_sys
+Clocks in Other Domains: none
+
+Datapath Delay Summary:
+; Path Type               Maximum Path Delay
+; ==========================================
+; Any Path               12.456 ns
+; Register to Register   9.123 ns
+; Combinational          3.333 ns
+
+
+; Design Summary
+;---------------
+Total Paths Analyzed: 2048
+Paths Meeting Timing: 2048 (100.0%)
+Paths Not Meeting Timing: 0 (0.0%)

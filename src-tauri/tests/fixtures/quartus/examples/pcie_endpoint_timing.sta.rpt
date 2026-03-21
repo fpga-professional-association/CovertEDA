@@ -1,0 +1,61 @@
+TimeQuest Timing Analyzer Report for pcie_top
+Fri Mar 21 16:28:45 2026
+
+Version 17.1 Build 213 SJ
+Device: 10AX115S2F45I1SG
+Design File: pcie.qpf
+
+
+; Fmax Summary
+;-----------
+Fmax                                           312.5 MHz ( period = 3.2 ns)
+
+
+; Setup Time Summary
+;-------------------
+Slack           Start Node           End Node
++2.45 ns        pcie_clk             tlp_data_in[63]
++2.34 ns        pcie_clk             app_data_out[31]
++2.23 ns        pcie_clk             bar_data_out[15]
++2.12 ns        pcie_clk             tlp_valid_in
++1.98 ns        pcie_clk             state[2]
+
+
+; Hold Time Summary
+;------------------
+Slack           Start Node           End Node
++0.234 ns       pcie_clk             tlp_data_in[63]
++0.198 ns       pcie_clk             app_data_out[31]
++0.187 ns       pcie_clk             bar_data_out[15]
++0.156 ns       pcie_clk             tlp_valid_in
++0.123 ns       pcie_clk             state[2]
+
+
+; Recovery Time Summary
+;----------------------
+Slack           Start Node           End Node
++3.45 ns        rst_n                tlp_data_in[0]
++3.34 ns        rst_n                app_data_out[0]
++3.23 ns        rst_n                state[0]
+
+
+; Clock Domain Analysis
+;-----------------------
+
+Clock Domain: pcie_clk (312.50 MHz)
+Clocks in Domain: pcie_clk
+Clocks in Other Domains: none
+
+Datapath Delay Summary:
+; Path Type               Maximum Path Delay
+; ==========================================
+; Any Path               15.678 ns
+; Register to Register   11.234 ns
+; Combinational          4.444 ns
+
+
+; Design Summary
+;---------------
+Total Paths Analyzed: 5678
+Paths Meeting Timing: 5678 (100.0%)
+Paths Not Meeting Timing: 0 (0.0%)

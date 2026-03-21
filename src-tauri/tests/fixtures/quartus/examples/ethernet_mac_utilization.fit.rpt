@@ -1,0 +1,80 @@
+Fitter Report for eth_top
+Quartus II 15.1 Build 185 SJ
+Fri Mar 21 16:16:12 2026
+
+; Fitter Resource Usage Summary
+; ==============================
+
+; Design Summary
+; ==============
+DEVICE                                    5CGXFC7C7F23C8 Cyclone V GX
+
+; Resource Usage by Entity
+; =========================
+Entity Name              ALMs         Registers   Memory Bits
+root_module              2891         1845        0
+eth_top                  1567         934         0
+mac_tx                   678          523         0
+mac_rx                   567          389         0
+crc32                    79           89          0
+
+
+; Total ALM Usage
+; ===============
+Total ALMs                             2891 (out of 72000) (4.0%)
+    - Logic only                       1834
+    - Combinatorial                   1057
+    - Sequential                      834
+
+
+; Total Memory Usage
+; ==================
+Total Block Memory                     0 bits (out of 4,608 M bits)
+    M10K RAM/ROM Blocks                0 (out of 432)
+
+
+; Total DSP Blocks
+; ================
+Total DSP Blocks                       0 (out of 144)
+
+
+; Total GPIOs
+; ===========
+Total I/O Pins                         48 (out of 508)
+    Input Pins                         24
+    Output Pins                        20
+    Bidir Pins                         4
+
+
+; Pin Usage
+; =========
+Dedicated Clock Pins                   3
+Dedicated Input Pins                   0
+Regular I/O Pins                       48
+
+
+; Dedicated Routing Resources
+; =============================
+Global Clock Networks                  2
+Dedicated Clocking Buffers Used        4
+
+
+; Logic Element Depth Distribution
+; ==================================
+Depth 1 : 456
+Depth 2 : 734
+Depth 3 : 856
+Depth 4 : 645
+Depth 5+: 200
+
+
+; Fit Time Statistics
+; ====================
+Placement Time                 0.456 seconds
+Routing Time                   0.789 seconds
+Total Fitting Time             1.245 seconds
+
+
+; Design Connectivity Status
+; ===========================
+Quartus II Connected to EDA Tool: N/A

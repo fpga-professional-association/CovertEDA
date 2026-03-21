@@ -1,0 +1,61 @@
+TimeQuest Timing Analyzer Report for ddc_top
+Fri Mar 21 16:40:45 2026
+
+Version 11.0 Build 147 SJ
+Device: EP2AGX125EF29C5
+Design File: ddc.qpf
+
+
+; Fmax Summary
+;-----------
+Fmax                                           234.5 MHz ( period = 4.265 ns)
+
+
+; Setup Time Summary
+;-------------------
+Slack           Start Node           End Node
++1.34 ns        clk_200m             i_data[31]
++1.23 ns        clk_200m             q_data[31]
++1.12 ns        clk_200m             output_valid
++0.98 ns        clk_200m             phase_acc[31]
++0.87 ns        clk_200m             i_acc[47]
+
+
+; Hold Time Summary
+;------------------
+Slack           Start Node           End Node
++0.145 ns       clk_200m             i_data[31]
++0.123 ns       clk_200m             q_data[31]
++0.098 ns       clk_200m             output_valid
++0.087 ns       clk_200m             phase_acc[31]
++0.067 ns       clk_200m             i_acc[47]
+
+
+; Recovery Time Summary
+;----------------------
+Slack           Start Node           End Node
++4.56 ns        rst_n                phase_acc[0]
++4.43 ns        rst_n                i_acc[0]
++4.32 ns        rst_n                decim_count[0]
+
+
+; Clock Domain Analysis
+;-----------------------
+
+Clock Domain: clk_200m (200.00 MHz)
+Clocks in Domain: clk_200m
+Clocks in Other Domains: none
+
+Datapath Delay Summary:
+; Path Type               Maximum Path Delay
+; ==========================================
+; Any Path               18.234 ns
+; Register to Register   14.567 ns
+; Combinational          3.667 ns
+
+
+; Design Summary
+;---------------
+Total Paths Analyzed: 7890
+Paths Meeting Timing: 7890 (100.0%)
+Paths Not Meeting Timing: 0 (0.0%)

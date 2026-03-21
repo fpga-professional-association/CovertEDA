@@ -1,0 +1,112 @@
+
+================================================================================
+*                         POWER SUMMARY REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Compiled on: Wed Jan 15 14:32:41 2025
+*
+* Design: blinky_top
+* Device: xc7a35tcpg236-1
+* Speed Grade: -1
+* Temperature Grade: C
+*
+================================================================================
+
+1. Summary
+-----------
+
++--------------------------+---------+
+| Total On-Chip Power (W)  |  0.089  |
+| Design Static Power (W)  |  0.072  |
+| Design Dynamic Power (W) |  0.017  |
++--------------------------+---------+
+
+2. Dynamic Power Summary by Clock Domains
+-------------------------------------------
+
++---------------------------+-------+-------+-------+
+| Clock Domain              | Freq  | Dyn   | Total |
+|                           | (MHz) | (mW)  | (mW)  |
++---------------------------+-------+-------+-------+
+| sys_clk                   | 100.0 |  8.45 | 10.22 |
++---------------------------+-------+-------+-------+
+
+3. Dynamic Power Summary by Resource Type
+-------------------------------------------
+
++---------------------------+--------+-------+
+| Resource Type             | Power  | Util% |
+|                           | (mW)   |       |
++---------------------------+--------+-------+
+| Slice Register            |  4.23  | 0.04  |
+| Slice LUT                 |  2.17  | 0.11  |
+| Block RAM                 |  0.00  | 0.00  |
+| IOPAD                     |  6.12  | 7.55  |
+| Clock                     |  2.45  | 3.13  |
+| Others                    |  0.28  | ---   |
++---------------------------+--------+-------+
+| Total Dynamic Power       | 17.25  | ---   |
++---------------------------+--------+-------+
+
+4. On-Chip Power Summary
+------------------------
+
++----------------------------+-------+
+| Power Domain               | Power |
+|                            | (mW)  |
++----------------------------+-------+
+| Vccint                     | 12.34 |
+| Vccaux                     | 3.45  |
+| Vccbram                    | 0.00  |
++----------------------------+-------+
+| Total On-Chip Power        | 89.00 |
++----------------------------+-------+
+
+5. Thermal Summary
+-------------------
+
++----------------------------+-------+
+| Thermal Metric             | Value |
++----------------------------+-------+
+| Junction Temperature (C)   | 25.6  |
+| Ambient Temperature (C)    | 25.0  |
+| Theta JA (C/W)             | 0.47  |
+| Estimated Power (W)        | 0.089 |
++----------------------------+-------+
+
+6. Power Distribution
+----------------------
+
+Clock Power (mW):
+  Signals clocking Sequential:      2.45
+  Signals clocking Logic:            0.89
+  Signals clocking Others:           0.12
+
+IO Power (mW):
+  LVCMOS33 I/O:                      6.12
+
+7. Device Power Summary
+------------------------
+
+Device Power Estimation:
+
+  Ambient Temperature:    25.0 C
+  Estimated Junction Temperature:  25.6 C
+  Theta-JA:               0.47 C/W
+  Total On-Chip Power:    89.00 mW
+  Total Power Supply Pins: 6
+  Number of Grounds:      3
+
+Power Supply Breakdown:
+
+  VCC (1.0V):            12.34 mW
+  VCCAUX (1.8V):          3.45 mW
+  VCCBRAM (1.0V):         0.00 mW
+
+Board Power Summary:
+
+  Vcc (Core):     89.00 mW
+  Vio (I/O):       6.12 mW
+  Recommended:    95.00 mW
+
+End of POWER SUMMARY REPORT

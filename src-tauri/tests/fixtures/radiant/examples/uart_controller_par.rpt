@@ -1,0 +1,88 @@
+================================================================================
+                      Lattice Radiant Place and Route Report
+                        uart_controller Project
+================================================================================
+
+Design: uart_top
+Device: LIFCL-40-7BG400I
+Date: 2026-03-21 14:36:02
+PAR Tool Version: 3.2.10
+
+================================================================================
+                         PLACEMENT SUMMARY
+================================================================================
+
+Placement Statistics:
+  Total Placements Attempted: 1
+  Successful Placements: 1
+  Placement Time: 0.68 seconds
+  Routing Time: 1.42 seconds
+  Total PAR Time: 2.10 seconds
+
+Device Utilization:
+  CLB Slices Used: 96 / 640 (15.0%)
+  Logic Cells: 387 (LUTs)
+  Sequential Cells: 256 DFFs
+  Dedicated Hardware: 1 PLL, 0 EBR, 0 DSP
+
+Placement Quality: Good
+  Estimated Area Utilization: 15.0%
+  Bounding Box Ratio: 0.48 (acceptable)
+
+================================================================================
+                      ROUTING SUMMARY
+================================================================================
+
+Routing Statistics:
+  Total Nets to Route: 156
+  Nets Successfully Routed: 156 (100%)
+  Failed Nets: 0
+  Routing Iterations: 1
+
+Wire Utilization:
+  Local Wires: 412 / 2048 (20.1%)
+  Global Wires: 38 / 256 (14.8%)
+  Long Lines: 28 / 128 (21.9%)
+
+Routing Congestion: None detected
+Maximum Channel Congestion: 62% (acceptable)
+
+================================================================================
+                      CRITICAL PATH ANALYSIS
+================================================================================
+
+Critical Path: uart_tx shift_reg[7] -> tx
+  Slack: +11.48 ns (Met)
+  Delay: 8.52 ns
+  Logic Levels: 2
+
+================================================================================
+                      TIMING CLOSURE
+================================================================================
+
+Setup Time Closure:
+  Target Period: 20.0 ns
+  Achieved Fmax: 156.25 MHz
+  Margin: +13.6 ns
+  Status: PASSED ✓
+
+Hold Time Closure:
+  Worst Hold Slack: +12.28 ns
+  Status: PASSED ✓
+
+Timing Violations: NONE
+
+================================================================================
+                      DESIGN STATISTICS
+================================================================================
+
+Total Design Time: 4.2 seconds
+  Synthesis: 1.8s
+  PAR: 2.1s
+  Analysis: 0.3s
+
+Peak Memory Usage: 412 MB
+
+================================================================================
+End of Place and Route Report
+================================================================================

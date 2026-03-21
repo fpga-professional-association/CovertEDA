@@ -89,3 +89,6 @@ build/
 
 # CovertEDA build temp
 .coverteda_build.tcl
+
+# Allow test fixture files (override vendor ignores above)
+!src-tauri/tests/fixtures/**

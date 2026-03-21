@@ -1,0 +1,142 @@
+
+     Lattice Diamond Map Report
+     Design Summary for blinky_led
+     Target Device: LFE5U-25F-6BG256C
+     Date: 2026-03-21 14:24:12 UTC
+
+=================================================================================
+                        DESIGN STATISTICS
+=================================================================================
+
+Number of Slices:              9 of 1,280 (0.7%)
+  LUT4:                       34 of 5,120 (0.7%)
+  DFF:                        24 of 5,120 (0.5%)
+  Latch:                       0 of 5,120 (0.0%)
+
+Number of IO Blocks:           5 of 104 (4.8%)
+  IB:                          2
+  OB:                          4
+  IBUF:                        2
+  OBUF:                        4
+
+Number of SERDES:              0 of 5 (0.0%)
+
+Number of Memory Blocks:       0 of 144 (0.0%)
+  EBR:                         0
+  SPRAM:                       0
+
+Number of DSP Blocks:          0 of 80 (0.0%)
+  Multiplier Accumulator:      0
+  Multiplier Only:             0
+  Multiplier/Accumulator:      0
+
+Number of PLL Blocks:          0 of 2 (0.0%)
+
+Number of Oscillators:         1 (DCM not used)
+
+
+=================================================================================
+                        DETAILED RESOURCE UTILIZATION
+=================================================================================
+
+Logic Cells Used:
+  Total Logic Cells:       34
+  Used for: Logic:         28
+  Used for: Routing:        6
+  Unused Logic Cells:    5,086
+
+Flip-Flops:
+  Total FFs Used:          24
+  D FFs:                   24
+  Set/Reset FFs:           18
+  Asynchronous Set:         6
+  Asynchronous Reset:      18
+
+LUT4 Distribution:
+  2-input LUTs:             8
+  3-input LUTs:            12
+  4-input LUTs:            14
+
+I/O Cell Distribution:
+  LVCMOS33:                 5
+  LVCMOS12:                 0
+  LVCMOS25:                 0
+  LVDS:                     0
+  MLVDS:                    0
+  TMDS:                     0
+
+
+=================================================================================
+                        CONNECTIVITY
+=================================================================================
+
+Signal Distribution:
+  Local routing:           180 tracks
+  Global routing:           6 tracks
+  Long routing:             4 routes
+
+Slice Routing:
+  Average per slice:       20.4 routes
+  Maximum per slice:       34 routes
+  Minimum per slice:        2 routes
+
+
+=================================================================================
+                        POWER ANALYSIS
+=================================================================================
+
+Estimated Power Dissipation:
+  Static Power:             4.2 mW
+  Dynamic Power:           18.1 mW
+  Total Power:             22.3 mW
+
+Leakage Power:              1.8 mW
+Junction Temperature:       45.3°C
+
+
+=================================================================================
+                        TIMING PERFORMANCE
+=================================================================================
+
+Fmax (computed):           287.5 MHz
+Critical Path Delay:        3.472 ns
+Slack:                     36.528 ns (all paths passed)
+
+
+=================================================================================
+                        DEVICE UTILIZATION SUMMARY
+=================================================================================
+
+Resources Used          Total Resources     Percentage
+-----------             ---------------     ----------
+Logic Slices                   9                 0.7%
+LUT4                          34                 0.7%
+DFF                           24                 0.5%
+IO Blocks                      5                 4.8%
+Memory Blocks                  0                 0.0%
+DSP Blocks                     0                 0.0%
+PLL Blocks                     0                 0.0%
+
+
+=================================================================================
+                        PERFORMANCE METRICS
+=================================================================================
+
+Design Size:                  Small (< 10% resources)
+Logic Density:                0.8 cells/slice
+Routing Congestion:           Low
+Clock Distribution:           Direct from IOB
+Power Efficiency:             Very High
+
+
+=================================================================================
+                        MEMORY USAGE (Compile Time)
+=================================================================================
+
+Peak Memory Usage:            342 MB
+Time to Generate Report:      1.2 seconds
+Total Compile Time:           8.3 seconds
+
+
+                     End of Map Report
+

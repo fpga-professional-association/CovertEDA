@@ -1,0 +1,85 @@
+================================================================================
+                        Lattice Radiant Timing Report
+                          spi_flash Project
+================================================================================
+
+Design       : spi_top
+Device       : LIFCL-40-9BG400C
+Speed Grade  : 9
+Date         : 2026-03-21 14:37:15
+
+================================================================================
+                         PERFORMANCE SUMMARY
+================================================================================
+
+Constraint: create_clock -name clk_sys -period 10.0 [get_ports clk]
+
+Timing Summary:
+  Fmax            : 100.0 MHz (at 1.1V, 25C, Slow Process)
+  Period          : 10.0 ns
+  Requested       : 10.0 ns (100 MHz)
+  WNS (Worst Negative Slack) : +2.45 ns (Met)
+  TNS (Total Negative Slack)  : 0.0 ns
+
+Setup Time Budget:
+  Clock Period    : 10.0 ns
+  Data Path Delay : 7.21 ns
+  Setup Time      : 0.34 ns
+  Total Slack     : 2.45 ns ✓ PASS
+
+Hold Time Budget:
+  Clock Skew      : -0.42 ns
+  Hold Time       : 0.68 ns
+  Total Slack     : 7.88 ns ✓ PASS
+
+================================================================================
+                      CLOCK DOMAIN SUMMARY
+================================================================================
+
+Clock Domain: clk_sys
+  Clock Source: clk (100 MHz)
+  Period: 10.0 ns
+  Uncertainty: 1.0 ns (setup), 0.6 ns (hold)
+  Logic Paths: 12
+  Sequential Paths: 16
+
+Clock Domain: spi_clk
+  Clock Source: spi_top/master/sclk (25 MHz)
+  Period: 40.0 ns
+  Derived from system clock
+
+================================================================================
+                    CRITICAL PATH ANALYSIS
+================================================================================
+
+Path 1: SETUP (Worst)
+  From: shift_reg_tx[7] / Q
+  To: shift_reg_tx[6] / D
+  Slack: 2.45 ns
+  Delay: 7.55 ns
+  Logic Levels: 2
+
+Path 2: HOLD
+  From: bit_count[3] / Q
+  To: bit_count[2] / D
+  Slack: 7.88 ns
+
+================================================================================
+                      TIMING STATISTICS
+================================================================================
+
+Total Nets:              248
+Total Cells:             312
+Total Sequential Cells:  256 (FFs)
+Total Combinational:     56 (LUTs)
+
+Critical paths: 0 violations
+Data Path Type    | Count | Worst Delay | Worst Slack | Status
+------------------|-------|-------------|-------------|--------
+Combinational     | 12    | 3.21 ns     | N/A         | ✓ OK
+Sequential setup  | 16    | 7.55 ns     | +2.45 ns    | ✓ OK
+Sequential hold   | 16    | 1.10 ns     | +7.88 ns    | ✓ OK
+
+================================================================================
+End of Timing Report
+================================================================================

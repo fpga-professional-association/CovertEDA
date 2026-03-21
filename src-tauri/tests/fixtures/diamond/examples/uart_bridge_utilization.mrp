@@ -1,0 +1,194 @@
+
+     Lattice Diamond Map Report
+     Design Summary for uart_bridge
+     Target Device: LFE5U-45F-8BG381C
+     Date: 2026-03-21 14:36:05 UTC
+
+=================================================================================
+                        DESIGN STATISTICS
+=================================================================================
+
+Number of Slices:             156 of 2,304 (6.8%)
+  LUT4:                       412 of 9,216 (4.5%)
+  DFF:                        298 of 9,216 (3.2%)
+  Latch:                        0 of 9,216 (0.0%)
+
+Number of IO Blocks:          31 of 172 (18.0%)
+  IB:                         12
+  OB:                         19
+  IBUF:                       12
+  OBUF:                       19
+
+Number of SERDES:              0 of 8 (0.0%)
+
+Number of Memory Blocks:       4 of 216 (1.9%)
+  EBR:                         4 (for FIFO memories)
+  SPRAM:                       0
+
+Number of DSP Blocks:          0 of 120 (0.0%)
+
+Number of PLL Blocks:          0 of 2 (0.0%)
+
+Number of Oscillators:         1 (DCM not used)
+
+
+=================================================================================
+                        DETAILED RESOURCE UTILIZATION
+=================================================================================
+
+Logic Cells Used:
+  Total Logic Cells:       412
+  Used for: Logic:         384
+  Used for: Routing:        28
+  Unused Logic Cells:     8,804
+
+Flip-Flops:
+  Total FFs Used:          298
+  D FFs:                   298
+  Set/Reset FFs:           186
+  Asynchronous Set:         76
+  Asynchronous Reset:      186
+
+LUT4 Distribution:
+  2-input LUTs:             64
+  3-input LUTs:            128
+  4-input LUTs:            220
+
+Memory Resources:
+  Embedded RAM Blocks (EBR): 4 of 216 (1.9%)
+    FIFO RX Buffer:        1 x 512B (1 EBR)
+    FIFO TX Buffer:        1 x 512B (1 EBR)
+    Scratch SRAM:          2 x 256B (2 EBR)
+
+I/O Cell Distribution:
+  LVCMOS33:                31
+  LVCMOS25:                 0
+  LVDS:                     0
+  MLVDS:                    0
+
+Clock Tree:
+  Clock buffers:            1
+  Clock distribution:       GLOBAL (optimal)
+
+
+=================================================================================
+                        CONNECTIVITY
+=================================================================================
+
+Signal Distribution:
+  Local routing:           2,456 tracks
+  Global routing:           12 tracks
+  Long routing:             34 routes
+
+Slice Routing:
+  Average per slice:       15.7 routes
+  Maximum per slice:       42 routes
+  Minimum per slice:        2 routes
+
+Critical Net Lengths (longest paths):
+  uart_rx:                  18.3 mm (on PCB)
+  usb_data_out[0:7]:        22.5 mm (on PCB)
+  clk_48m:                   4.2 mm (on PCB)
+
+
+=================================================================================
+                        POWER ANALYSIS
+=================================================================================
+
+Estimated Power Dissipation:
+  Static Power:             8.4 mW
+  Dynamic Power:           27.2 mW
+  Total Power:             35.6 mW
+
+Leakage Power:              3.2 mW
+Junction Temperature:       52.1°C
+
+
+=================================================================================
+                        TIMING PERFORMANCE
+=================================================================================
+
+Fmax (computed):           156.0 MHz
+Critical Path Delay:        13.333 ns
+Slack:                      7.500 ns (MARGINAL - PASSED)
+
+
+=================================================================================
+                        DEVICE UTILIZATION SUMMARY
+=================================================================================
+
+Resources Used          Total Resources     Percentage
+-----------             ---------------     ----------
+Logic Slices                 156                6.8%
+LUT4                         412                4.5%
+DFF                          298                3.2%
+IO Blocks                     31               18.0%
+Memory Blocks (EBR)            4                1.9%
+DSP Blocks                      0                0.0%
+PLL Blocks                      0                0.0%
+
+
+=================================================================================
+                        PERFORMANCE METRICS
+=================================================================================
+
+Design Size:                Medium (6-10% resources)
+Logic Density:              2.64 cells/slice
+Routing Congestion:         Moderate
+Clock Distribution:         Optimal (global routing)
+Memory Utilization:         Low (4 of 216 EBR blocks)
+
+Design meets timing constraints with 3.25x margin.
+
+
+=================================================================================
+                        MEMORY USAGE ANALYSIS
+=================================================================================
+
+Embedded RAM (EBR):
+  Total EBR available:     216 blocks (13.5 Mbit total)
+  EBR used:                  4 blocks (256 Kbit total)
+  Utilization:             1.9%
+  Throughput: Dual port capable at 48 MHz
+
+FIFO RX (512-byte):
+  Address width: 9 bits
+  Data width: 8 bits
+  Organization: Single-port SRAM
+
+FIFO TX (512-byte):
+  Address width: 9 bits
+  Data width: 8 bits
+  Organization: Single-port SRAM
+
+
+=================================================================================
+                        COMPILE TIME STATISTICS
+=================================================================================
+
+Peak Memory Usage:            654 MB
+Time to Generate Report:      2.1 seconds
+Optimization Passes:          4
+Routing Time:                 8.7 seconds
+Total Compile Time:           14.2 seconds
+
+
+=================================================================================
+                        RECOMMENDATIONS
+=================================================================================
+
+1. Critical timing path (uart_rx -> rx_data[0]) has 7.5ns slack
+   Consider: Register UART RX with synchronizer to improve setup time
+
+2. FIFO utilization is good at 1.9%
+   Potential: Can increase buffer sizes up to 10 EBR blocks (85%)
+
+3. I/O utilization is 18% of available banks
+   Potential: Can add more USB endpoints or parallel interfaces
+
+4. No PLL instantiated - consider for higher frequency operation
+   Benefit: Could push Fmax to 250+ MHz with PLL
+
+
+                     End of Map Report
+

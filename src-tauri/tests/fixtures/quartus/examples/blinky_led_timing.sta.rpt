@@ -1,0 +1,90 @@
+TimeQuest Timing Analyzer report for blinky_top
+Fri Mar 21 15:47:23 2026
+
+Version 13.1 Build 162 SJ
+Date: Mar 21 2026
+
+Design File: blinky.qpf
+Device: EP4CE6E22C8
+
+
+; Fmax Summary
+;-----------
+Fmax                                           287.36 MHz ( period = 3.481 ns)
+
+
+; Setup Time Summary
+;-------------------
+Slack           Start Node    End Node
++12.45 ns       div_counter0  div_counter0[3]
++12.32 ns       div_counter1  div_counter1[4]
++12.18 ns       div_counter2  div_counter2[5]
++12.01 ns       div_counter3  div_counter3[6]
++11.89 ns       led_internal  led[0]
++11.76 ns       led_internal  led[1]
+
+
+; Hold Time Summary
+;------------------
+Slack           Start Node    End Node
++0.234 ns       div_counter0  div_counter0[3]
++0.219 ns       div_counter1  div_counter1[4]
++0.207 ns       div_counter2  div_counter2[5]
++0.196 ns       div_counter3  div_counter3[6]
++0.187 ns       clk_50m       led_internal
+
+
+; Recovery Time Summary
+;----------------------
+Slack           Start Node    End Node
++15.34 ns       rst_n         div_counter0[0]
++15.28 ns       rst_n         led_internal[0]
+
+
+; Removal Time Summary
+;---------------------
+Slack           Start Node    End Node
++0.645 ns       rst_n         div_counter0[0]
++0.634 ns       rst_n         led_internal[0]
+
+
+; Clock Domain Analysis
+;-----------------------
+
+Clock Domain: clk_50m (50.00 MHz)
+Clocks in Domain: clk_50m
+Clocks in Other Domains: none
+
+Datapath Delay Summary:
+; Path Type               Maximum Path Delay
+; ==========================================
+; Any Path               10.215 ns
+; Register to Register   7.856 ns
+; Combinational          2.359 ns
+
+
+Clock Domain Crossings:
+Slack = N/A (Timing not analyzed across clock domains)
+
+
+; Source Synchronous Timing Summary
+;----------------------------------
+Source Synchronous Path: N/A
+
+
+; Asynchronous Paths
+;-------------------
+Slack for Asynchronous Paths: Not Calculated
+
+
+; Data Arrival Summary
+;---------------------
+Min Data Arrival: 1.231 ns
+Max Data Arrival: 15.482 ns
+
+
+; Design Summary
+;---------------
+Total Paths Analyzed: 1024
+Paths Meeting Timing: 1024 (100.0%)
+Paths Not Meeting Timing: 0 (0.0%)

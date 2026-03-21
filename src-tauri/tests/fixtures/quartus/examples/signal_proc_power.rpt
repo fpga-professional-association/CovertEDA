@@ -1,0 +1,68 @@
+PowerPlay Power Analyzer Report
+Quartus II 11.0 Build 147 SJ
+Fri Mar 21 16:41:45 2026
+
+Design Name: ddc_top
+Device: EP2AGX125EF29C5
+Device Grade: C5 (Industrial)
+Board Thermal Model: NONE (CONSERVATIVE)
+
+
+; Total Power Summary
+; ===================
+Total Power                            1890.45 mW
+    Core Dynamic Power                 1234.56 mW  (65.3%)
+    Core Static Power                  423.67 mW   (22.4%)
+    I/O Dynamic Power                  156.78 mW   (8.3%)
+    I/O Static Power                   75.44 mW    (4.0%)
+
+
+; Thermal Summary
+; ===============
+TJ (Junction Temperature)              79.8°C
+
+
+; Voltage Rail Summary
+; ====================
+VCC (1.0V)                             1234.56 mW
+VCC_IO (1.5V)                          232.22 mW
+GND                                    1890.45 mW
+
+
+; Power by Logic Block Type
+; ==========================
+Logic Block Type          Dynamic Power   Static Power   Total Power
+Combinatorial Logic       234.56 mW       89.12 mW       323.68 mW
+Sequential Logic          567.89 mW       189.45 mW      757.34 mW
+Block RAM                 78.90 mW        34.56 mW       113.46 mW
+DSP Blocks                353.21 mW       110.54 mW      463.75 mW
+
+
+; Power by Entity
+; ===============
+Entity Name               Type          Dynamic Power   Static Power   Total
+ddc_top                   User Logic    789.45 mW       267.89 mW      1057.34 mW
+nco_inst                  Module        145.67 mW       45.23 mW       190.90 mW
+cic_filter                Module        234.56 mW       78.45 mW       313.01 mW
+fir_decimate              Module        123.45 mW       32.10 mW       155.55 mW
+Clock Distribution        Global        78.90 mW        56.78 mW       135.68 mW
+I/O Block                 GPIO          156.78 mW       75.44 mW       232.22 mW
+
+
+; Per-Pin Power Breakdown
+; =======================
+Pin Name          Direction   I/O Standard     Usage    Dynamic Power
+clk_200m          Input       1.5V LVCMOS      Clock    3.45 mW
+rst_n             Input       1.5V LVCMOS      Signal   0.67 mW
+adc_data[0-15]    Input       1.5V LVCMOS      Signal   18.34 mW
+nco_freq[0-31]    Input       1.5V LVCMOS      Signal   8.56 mW
+i_data[0-31]      Output      1.5V LVCMOS      Signal   56.78 mW
+q_data[0-31]      Output      1.5V LVCMOS      Signal   54.23 mW
+output_valid      Output      1.5V LVCMOS      Signal   2.34 mW
+
+
+; Design Assumptions
+; ==================
+Assume Junction Temperature (TJ): 25°C
+Assume Ambient Temperature (TA): 25°C
+Total Device Power Dissipation: 1890.45 mW

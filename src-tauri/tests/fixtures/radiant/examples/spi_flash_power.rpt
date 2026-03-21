@@ -1,0 +1,111 @@
+================================================================================
+                      Lattice Radiant Power Analysis Report
+                          spi_flash Project
+================================================================================
+
+Design: spi_top
+Device: LIFCL-40-9BG400C
+Date: 2026-03-21 14:38:15
+Analysis Conditions: 25°C, nominal voltage
+
+================================================================================
+                         POWER SUMMARY
+================================================================================
+
+Total Estimated Power Consumption:
+  Static Power (Leakage):     19.2 mW
+  Dynamic Power (Switching):  12.3 mW
+  ────────────────────────────────────
+  Total Power:                31.5 mW
+
+Power Margin:
+  Max Rated Power: 500 mW
+  Design Headroom: 468.5 mW (93.7%)
+  Thermal Margin: Excellent
+
+Junction Temperature Estimate:
+  Ambient Temperature: 25°C
+  Estimated Junction Temp: 27.5°C
+  Max Rated Junction Temp: 85°C
+  Temperature Margin: 57.5°C
+
+================================================================================
+                      POWER BREAKDOWN BY RAIL
+================================================================================
+
+1.0V Core Power Rail:
+  Leakage Power:              14.8 mW
+  Clock Distribution:         3.2 mW
+  Logic Switching:            4.6 mW
+  Memory (EBR):               1.2 mW
+  ────────────────────────────────────
+  Subtotal Core Power:       23.8 mW (75% of total)
+
+3.3V I/O Power Rail:
+  I/O Leakage:                4.6 mW
+  SPI Driver Switching:       2.1 mW
+  QSPI I/O Switching:         1.0 mW
+  ────────────────────────────────────
+  Subtotal I/O Power:         7.7 mW (25% of total)
+
+================================================================================
+                      DYNAMIC POWER ANALYSIS
+================================================================================
+
+Switching Power by Function:
+
+  Clock Distribution:         3.2 mW
+  SPI Master Controller:      3.8 mW
+  FIFO Operations:            2.4 mW
+  SPI I/O Drivers:            2.1 mW
+  QSPI I/O:                   1.0 mW
+  Miscellaneous:              0.8 mW
+
+Signal Activity Factors:
+  clk:        1.0 (always switching at 100 MHz)
+  spi_clk:    0.25 (divided clock)
+  FIFO ops:   0.3 (intermittent)
+
+================================================================================
+                      STATIC POWER ANALYSIS
+================================================================================
+
+Leakage Power by Component:
+
+  LUT Logic (612 LUTs):       10.8 mW
+  Flip-Flops (384 DFFs):      5.2 mW
+  EBR Blocks (2×18K):         1.8 mW
+  I/O Buffers:                4.6 mW
+  Interconnect Leakage:       1.8 mW
+
+================================================================================
+                      MEMORY POWER
+================================================================================
+
+EBR Memory Power:
+  Static (idle): 0.6 mW per block = 1.2 mW total
+  Dynamic (access): 0.3 mW per block = 0.6 mW total
+  Total EBR Power: 1.8 mW
+
+FIFO Operations:
+  Read/Write frequency: ~1 MHz
+  Power consumption: 2.4 mW
+
+================================================================================
+                      THERMAL ANALYSIS
+================================================================================
+
+Thermal Characteristics:
+  Die Size: 25.2 mm²
+  Package: BG400C (improved thermal)
+  Thermal Resistance (JA): 72°C/W
+
+Temperature Calculation (Ambient: 25°C):
+  Power Dissipation:    31.5 mW = 0.0315 W
+  ΔT = 0.0315 W × 72°C/W = 2.3°C
+  Junction Temperature: 25°C + 2.3°C = 27.3°C
+  Thermal Margin: 57.7°C
+
+================================================================================
+End of Power Analysis Report
+================================================================================

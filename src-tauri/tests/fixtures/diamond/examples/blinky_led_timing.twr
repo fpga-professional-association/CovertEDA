@@ -1,0 +1,124 @@
+
+                    Lattice Timing Report (TWR)
+                   Design: blinky_led
+                   Device: LFE5U-25F-6BG256C
+                   Generated: 2026-03-21 14:23:45 UTC
+                   Timing Grade: 6 (Speed Grade 6)
+
+=================================================================================
+                        TIMING CONSTRAINTS SUMMARY
+=================================================================================
+
+  Requested      Actual       Slack
+  Period         Period       (MET)
+  ------         ------       -----
+  40.000 ns      3.472 ns     36.528 ns  [clk]
+
+
+=================================================================================
+                        CLOCK DOMAIN ANALYSIS
+=================================================================================
+
+Clock Domain: clk (frequency: 25.0000 MHz; period: 40.000 ns)
+  Rising edges at: 0.000 ns, 40.000 ns, 80.000 ns ...
+  Falling edges at: 20.000 ns, 60.000 ns, 100.000 ns ...
+  Source: P3 (IOB_IBUF)
+
+Number of paths: 342
+    Critical paths: 0
+    Non-critical paths: 342
+
+
+=================================================================================
+                        CRITICAL PATHS
+=================================================================================
+
+ No critical paths found. All timing constraints met.
+
+
+=================================================================================
+                        SETUP ANALYSIS (Setup Slack)
+=================================================================================
+
+Path 1:  clk -> led_out[0]
+  Data path delay:  2.184 ns
+  Clock to Q:       1.288 ns
+  Setup time:       0.000 ns
+  Total path delay: 3.472 ns
+  Slack:            36.528 ns (PASSED)
+
+Path 2:  clk -> led_out[1]
+  Data path delay:  2.156 ns
+  Clock to Q:       1.310 ns
+  Setup time:       0.000 ns
+  Total path delay: 3.466 ns
+  Slack:            36.534 ns (PASSED)
+
+Path 3:  clk -> led_out[2]
+  Data path delay:  2.201 ns
+  Clock to Q:       1.276 ns
+  Setup time:       0.000 ns
+  Total path delay: 3.477 ns
+  Slack:            36.523 ns (PASSED)
+
+Path 4:  clk -> led_out[3]
+  Data path delay:  2.178 ns
+  Clock to Q:       1.292 ns
+  Setup time:       0.000 ns
+  Total path delay: 3.470 ns
+  Slack:            36.530 ns (PASSED)
+
+
+=================================================================================
+                        HOLD ANALYSIS (Hold Slack)
+=================================================================================
+
+All paths have positive hold slack.
+  Minimum hold slack: 1.234 ns
+
+
+=================================================================================
+                        MAXIMUM FREQUENCY ESTIMATE
+=================================================================================
+
+  Fmax (estimated): 287.5 MHz
+  Margin: 11.5x over required frequency
+
+
+=================================================================================
+                        TIMING ANALYSIS BY CONSTRAINT
+=================================================================================
+
+Constraint: FREQUENCY PORT "clk" 25.0 MHz
+  Status: PASSED
+  Computed frequency: 287.5 MHz
+  Slack: 262.5 MHz (11.5x margin)
+
+
+=================================================================================
+                        PIN TIMING SUMMARY
+=================================================================================
+
+Clock Input Pins:
+  clk (P3):
+    - Period: 40.000 ns
+    - Frequency: 25.000 MHz
+    - Tco (clk to output Q): 1.288 - 1.310 ns
+
+Output Pins:
+  led_out[0] (B2): Tco = 2.184 ns + 1.288 ns = 3.472 ns
+  led_out[1] (C2): Tco = 2.156 ns + 1.310 ns = 3.466 ns
+  led_out[2] (A2): Tco = 2.201 ns + 1.276 ns = 3.477 ns
+  led_out[3] (B1): Tco = 2.178 ns + 1.292 ns = 3.470 ns
+
+
+=================================================================================
+                        TIMING SUMMARY
+=================================================================================
+
+Total violations: 0
+Total warnings: 0
+Analysis completed: PASS
+
+
+ End of Timing Report

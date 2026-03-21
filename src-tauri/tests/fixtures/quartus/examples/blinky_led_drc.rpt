@@ -1,0 +1,79 @@
+Quartus II Design Assistant Report
+Version 13.1 Build 162
+Fri Mar 21 15:49:03 2026
+
+Design File: blinky.qpf
+Device: EP4CE6E22C8
+
+
+; Summary
+; =======
+Critical Violations: 0
+Major Violations:    3
+Minor Violations:    0
+Informational:       5
+
+
+; Critical Violations
+; ====================
+None
+
+
+; Major Violations
+; =================
+
+Warning (10235): Using RESERVE_ALL_UNUSED_PINS as "AS INPUT TRI-STATED";
+The reserved pins may not be able to be used in the future.
+Location: blinky.qsf line 24
+
+Warning (12126): Power consumption may be higher than expected due to I/O
+switching activity on led pins. Consider using slew rate control.
+Location: not applicable
+
+Warning (15705): The I/O pin rst_n should be registered for better timing
+performance and lower power consumption.
+Location: Pin J15
+
+
+; Minor Violations
+; ================
+None
+
+
+; Informational Messages
+; =======================
+
+Info (13055): This design has no clock domain crossings
+Location: not applicable
+
+Info (14074): The design has 4 logic levels of depth with a maximum fanout of 8
+Location: not applicable
+
+Info (12007): Total of 5 pins configured for I/O
+Location: not applicable
+
+Info (14075): Logic utilization is 31 out of 6272 logic elements (0.5%)
+Location: not applicable
+
+Info (14089): Total of 18 flip-flops used
+Location: not applicable
+
+
+; Design Statistics
+; =================
+Logic Elements Used:           31 / 6272
+Registers Used:                18 / 6272
+Block RAM Bits Used:           0 / 276480
+Maximum Clock Frequency:       287.36 MHz
+Device Temperature:            62.3°C
+Estimated Power Consumption:   82.14 mW
+
+
+; Report Generation Status
+; ========================
+Report Generated:              Fri Mar 21 15:49:03 2026
+Quartus II Version:            13.1 Build 162 SJ
+Analysis Tool:                 Design Assistant
+Machine:                       QUARTUS_PC-01
+
+Design successfully analyzed with 3 warnings.

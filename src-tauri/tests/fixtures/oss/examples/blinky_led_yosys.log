@@ -1,0 +1,77 @@
+
+ /\___/\
+/     \  Yosys Open SYnthesis Suite
+\     /
+ /___/\
+
+Yosys 0.35 (git sha1 bd44d1e, c++ 11.2.0-19ubuntu1 -fPIC -Os)
+
+-- Running Verilog-2005 frontend ...
+Parsing Verilog input from `blinky_top.v' ...
+Module `blinky_top' defined.
+
+-- Running Verilog-2005 frontend ...
+Parsing Verilog input from `../../../generated_rtl/cells.v' ...
+
+=== design hierarchy ===
+
+   blinky_top                                             0
+
+
+=== design statistics ===
+
+   Number of wires:               28
+   Number of wire bits:          124
+   Number of public wires:         7
+   Number of public wire bits:    32
+   Number of memories:             0
+   Number of memory bits:          0
+   Number of processes:            0
+   Number of cells:              156
+
+     SB_DFF                      124
+     SB_LUT4                      32
+
+=== optimizing design ===
+[...]
+Optimizing module `blinky_top'.
+
+-- Optimizing LUT logic.
+[...]
+
+=== optimized design statistics ===
+
+   Number of wires:               28
+   Number of wire bits:          124
+   Number of public wires:         7
+   Number of public wire bits:    32
+   Number of memories:             0
+   Number of memory bits:          0
+   Number of processes:            0
+   Number of cells:              156
+
+     SB_DFF                      124
+     SB_LUT4                      32
+
+=== mapping to SB_LUT4 ===
+
+=== mapping to iCE40 ===
+iCE40 cells: 156 (32 SB_LUT4, 124 SB_DFF)
+
+=== mapping to general iCE40 cells ===
+
+=== mapping to cells ===
+
+=== final optimization ===
+
+=== memory map ===
+
+=== design summary ===
+   Number of cells:              156
+   SB_DFF           124
+   SB_LUT4           32
+
+===== Verilog to netlist conversion finished =====
+
+-- Running JSON netlist backend ...
+Wrote JSON netlist to netlist.json.

@@ -1,0 +1,51 @@
+
+ /\___/\
+/     \  Yosys Open SYnthesis Suite
+\     /
+ /___/\
+
+Yosys 0.35
+
+-- Running Verilog-2005 frontend ...
+
+Parsing Verilog input from `audio_top.v' ...
+Module `audio_top' defined.
+Parsing Verilog input from `pwm_dac.v' ...
+Module `pwm_dac' defined.
+Parsing Verilog input from `sample_rom.v' ...
+Module `sample_rom' defined.
+
+=== design hierarchy ===
+
+   audio_top                                            0
+     pwm_dac                                            1
+     sample_rom                                         1
+
+
+=== design statistics ===
+
+   Number of wires:               34
+   Number of wire bits:          145
+   Number of public wires:         5
+   Number of public wire bits:    22
+   Number of memories:             1
+   Number of memory bits:       8192
+   Number of processes:            0
+   Number of cells:              234
+
+     SB_DFF                      187
+     SB_LUT4                      47
+
+=== optimizing design ===
+
+Optimizing module `sample_rom'.
+Optimizing module `pwm_dac'.
+Optimizing module `audio_top'.
+
+=== optimized design statistics ===
+
+   Number of cells:              234
+   SB_DFF                      187
+   SB_LUT4                      47
+
+===== Verilog to netlist conversion finished =====

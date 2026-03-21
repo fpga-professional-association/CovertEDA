@@ -1,0 +1,37 @@
+nextpnr -- Next Generation Place and Route
+
+Version: nextpnr-ice40 -- Version 0.6
+
+Device: iCE40HX8K-CT256
+
+Importing design...
+
+Read constraints from ws2812.pcf...
+  Constraint set_io clk 91
+  Constraint set_io rst_n 88
+  Constraint set_io ws2812_out 2
+
+Info: Placed 567 cells based on constraints.
+Info: Running main placement...
+Info: Executing constraint propagation...
+Info: Running detailed placement for 567 cells.
+Info: Routed 567 nets using 4231 wires (812 full).
+
+Info: Device utilisation:
+Info:
+Info: ICESTORM_LC:   567/7680 (7.38%)
+Info: SB_IO:           3/256 (1.17%)
+Info: SB_GB_IO:        1/8   (12.50%)
+Info:
+Info: ICESTORM_HFOSC: 0/1   (0%)
+Info: ICESTORM_LFOSC: 0/1   (0%)
+Info: SB_GB:          0/8   (0%)
+Info: ICESTORM_RAM:   0/32  (0%)
+Info: SB_SPRAM256KA:  0/4   (0%)
+
+Info: Placed 567 ICESTORM_LC cells and 0 other cells.
+Info: Longest critical path: 13.9 ns
+
+Info: Max frequency for clock 'clk': 72 MHz
+
+Info: Timing analysis complete! (real time: 0.45s)

@@ -1,0 +1,264 @@
+
+          Lattice Diamond Pad Report (Pin Assignment Verification)
+          Design: blinky_led
+          Device: LFE5U-25F-6BG256C
+          Package: BG256 (16x16 BGA, 1.0mm pitch)
+          Date: 2026-03-21 14:27:33 UTC
+
+=================================================================================
+                        PIN ASSIGNMENT SUMMARY
+=================================================================================
+
+Total Design Pins:      6
+  Input Pins:           2
+  Output Pins:          4
+  Bidirectional Pins:   0
+  Power Pins:          40 (implicit)
+  Ground Pins:         40 (implicit)
+
+Banks Used:             2
+  Bank A (3.3V):        2 pins
+  Bank B (3.3V):        4 pins
+  Unused Banks:         6 (disabled to save power)
+
+Voltage Standards:      1 type
+  LVCMOS33:             6 pins
+
+
+=================================================================================
+                        PIN DETAILS
+=================================================================================
+
+Pad #  | Pin Name    | Function     | Bank | I/O Std  | Dir  | Drive | Slew
+------ | ----------- | ------------ | ---- | -------- | ---- | ----- | -----
+1      | P3          | clk          | A    | LVCMOS33 | IN   | --    | FAST
+2      | T14         | reset_n      | A    | LVCMOS33 | IN   | --    | FAST
+3      | B2          | led_out[0]   | B    | LVCMOS33 | OUT  | 12mA  | FAST
+4      | C2          | led_out[1]   | B    | LVCMOS33 | OUT  | 12mA  | FAST
+5      | A2          | led_out[2]   | B    | LVCMOS33 | OUT  | 12mA  | FAST
+6      | B1          | led_out[3]   | B    | LVCMOS33 | OUT  | 12mA  | FAST
+
+
+=================================================================================
+                        BANK CONFIGURATION
+=================================================================================
+
+Bank A (Row 1, Columns A-H):
+  Voltage:       3.3V LVCMOS (VCCIO_A = 3.3V)
+  Pins Used:     2 of 13
+  Pins:          P1, P2, P3, P4, P5, P6, R1-R8, T1-T8
+  Assigned:      P3 (clk), T14 (reset_n)
+  Utilization:   15.4% (conservative)
+  Termination:   None required
+  Status:        OK
+
+Bank B (Row 2, Columns A-H):
+  Voltage:       3.3V LVCMOS (VCCIO_B = 3.3V)
+  Pins Used:     4 of 13
+  Pins:          A1-H1, A2-H2
+  Assigned:      B2 (led_out[0]), C2 (led_out[1]), A2 (led_out[2]), B1 (led_out[3])
+  Utilization:   30.8% (moderate)
+  Termination:   None required
+  Status:        OK
+
+Bank C (Row 3, Columns A-H):
+  Voltage:       3.3V LVCMOS (VCCIO_C = 3.3V)
+  Pins Used:     0 of 13
+  Pins:          Unused
+  Utilization:   0.0% (disabled)
+  Status:        Powered down
+
+Banks D, E, F, G (Rows 4-7):
+  Voltage:       3.3V LVCMOS
+  Pins Used:     0 per bank
+  Utilization:   0.0% (disabled)
+  Status:        Powered down
+
+
+=================================================================================
+                        VOLTAGE COMPATIBILITY
+=================================================================================
+
+I/O Standard LVCMOS33:
+  Output Low Level (Vol):   < 0.4V
+  Output High Level (Voh):  > 2.4V @ 12mA
+  Input Low Level (Vil):    < 1.0V
+  Input High Level (Vih):   > 2.0V
+
+Supply Voltage Range:       2.97V - 3.63V (nominal 3.3V)
+Device Operating Voltage:   1.2V (core) compliant
+I/O Voltage:                3.3V compliant
+All voltage standards compatible.
+
+
+=================================================================================
+                        DRIVE STRENGTH SPECIFICATIONS
+=================================================================================
+
+Input Pins:
+  clk (P3):
+    Input impedance: ~100 kΩ
+    Input threshold: LVCMOS33 standard
+    Recommended load: < 1 pF
+
+  reset_n (T14):
+    Input impedance: ~100 kΩ
+    Input threshold: LVCMOS33 standard
+    Recommended load: < 1 pF
+
+Output Pins (all configured for 12mA drive):
+  led_out[0] (B2):
+    Drive current: 12 mA @ 3.3V
+    Maximum load: ~330 Ω (LED + series resistor)
+    Short-circuit capable: Yes
+
+  led_out[1] (C2):
+    Drive current: 12 mA @ 3.3V
+    Maximum load: ~330 Ω
+    Short-circuit capable: Yes
+
+  led_out[2] (A2):
+    Drive current: 12 mA @ 3.3V
+    Maximum load: ~330 Ω
+    Short-circuit capable: Yes
+
+  led_out[3] (B1):
+    Drive current: 12 mA @ 3.3V
+    Maximum load: ~330 Ω
+    Short-circuit capable: Yes
+
+All outputs capable of driving standard LEDs with current-limiting resistors.
+
+
+=================================================================================
+                        SLEW RATE CONFIGURATION
+=================================================================================
+
+Input Pins:
+  Slew Rate: FAST (input sampling at clock edge)
+  Delay impact: Minimal
+
+Output Pins:
+  Slew Rate: FAST (transition time < 2 ns)
+  Edge rate: ~5V/ns
+  EMI impact: Moderate (acceptable for low-speed LED interface)
+
+
+=================================================================================
+                        POWER PIN DISTRIBUTION
+=================================================================================
+
+Power Supply Pins (implicit):
+  VCORE (1.2V):     20 pins distributed around die
+  VCCIO (3.3V):     20 pins per bank (Banks A, B enabled)
+  GND:              40 pins distributed
+
+Decoupling Recommendation:
+  VCORE: 10x 100nF + 2x 10µF per corner
+  VCCIO: 5x 100nF + 1x 10µF per bank
+  GND:   Multiple vias to PCB ground plane (8-mil vias)
+
+
+=================================================================================
+                        PINOUT DIAGRAM (Text)
+=================================================================================
+
+BG256 Package (16x16 grid, top view):
+
+    A     B     C     D     E     F     G     H
+  +-----+-----+-----+-----+-----+-----+-----+-----+
+1 |  .  | L0  | L1  | GND | VCC | GND | .   | .   |
+2 |  .  | L2  | L3  | GND | VCC | GND | .   | .   |
+3 |CLK  | .   | .   | GND | VCC | GND | .   | .   |
+  +-----+-----+-----+-----+-----+-----+-----+-----+
+
+Legend:
+  CLK   = Clock input (P3)
+  L0-L3 = LED outputs [0:3] (B2, C2, A2, B1)
+  VCC   = VCCIO supply
+  GND   = Ground
+  .     = Unused
+
+
+=================================================================================
+                        CONSTRAINT VERIFICATION
+=================================================================================
+
+[PASS] Location Constraints
+  P3:  LOCATE COMP "clk" SITE "P3"              ✓
+  T14: LOCATE COMP "reset_n" SITE "T14"         ✓
+  B2:  LOCATE COMP "led_out[0]" SITE "B2"       ✓
+  C2:  LOCATE COMP "led_out[1]" SITE "C2"       ✓
+  A2:  LOCATE COMP "led_out[2]" SITE "A2"       ✓
+  B1:  LOCATE COMP "led_out[3]" SITE "B1"       ✓
+
+[PASS] I/O Voltage Specifications
+  All pins: IOBUF PORT ... IO_TYPE=LVCMOS33     ✓
+
+[PASS] Frequency Constraints
+  FREQUENCY PORT "clk" 25.0 MHz                 ✓
+
+[PASS] Voltage Range
+  VCCIO Bank A: 3.3V (configured)               ✓
+  VCCIO Bank B: 3.3V (configured)               ✓
+  VCORE:       1.2V (device nominal)            ✓
+
+
+=================================================================================
+                        ELECTRICAL CHARACTERISTICS
+=================================================================================
+
+Power Consumption per I/O Bank:
+  Bank A: ~0.3 mW (2 pins, low switching activity)
+  Bank B: ~1.2 mW (4 pins, LED drivers)
+  Total I/O: ~1.5 mW
+
+Signal Propagation Delays:
+  Input to CLB: ~1.5 ns (typical)
+  CLB to Output: ~2.2 ns (typical)
+  Total IOB delay: ~3.7 ns
+
+Capacitive Loading:
+  Each input: <5 pF (internal trace)
+  Each output: ~20 pF (PCB traces + LED load)
+
+
+=================================================================================
+                        DESIGN RULE CHECK RESULTS
+=================================================================================
+
+[PASS] All pins assigned to valid sites
+[PASS] All pins meet voltage compatibility requirements
+[PASS] No pin conflicts detected
+[PASS] All output drive strengths adequate
+[PASS] Bank voltage configurations consistent
+[PASS] No floating pins
+[PASS] Clock input properly terminated
+[PASS] Reset input properly terminated
+[PASS] Output impedance acceptable for loads
+
+
+=================================================================================
+                        MANUFACTURING NOTES
+=================================================================================
+
+1. Use single-sided 0.5mm pitch BGA solder paste stencil
+2. Reflow profile: Standard LVCMOS lead-free (260°C peak)
+3. Underfill not required for -6 temperature grade
+4. Test points recommended on clk and reset_n for debug
+5. Thermal via array under FPGA die recommended for heat dissipation
+
+
+=================================================================================
+                        FINAL STATUS
+=================================================================================
+
+Pin Assignment: VERIFIED
+All pins correctly placed and configured.
+Ready for PCB layout.
+
+Decoupling capacitors should be placed within 5mm of device pins.
+
+
+                     End of Pad Report
+

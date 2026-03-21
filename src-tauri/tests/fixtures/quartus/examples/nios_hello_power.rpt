@@ -1,0 +1,65 @@
+PowerPlay Power Analyzer Report
+Quartus II 13.1 Build 162 SJ
+Fri Mar 21 16:03:45 2026
+
+Design Name: nios_top
+Device: EP4CE115F29C7
+Device Grade: C (Industrial)
+Board Thermal Model: NONE (CONSERVATIVE)
+
+
+; Total Power Summary
+; ===================
+Total Power                            456.23 mW
+    Core Dynamic Power                 287.45 mW  (63.0%)
+    Core Static Power                  92.34 mW   (20.2%)
+    I/O Dynamic Power                  56.78 mW   (12.4%)
+    I/O Static Power                   19.66 mW   (4.3%)
+
+
+; Thermal Summary
+; ===============
+TJ (Junction Temperature)              78.2°C
+
+
+; Voltage Rail Summary
+; ====================
+VCC (1.2V)                            287.45 mW
+VCC_IO (3.3V)                         76.44 mW
+GND                                   456.23 mW
+
+
+; Power by Logic Block Type
+; ==========================
+Logic Block Type          Dynamic Power   Static Power   Total Power
+Combinatorial Logic       67.34 mW        23.67 mW       91.01 mW
+Sequential Logic          145.78 mW       45.23 mW       191.01 mW
+Block RAM                 45.67 mW        12.34 mW       58.01 mW
+PLL                       28.66 mW        11.10 mW       39.76 mW
+
+
+; Power by Entity
+; ===============
+Entity Name               Type          Dynamic Power   Static Power   Total
+nios_top                  User Logic    234.56 mW       78.45 mW       312.01 mW
+NIOS II Processor         Megafunction  156.78 mW       56.78 mW       213.56 mW
+Clock Distribution        Global        28.66 mW        11.10 mW       39.76 mW
+I/O Block                 GPIO          56.78 mW        19.66 mW       76.44 mW
+
+
+; Per-Pin Power Breakdown
+; =======================
+Pin Name          Direction   I/O Standard     Usage    Dynamic Power
+clk_100m          Input       3.3V LVCMOS      Clock    1.23 mW
+rst_n             Input       3.3V LVCMOS      Signal   0.34 mW
+sw_input[0-7]     Input       3.3V LVCMOS      Signal   3.12 mW
+led_output[0-7]   Output      3.3V LVCMOS      Signal   18.56 mW
+seg_output[0-7]   Output      3.3V LVCMOS      Signal   16.78 mW
+gpio_bidir[0-7]   Bidir       3.3V LVCMOS      Signal   14.23 mW
+
+
+; Design Assumptions
+; ==================
+Assume Junction Temperature (TJ): 25°C
+Assume Ambient Temperature (TA): 25°C
+Total Device Power Dissipation: 456.23 mW

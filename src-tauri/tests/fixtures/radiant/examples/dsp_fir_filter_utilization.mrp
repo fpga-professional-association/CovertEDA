@@ -1,0 +1,93 @@
+================================================================================
+                      Lattice Radiant Utilization Report
+                        dsp_fir_filter Project
+================================================================================
+
+Design: fir_top
+Device: LIFCL-40-7BG400I
+Date: 2026-03-21 14:41:32
+
+================================================================================
+                         DESIGN SUMMARY
+================================================================================
+
+Resource Type          | Used | Total | Util%  | Status
+-----------------------|------|-------|--------|--------
+LUT4                   | 156  | 2560  |  6.1%  | ✓ OK
+DFF                    | 128  | 2560  |  5.0%  | ✓ OK
+Adder                  |   8  |  640  |  1.3%  | ✓ OK
+Comparator             |   0  |  640  |  0.0%  | ✓ OK
+                       |      |       |        |
+EBR (18K blocks)       |   1  |  10   | 10.0%  | ✓ OK (coefficients)
+DSP (18x18)            |   8  |  10   | 80.0%  | ✓ OK (MAC units)
+PLL                    |   1  |   2   | 50.0%  | ✓ OK
+                       |      |       |        |
+IO Pads                |  50  |  160  | 31.3%  | ✓ OK
+
+================================================================================
+                      LOGIC ELEMENT BREAKDOWN
+================================================================================
+
+By Function:
+  Delay Line FFs        :  128 DFFs (8 taps × 16 bits)
+  MAC DSP Blocks        :   8 DSP blocks (18x18 multipliers)
+  Accumulator Logic     :  156 LUTs (32-bit adders)
+  Control Logic         :   0 LUTs
+
+Total: 156 LUTs, 128 DFFs, 8 DSP
+
+================================================================================
+                      MEMORY ELEMENTS
+================================================================================
+
+EBR Usage:
+  Coefficient ROM: 1 EBR (18Kb) - stores 8 × 16-bit coefficients
+
+Distributed RAM: 0 blocks
+Total Memory Used: 18 Kb of 180 Kb available (10%)
+
+================================================================================
+                      DEDICATED HARDWARE BLOCKS
+================================================================================
+
+DSP Blocks (18x18 Multipliers):
+  In Use: 8 (for MAC operations)
+  Available: 10
+  Utilization: 80%
+
+  DSP Configuration:
+    - 8 × (16-bit sample × 16-bit coefficient)
+    - All outputs: 32-bit accumulator
+    - Pipelined for high throughput
+
+EBR Blocks:
+  In Use: 1 (for coefficient storage)
+  Available: 10
+  Utilization: 10%
+
+================================================================================
+                      POWER ANALYSIS SUMMARY
+================================================================================
+
+Power Estimation (at 25°C):
+
+Static Power:        28.1 mW
+Dynamic Power:       14.2 mW
+                    --------
+Total Power:         42.3 mW
+
+Power Breakdown by Voltage Rail:
+  1.0V Core Rail:  31.8 mW (75%)
+  3.3V I/O Rail:   10.5 mW (25%)
+
+Power Breakdown by Function:
+  DSP Blocks:      18.4 mW (43% of total)
+  Clock Distribution: 4.2 mW (10%)
+  I/O Drivers:      7.1 mW (17%)
+  Logic:            5.8 mW (14%)
+  Memory:           2.4 mW (6%)
+  Leakage:         28.1 mW (66%)
+
+================================================================================
+End of Utilization Report
+================================================================================

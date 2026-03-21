@@ -1,0 +1,114 @@
+
+================================================================================
+*                          DRC REPORT
+*
+* Vivado v2023.2 (64-bit)
+* Compiled on: Wed Jan 15 14:32:41 2025
+*
+* Design: blinky_top
+* Device: xc7a35tcpg236-1
+*
+================================================================================
+
+Report Summary
+===============
+
+Total Errors:       0
+Total Warnings:     2
+Total Advisories:   5
+
+================================================================================
+
+DRC Check Results
+==================
+
+ERROR DRC Checks: 0 found
+
+WARNING DRC Checks: 2 found
+
++------+----+------------------------+--------+
+| DRC# | ID | Description            | Result |
++------+----+------------------------+--------+
+| 1    | W1 | PLCK-12                | 2x    |
++------+----+------------------------+--------+
+
+  WARNING: (W1:PLCK-12) Missing I/O Pin Assignment
+  Severity: WARNING
+  Messages: 2
+
+  Message 1: Pin 'LED1' has LVCMOS33 and has not been assigned a I/O constraint.
+    Please set a constraint or assign to LVCMOS33
+    Instance: led_out[0]
+
+  Message 2: Pin 'BTN2' has LVCMOS33 and has not been assigned a I/O constraint.
+    Please set a constraint or assign to LVCMOS33
+    Instance: btn_in[1]
+
+ADVISORY DRC Checks: 5 found
+
++------+----+------------------------------+--------+
+| DRC# | ID | Description                  | Result |
++------+----+------------------------------+--------+
+| 2    | A1 | XDCDB-1                      | 1x     |
+| 3    | A2 | PDRC-153                     | 2x     |
+| 4    | A3 | DPOR-1                       | 1x     |
+| 5    | A4 | LUTAR-1                      | 1x     |
++------+----+------------------------------+--------+
+
+  ADVISORY: (A1:XDCDB-1) Unmet Default XDC Constraint
+  Severity: ADVISORY
+  Messages: 1
+
+  Message 1: Default constraint for differential pair mode is not met.
+    XDC constraint 'set_property -dict {PACKAGE_PIN E3 IOSTANDARD LVCMOS33}'
+    suggests single-ended signaling but the pin is capable of differential mode.
+    Location: blinky.xdc:14
+
+  ADVISORY: (A2:PDRC-153) Partial I/O Pin Assignment
+  Severity: ADVISORY
+  Messages: 2
+
+  Message 1:
+    IO Bank 0 has unused pins with unset I/O standards.
+    Expected I/O standard: LVCMOS33
+    Unassigned Pins: K18, K19, L18, M18
+
+  Message 2:
+    IO Bank 1 has partially assigned voltage.
+    Bank 1 has LVCMOS33, but capacitors are recommended.
+    Location: IO Bank 1 (H16:H17)
+
+  ADVISORY: (A3:DPOR-1) Distributed Power On Reset (POR)
+  Severity: ADVISORY
+  Messages: 1
+
+  Message 1: Design does not explicitly disable DCAP pins.
+    All I/O Bank DCAP pins should be connected. Please verify DCAP placement.
+    Location: Bank 0
+
+  ADVISORY: (A4:LUTAR-1) LUT Area Usage
+  Severity: ADVISORY
+  Messages: 1
+
+  Message 1: LUT usage is 0.11% which is low. Consider increasing logic complexity
+    or using more resources for timing improvement.
+    LUT Resources: 23/20720
+
+================================================================================
+
+DRC Summary
+===========
+
+Total: 7 Design Rule Checks
+
+Design Rule Check Status:
+  Errors:      PASS (0 checks)
+  Warnings:    2 checks issued (review recommended)
+  Advisories:  5 checks issued (informational)
+
+All Critical DRC Checks Passed
+
+Design meets all mandatory design rules for this device.
+Warning and Advisory items may require review to optimize performance.
+
+End of DRC REPORT

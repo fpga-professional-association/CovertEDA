@@ -1,0 +1,85 @@
+================================================================================
+                        Lattice Radiant Timing Report
+                         i2c_bridge Project
+================================================================================
+
+Design       : i2c_top
+Device       : LFD2NX-40-7MG672
+Speed Grade  : 7
+Date         : 2026-03-21 14:39:02
+
+================================================================================
+                         PERFORMANCE SUMMARY
+================================================================================
+
+Constraint: create_clock -name clk_sys -period 20.0 [get_ports clk]
+
+Timing Summary:
+  Fmax            : 200.0 MHz (at 1.1V, 25C, Slow Process)
+  Period          : 5.0 ns
+  Requested       : 20.0 ns (50 MHz)
+  WNS (Worst Negative Slack) : +13.24 ns (Met)
+  TNS (Total Negative Slack)  : 0.0 ns
+
+Setup Time Budget:
+  Clock Period    : 20.0 ns
+  Data Path Delay : 5.42 ns
+  Clock Skew      : 1.34 ns
+  Setup Time      : 1.00 ns
+  Total Slack     : 13.24 ns ✓ PASS
+
+Hold Time Budget:
+  Clock Skew      : -0.92 ns
+  Hold Time       : 0.68 ns
+  Data Path Delay : 5.18 ns
+  Total Slack     : 13.56 ns ✓ PASS
+
+================================================================================
+                      CLOCK DOMAIN SUMMARY
+================================================================================
+
+Clock Domain: clk_sys
+  Clock Source: clk (50 MHz)
+  Period: 20.0 ns
+  Uncertainty: 0.8 ns (setup), 0.5 ns (hold)
+  Logic Paths: 6
+  Sequential Paths: 9
+
+================================================================================
+                    CRITICAL PATH ANALYSIS
+================================================================================
+
+Path 1: SETUP (Worst)
+  From: wb_master/state[1] / Q
+  To: wb_master/wb_cyc / D
+  Slack: 13.24 ns
+  Delay: 6.76 ns
+  Logic Levels: 1
+
+Path 2: HOLD
+  From: i2c_slave/bit_count[2] / Q
+  To: i2c_slave/bit_count[2] / D
+  Slack: 13.56 ns
+
+================================================================================
+                      TIMING STATISTICS
+================================================================================
+
+Total Nets:              98
+Total Cells:             145
+Total Sequential Cells:  128 (FFs)
+Total Combinational:     17 (LUTs)
+
+Critical paths: 0 violations
+Data Path Type    | Count | Worst Delay | Worst Slack | Status
+------------------|-------|-------------|-------------|--------
+Combinational     | 6     | 2.14 ns     | N/A         | ✓ OK
+Sequential setup  | 9     | 6.76 ns     | +13.24 ns   | ✓ OK
+Sequential hold   | 9     | 1.24 ns     | +13.56 ns   | ✓ OK
+
+Worst Setup Slack:   +13.24 ns
+Worst Hold Slack:    +13.56 ns
+
+================================================================================
+End of Timing Report
+================================================================================

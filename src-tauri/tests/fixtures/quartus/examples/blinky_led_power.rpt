@@ -1,0 +1,64 @@
+PowerPlay Power Analyzer Report
+Quartus II 13.1 Build 162 SJ
+Fri Mar 21 15:48:45 2026
+
+Design Name: blinky_top
+Device: EP4CE6E22C8
+Device Grade: C (Industrial)
+Board Thermal Model: NONE (CONSERVATIVE)
+
+
+; Total Power Summary
+; ===================
+Total Power                            82.14 mW
+    Core Dynamic Power                 45.32 mW  (55.2%)
+    Core Static Power                  18.76 mW  (22.8%)
+    I/O Dynamic Power                  12.84 mW  (15.6%)
+    I/O Static Power                   5.22 mW   (6.4%)
+
+
+; Thermal Summary
+; ===============
+TJ (Junction Temperature)              62.3°C
+
+
+; Voltage Rail Summary
+; ====================
+VCC (1.2V)                            45.32 mW
+VCC_IO (3.3V)                         18.06 mW
+GND                                   82.14 mW
+
+
+; Power by Logic Block Type
+; ==========================
+Logic Block Type          Dynamic Power   Static Power   Total Power
+Combinatorial Logic       12.45 mW        8.23 mW        20.68 mW
+Sequential Logic          22.34 mW        7.12 mW        29.46 mW
+Block RAM                 0.00 mW         1.34 mW        1.34 mW
+PLL                       10.53 mW        2.07 mW        12.60 mW
+
+
+; Power by Entity
+; ===============
+Entity Name               Type          Dynamic Power   Static Power   Total
+blinky_top                User Logic    34.79 mW        16.35 mW       51.14 mW
+Clock Distribution        Global        10.53 mW        2.07 mW        12.60 mW
+I/O Block                 GPIO          12.84 mW        5.22 mW        18.06 mW
+
+
+; Per-Pin Power Breakdown
+; =======================
+Pin Name     Direction   I/O Standard     Usage    Dynamic Power
+clk_50m      Input       3.3V LVCMOS      Clock    0.34 mW
+rst_n        Input       3.3V LVCMOS      Signal   0.12 mW
+led[0]       Output      3.3V LVCMOS      Signal   3.21 mW
+led[1]       Output      3.3V LVCMOS      Signal   3.18 mW
+led[2]       Output      3.3V LVCMOS      Signal   3.24 mW
+led[3]       Output      3.3V LVCMOS      Signal   3.19 mW
+
+
+; Design Assumptions
+; ==================
+Assume Junction Temperature (TJ): 25°C
+Assume Ambient Temperature (TA): 25°C
+Total Device Power Dissipation: 82.14 mW
