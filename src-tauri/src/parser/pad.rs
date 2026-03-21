@@ -434,10 +434,10 @@ sig3 | C3 | 1 | LVCMOS33
     #[test]
     fn test_parse_libero_pad_basic() {
         let content = r#"
-| Pin | Net Name | Bank | Direction |
-| A1  | clk      | 0    | IN        |
-| B2  | data[0]  | 0    | OUT       |
-| C3  | reset    | 1    | IN        |
+Pin | Net Name | Bank | Direction
+A1  | clk      | 0    | IN
+B2  | data[0]  | 0    | OUT
+C3  | reset    | 1    | IN
 "#;
         let report = parse_libero_pad(content).unwrap();
         assert_eq!(report.assigned_pins.len(), 3);
@@ -454,8 +454,8 @@ sig3 | C3 | 1 | LVCMOS33
     #[test]
     fn test_parse_libero_pad_direction_preservation() {
         let content = r#"
-| Pin | Net Name | Bank | Direction |
-| A1  | sig1     | 0    | INOUT     |
+Pin | Net Name | Bank | Direction
+A1  | sig1     | 0    | INOUT
 "#;
         let report = parse_libero_pad(content).unwrap();
         assert_eq!(report.assigned_pins[0].direction, "INOUT");

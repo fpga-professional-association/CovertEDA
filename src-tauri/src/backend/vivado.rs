@@ -790,10 +790,10 @@ mod tests {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
         let power_content = r#"
-Total On-Chip Power (W): 2.456
+Total On-Chip Power: 2.456 W
 Device Static Power: 0.623 W
 Device Dynamic Power: 1.833 W
-Junction Temperature (C): 65.4
+Junction Temperature: 65.4 C
 "#;
         std::fs::write(tmp.path().join("power.rpt"), power_content).unwrap();
         let result = b.parse_power_report(tmp.path()).unwrap();
@@ -893,11 +893,10 @@ CRITICAL WARNING [TIMING-7] Timing constraint not met on path main_clk.
     #[test]
     fn test_parse_pad_report_with_pins() {
         let content = r#"
-|     PIN     | BUFFER_TYPE |
-|------|---------|
-| A14  | LVCMOS33|
-| A15  | LVCMOS33|
-| B16  | LVCMOS33|
+PIN | BUFFER_TYPE
+A14 | LVCMOS33
+A15 | LVCMOS33
+B16 | LVCMOS33
 "#;
         let result = VivadoBackend::parse_pad_report(content).unwrap();
         assert!(result.len() >= 3);

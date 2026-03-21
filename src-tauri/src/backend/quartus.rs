@@ -1468,7 +1468,7 @@ Info | I001 | Test info | loc3 | Note it
             &[],
             &HashMap::new(),
         ).unwrap();
-        assert!(script.contains("Quartus Prime Standard"));
+        assert!(script.contains("CovertEDA"));
         assert!(script.contains("5CGXFC7C7F23C8"));
     }
 
@@ -1488,7 +1488,7 @@ Info | I001 | Test info | loc3 | Note it
             &[],
             &HashMap::new(),
         ).unwrap();
-        assert!(script.contains("Quartus Prime Pro"));
+        assert!(script.contains("CovertEDA"));
         assert!(script.contains("1SG280LU3F50E2VG"));
     }
 
@@ -1621,7 +1621,7 @@ Info | I001 | Test info | loc3 | Note it
         let std = make_backend();
         let pro = make_pro_backend();
 
-        assert_eq!(std.default_device(), "5CGXFC7C7F23C8");
+        assert_eq!(std.default_device(), "5CSEMA5F31C6");
         assert_eq!(pro.default_device(), "1SG280LU3F50E2VG");
     }
 
@@ -1694,7 +1694,7 @@ Info | I001 | Test info | loc3 | Note it
 
         let synth = &stages[0];
         assert_eq!(synth.id, "synth");
-        assert!(synth.cmd.contains("execute_module"));
+        assert!(synth.cmd.contains("quartus_syn"));
 
         let fit = &stages[1];
         assert_eq!(fit.id, "fit");

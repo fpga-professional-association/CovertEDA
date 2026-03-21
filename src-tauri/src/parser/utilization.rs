@@ -31,6 +31,11 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
         let used: u64 = cap[2].parse().unwrap_or(0);
         let total: u64 = cap[3].parse().unwrap_or(0);
 
+        // Skip entries with zero total resources
+        if total == 0 {
+            continue;
+        }
+
         let item = ResourceItem {
             resource: name.clone(),
             used,

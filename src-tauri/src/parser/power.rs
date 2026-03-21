@@ -781,7 +781,7 @@ Dynamic Power: 0.7 W
     #[test]
     fn test_parse_vivado_power_basic() {
         let content = r#"
-Total Power (W): 0.456
+Total Power: 0.456 W
 Device Static: 0.123 W
 Dynamic: 0.333 W
 Junction Temperature: 62.0 C
