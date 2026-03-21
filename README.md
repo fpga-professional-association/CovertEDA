@@ -31,6 +31,40 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/01_start_screen.png" alt="CovertEDA Start Screen" width="700" /><br />
+  <em>Start Screen — Auto-detects all 7 vendor toolchains, recent projects, and system status</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/02_build_pipeline.png" alt="Build Pipeline" width="700" /><br />
+  <em>Build Pipeline — Visual stages with live progress, per-stage configuration, and streaming build log</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/03_reports_timing.png" alt="Timing Report" width="700" /><br />
+  <em>Timing Report — Fmax gauge, WNS/TNS analysis, clock domains, and critical path table</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/04_reports_utilization.png" alt="Utilization Report" width="700" /><br />
+  <em>Utilization Report — Resource usage bars, device summary, and per-module breakdown</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/05_constraint_editor.png" alt="Constraint Editor" width="700" /><br />
+  <em>Constraint Editor — Pin assignments with I/O standards, timing constraints, and lock indicators</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/06_ip_catalog.png" alt="IP Catalog" width="700" /><br />
+  <em>IP Catalog — Multi-vendor IP cores with configurable parameters and one-click generation</em>
+</p>
+
+---
+
 ## The Problem
 
 FPGA engineers are forced to use vendor-specific IDEs that are slow, buggy, and stuck in the past. Every major vendor ships its own GUI -- built on aging Java or Qt frameworks -- with inconsistent interfaces, random crashes, and workflows that assume you never switch vendors.
