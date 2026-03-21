@@ -506,6 +506,217 @@ impl QuartusBackend {
         }
         results
     }
+
+    /// Parse Quartus PowerPlay report (*.pow.rpt)
+    /// Extracts total power, thermal info, and power breakdown by category
+    fn parse_quartus_power_report(&self, content: &str) -> BackendResult<PowerReport> {
+        use regex::Regex;
+
+        let mut total_mw = 0.0;
+        let mut junction_temp_c = 25.0;
+        let mut ambient_temp_c = 25.0;
+        let mut theta_ja = 0.0;
+        let mut breakdown = vec![];
+        let mut by_rail = vec![];
+        let mut confidence = "Medium".to_string();
+
+        // Parse "Total Thermal Power Dissipation" (usually in watts)
+        if let Ok(re) = Regex::new(r"Total Thermal Power Dissipation\s*:\s*([\d.]+)\s*W") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    total_mw = val * 1000.0;
+                }
+            }
+        }
+
+        // Parse "Core Dynamic Power"
+        if let Ok(re) = Regex::new(r"Core Dynamic\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "Core Dynamic".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "Core Static Power"
+        if let Ok(re) = Regex::new(r"Core Static\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "Core Static".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "I/O Power"
+        if let Ok(re) = Regex::new(r"I/O\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "I/O".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "Junction Temperature"
+        if let Ok(re) = Regex::new(r"Junction Temperature\s*:\s*([\d.]+)\s*C") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    junction_temp_c = val;
+                }
+            }
+        }
+
+        // Parse "Ambient Temperature"
+        if let Ok(re) = Regex::new(r"Ambient Temperature\s*:\s*([\d.]+)\s*C") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    ambient_temp_c = val;
+                }
+            }
+        }
+
+        // Parse "Theta JA" (thermal resistance)
+        if let Ok(re) = Regex::new(r"Theta JA\s*:\s*([\d.]+)\s*C/W") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    theta_ja = val;
+                }
+            }
+        }
+
+        // Parse confidence level (if present)
+        if let Ok(re) = Regex::new(r"Confidence\s*:\s*(\w+)") {
+            if let Some(caps) = re.captures(content) {
+                confidence = caps[1].to_string();
+            }
+        }
+
+        // Parse power by rail if available (e.g., "VCCINT: 150.2 mW")
+        if let Ok(re) = Regex::new(r"(VCC\w+)\s*:\s*([\d.]+)\s*mW") {
+            for caps in re.captures_iter(content) {
+                if let Ok(mw) = caps[2].parse::<f64>() {
+                    by_rail.push(PowerRail {
+                        rail: caps[1].to_string(),
+                        mw,
+                    });
+                }
+            }
+        }
+
+        // Calculate percentages
+        if total_mw > 0.0 {
+            for entry in &mut breakdown {
+                entry.percentage = (entry.mw / total_mw) * 100.0;
+            }
+        }
+
+        Ok(PowerReport {
+            total_mw,
+            junction_temp_c,
+            ambient_temp_c,
+            theta_ja,
+            confidence,
+            breakdown,
+            by_rail,
+        })
+    }
+
+    /// Parse Quartus DRC report (*.drc.rpt)
+    /// Extracts error/warning counts and individual DRC items
+    fn parse_quartus_drc_report(&self, content: &str) -> BackendResult<DrcReport> {
+        use regex::Regex;
+
+        let mut errors = 0u32;
+        let mut critical_warnings = 0u32;
+        let mut warnings = 0u32;
+        let mut info = 0u32;
+        let mut waived = 0u32;
+        let mut items = vec![];
+
+        // Parse summary counts
+        if let Ok(re) = Regex::new(r"(\d+)\s+Error") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    errors = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Critical Warning") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    critical_warnings = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Warning") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    warnings = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Info") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    info = val;
+                }
+            }
+        }
+
+        // Parse individual DRC items (format: Severity | Code | Message | Location | Action)
+        // Error example: "Error | PRJ0001 | Device not specified | N/A | Set device in settings"
+        if let Ok(re) = Regex::new(
+            r"(\w+)\s*\|\s*([A-Z0-9]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|\s*([^\n]+)"
+        ) {
+            for caps in re.captures_iter(content) {
+                let severity_str = caps[1].trim();
+                let code = caps[2].trim().to_string();
+                let message = caps[3].trim().to_string();
+                let location = caps[4].trim().to_string();
+                let action = caps[5].trim().to_string();
+
+                let severity = match severity_str {
+                    "Error" => DrcSeverity::Error,
+                    "CriticalWarning" | "Critical Warning" => DrcSeverity::CriticalWarning,
+                    "Warning" => DrcSeverity::Warning,
+                    "Info" => DrcSeverity::Info,
+                    "Waived" => DrcSeverity::Waived,
+                    _ => DrcSeverity::Info,
+                };
+
+                items.push(DrcItem {
+                    severity,
+                    code,
+                    message,
+                    location,
+                    action,
+                });
+            }
+        }
+
+        Ok(DrcReport {
+            errors,
+            critical_warnings,
+            warnings,
+            info,
+            waived,
+            items,
+        })
+    }
 }
 
 impl FpgaBackend for QuartusBackend {
@@ -822,217 +1033,6 @@ puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constrai
         let content = std::fs::read_to_string(&drc_file)?;
         let report = self.parse_quartus_drc_report(&content)?;
         Ok(Some(report))
-    }
-
-    /// Parse Quartus PowerPlay report (*.pow.rpt)
-    /// Extracts total power, thermal info, and power breakdown by category
-    fn parse_quartus_power_report(&self, content: &str) -> BackendResult<PowerReport> {
-        use regex::Regex;
-
-        let mut total_mw = 0.0;
-        let mut junction_temp_c = 25.0;
-        let mut ambient_temp_c = 25.0;
-        let mut theta_ja = 0.0;
-        let mut breakdown = vec![];
-        let mut by_rail = vec![];
-        let mut confidence = "Medium".to_string();
-
-        // Parse "Total Thermal Power Dissipation" (usually in watts)
-        if let Ok(re) = Regex::new(r"Total Thermal Power Dissipation\s*:\s*([\d.]+)\s*W") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    total_mw = val * 1000.0;
-                }
-            }
-        }
-
-        // Parse "Core Dynamic Power"
-        if let Ok(re) = Regex::new(r"Core Dynamic\s*:\s*([\d.]+)\s*mW") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    breakdown.push(PowerBreakdown {
-                        category: "Core Dynamic".to_string(),
-                        mw: val,
-                        percentage: 0.0,
-                    });
-                }
-            }
-        }
-
-        // Parse "Core Static Power"
-        if let Ok(re) = Regex::new(r"Core Static\s*:\s*([\d.]+)\s*mW") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    breakdown.push(PowerBreakdown {
-                        category: "Core Static".to_string(),
-                        mw: val,
-                        percentage: 0.0,
-                    });
-                }
-            }
-        }
-
-        // Parse "I/O Power"
-        if let Ok(re) = Regex::new(r"I/O\s*:\s*([\d.]+)\s*mW") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    breakdown.push(PowerBreakdown {
-                        category: "I/O".to_string(),
-                        mw: val,
-                        percentage: 0.0,
-                    });
-                }
-            }
-        }
-
-        // Parse "Junction Temperature"
-        if let Ok(re) = Regex::new(r"Junction Temperature\s*:\s*([\d.]+)\s*C") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    junction_temp_c = val;
-                }
-            }
-        }
-
-        // Parse "Ambient Temperature"
-        if let Ok(re) = Regex::new(r"Ambient Temperature\s*:\s*([\d.]+)\s*C") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    ambient_temp_c = val;
-                }
-            }
-        }
-
-        // Parse "Theta JA" (thermal resistance)
-        if let Ok(re) = Regex::new(r"Theta JA\s*:\s*([\d.]+)\s*C/W") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<f64>() {
-                    theta_ja = val;
-                }
-            }
-        }
-
-        // Parse confidence level (if present)
-        if let Ok(re) = Regex::new(r"Confidence\s*:\s*(\w+)") {
-            if let Some(caps) = re.captures(content) {
-                confidence = caps[1].to_string();
-            }
-        }
-
-        // Parse power by rail if available (e.g., "VCCINT: 150.2 mW")
-        if let Ok(re) = Regex::new(r"(VCC\w+)\s*:\s*([\d.]+)\s*mW") {
-            for caps in re.captures_iter(content) {
-                if let Ok(mw) = caps[2].parse::<f64>() {
-                    by_rail.push(PowerRail {
-                        rail: caps[1].to_string(),
-                        mw,
-                    });
-                }
-            }
-        }
-
-        // Calculate percentages
-        if total_mw > 0.0 {
-            for entry in &mut breakdown {
-                entry.percentage = (entry.mw / total_mw) * 100.0;
-            }
-        }
-
-        Ok(PowerReport {
-            total_mw,
-            junction_temp_c,
-            ambient_temp_c,
-            theta_ja,
-            confidence,
-            breakdown,
-            by_rail,
-        })
-    }
-
-    /// Parse Quartus DRC report (*.drc.rpt)
-    /// Extracts error/warning counts and individual DRC items
-    fn parse_quartus_drc_report(&self, content: &str) -> BackendResult<DrcReport> {
-        use regex::Regex;
-
-        let mut errors = 0u32;
-        let mut critical_warnings = 0u32;
-        let mut warnings = 0u32;
-        let mut info = 0u32;
-        let mut waived = 0u32;
-        let mut items = vec![];
-
-        // Parse summary counts
-        if let Ok(re) = Regex::new(r"(\d+)\s+Error") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<u32>() {
-                    errors = val;
-                }
-            }
-        }
-
-        if let Ok(re) = Regex::new(r"(\d+)\s+Critical Warning") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<u32>() {
-                    critical_warnings = val;
-                }
-            }
-        }
-
-        if let Ok(re) = Regex::new(r"(\d+)\s+Warning") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<u32>() {
-                    warnings = val;
-                }
-            }
-        }
-
-        if let Ok(re) = Regex::new(r"(\d+)\s+Info") {
-            if let Some(caps) = re.captures(content) {
-                if let Ok(val) = caps[1].parse::<u32>() {
-                    info = val;
-                }
-            }
-        }
-
-        // Parse individual DRC items (format: Severity | Code | Message | Location | Action)
-        // Error example: "Error | PRJ0001 | Device not specified | N/A | Set device in settings"
-        if let Ok(re) = Regex::new(
-            r"(\w+)\s*\|\s*([A-Z0-9]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|\s*([^\n]+)"
-        ) {
-            for caps in re.captures_iter(content) {
-                let severity_str = caps[1].trim();
-                let code = caps[2].trim().to_string();
-                let message = caps[3].trim().to_string();
-                let location = caps[4].trim().to_string();
-                let action = caps[5].trim().to_string();
-
-                let severity = match severity_str {
-                    "Error" => DrcSeverity::Error,
-                    "CriticalWarning" | "Critical Warning" => DrcSeverity::CriticalWarning,
-                    "Warning" => DrcSeverity::Warning,
-                    "Info" => DrcSeverity::Info,
-                    "Waived" => DrcSeverity::Waived,
-                    _ => DrcSeverity::Info,
-                };
-
-                items.push(DrcItem {
-                    severity,
-                    code,
-                    message,
-                    location,
-                    action,
-                });
-            }
-        }
-
-        Ok(DrcReport {
-            errors,
-            critical_warnings,
-            warnings,
-            info,
-            waived,
-            items,
-        })
     }
 
     fn read_constraints(&self, constraint_file: &Path) -> BackendResult<Vec<PinConstraint>> {

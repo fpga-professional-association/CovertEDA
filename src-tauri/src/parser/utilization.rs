@@ -902,7 +902,7 @@ Number of PLL sites: 1 out of 4
     }
 
     #[test]
-    fn test_parse_quartus_utilization_empty() {
+    fn test_parse_quartus_utilization_with_alms_empty() {
         let content = "";
         let report = parse_quartus_utilization(content, "test").unwrap();
         assert!(report.categories.is_empty());

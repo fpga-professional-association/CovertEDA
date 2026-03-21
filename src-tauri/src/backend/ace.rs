@@ -1,4 +1,4 @@
-use crate::backend::{BackendError, BackendResult, FpgaBackend, DetectedVersion};
+use crate::backend::{BackendError, BackendResult, FpgaBackend, DetectedVersion, PackagePin};
 use crate::types::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
