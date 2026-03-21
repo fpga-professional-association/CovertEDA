@@ -640,7 +640,7 @@ impl FpgaBackend for RadiantBackend {
                     let path = entry.path();
                     if path.extension().and_then(|e| e.to_str()) == Some("pad") {
                         if let Ok(content) = std::fs::read_to_string(&path) {
-                            if let Some(report) = crate::parser::pad::parse_radiant_pad(&content) {
+                            if let Ok(report) = crate::parser::pad::parse_radiant_pad(&content) {
                                 return Ok(Some(report));
                             }
                         }

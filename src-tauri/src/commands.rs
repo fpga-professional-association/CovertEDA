@@ -1355,7 +1355,7 @@ pub fn get_io_report(
                 let p = entry.path();
                 if p.extension().map(|e| e == "pad").unwrap_or(false) {
                     if let Ok(content) = std::fs::read_to_string(&p) {
-                        if let Some(pad) = crate::parser::pad::parse_radiant_pad(&content) {
+                        if let Ok(pad) = crate::parser::pad::parse_radiant_pad(&content) {
                             return Ok(Some(pad_report_to_io_report(&pad)));
                         }
                     }
