@@ -181,7 +181,7 @@ pub fn scan_eco_targets(design_file: &std::path::Path) -> BackendResult<EcoTarge
             if let Some(pos) = trimmed.find('[') {
                 let rest = &trimmed[pos + 1..];
                 if let Some(end) = rest.find(']') {
-                    if let Ok(width) = rest[..end].split(':').next().unwrap_or("0").parse() {
+                    if let Ok(width) = rest[..end].split(':').next().unwrap_or("0").parse::<u32>() {
                         targets.add_ports.push(EcoIoPort {
                             port_name: format!("port_{}", targets.add_ports.len()),
                             direction: if trimmed.starts_with("input") {

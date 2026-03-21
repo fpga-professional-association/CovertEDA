@@ -113,8 +113,41 @@ pub fn write_pdc(constraints: &[PinConstraint]) -> String {
     lines.join("\n") + "\n"
 }
 
-/// Parse Synopsys .sdc constraint file (timing constraints)
-pub fn parse_sdc(content: &str) -> BackendResult<SdcFile> {
+/// Parse SDC for pin constraints (backward-compatible API for backends)
+pub fn parse_sdc(content: &str) -> BackendResult<Vec<PinConstraint>> {
+    // SDC files don't typically contain pin location assignments,
+    // but Quartus uses set_location_assignment in SDC-like files
+    let mut constraints = Vec::new();
+    let loc_re = Regex::new(r"set_location_assignment\s+(\S+)\s+-to\s+(\S+)").unwrap();
+    for cap in loc_re.captures_iter(content) {
+        constraints.push(PinConstraint {
+            pin: cap[1].to_string(),
+            net: cap[2].to_string(),
+            direction: String::new(),
+            io_standard: "LVCMOS33".to_string(),
+            bank: String::new(),
+            locked: true,
+            extra: vec![],
+        });
+    }
+    Ok(constraints)
+}
+
+/// Write SDC pin constraints (backward-compatible API for backends)
+pub fn write_sdc_pins(constraints: &[PinConstraint]) -> String {
+    let mut lines = Vec::new();
+    lines.push("# CovertEDA — Generated SDC Constraints".to_string());
+    for c in constraints {
+        lines.push(format!(
+            "set_location_assignment {} -to {}",
+            c.pin, c.net
+        ));
+    }
+    lines.join("\n") + "\n"
+}
+
+/// Parse Synopsys .sdc constraint file (full timing constraints)
+pub fn parse_sdc_timing(content: &str) -> BackendResult<SdcFile> {
     let mut sdc = SdcFile {
         clocks: Vec::new(),
         input_delays: Vec::new(),
@@ -361,8 +394,8 @@ pub fn parse_sdc(content: &str) -> BackendResult<SdcFile> {
     Ok(sdc)
 }
 
-/// Write Synopsys .sdc constraint file
-pub fn write_sdc(sdc: &SdcFile) -> String {
+/// Write Synopsys .sdc constraint file (full timing constraints)
+pub fn write_sdc_timing(sdc: &SdcFile) -> String {
     let mut lines = Vec::new();
     lines.push("# CovertEDA — Generated SDC Constraints".to_string());
     lines.push(String::new());
@@ -838,7 +871,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_create_clock() {
         let input = "create_clock -name clk -period 10.0 [get_ports {clk}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.clocks.len(), 1);
         assert_eq!(result.clocks[0].name, Some("clk".to_string()));
         assert_eq!(result.clocks[0].period, Some(10.0));
@@ -848,7 +881,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_input_delay() {
         let input = "set_input_delay -clock clk 2.0 [get_ports {data}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.input_delays.len(), 1);
         assert_eq!(result.input_delays[0].clock, Some("clk".to_string()));
         assert_eq!(result.input_delays[0].value, Some(2.0));
@@ -857,7 +890,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_output_delay() {
         let input = "set_output_delay -clock clk 3.0 [get_ports {result}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.output_delays.len(), 1);
         assert_eq!(result.output_delays[0].clock, Some("clk".to_string()));
         assert_eq!(result.output_delays[0].value, Some(3.0));
@@ -866,7 +899,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_false_path() {
         let input = "set_false_path -from [get_pins {async_in}] -to [get_pins {sync_out}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.false_paths.len(), 1);
         assert!(result.false_paths[0].from.is_some());
         assert!(result.false_paths[0].to.is_some());
@@ -875,7 +908,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_multicycle() {
         let input = "set_multicycle_path 2 -from [get_pins {a}] -to [get_pins {b}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.multicycle_paths.len(), 1);
         assert_eq!(result.multicycle_paths[0].value, Some(2.0));
     }
@@ -883,7 +916,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_max_delay() {
         let input = "set_max_delay 5.5 -from [get_pins {a}] -to [get_pins {b}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.max_delays.len(), 1);
         assert_eq!(result.max_delays[0].value, Some(5.5));
     }
@@ -891,7 +924,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_min_delay() {
         let input = "set_min_delay 1.2 -from [get_pins {x}] -to [get_pins {y}]";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.min_delays.len(), 1);
         assert_eq!(result.min_delays[0].value, Some(1.2));
     }
@@ -899,7 +932,7 @@ ldc_set_location -site {B4} [get_ports {led[1]}]"#;
     #[test]
     fn test_parse_sdc_clock_groups() {
         let input = "set_clock_groups -asynchronous -group {clk1} -group {clk2}";
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.clock_groups.len(), 1);
         assert_eq!(result.clock_groups[0].targets.len(), 2);
     }
@@ -912,7 +945,7 @@ set_input_delay -clock sys_clk 5.0 [get_ports {data_in}]
 set_output_delay -clock sys_clk 3.0 [get_ports {data_out}]
 set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 "#;
-        let result = parse_sdc(input).unwrap();
+        let result = parse_sdc_timing(input).unwrap();
         assert_eq!(result.clocks.len(), 1);
         assert_eq!(result.input_delays.len(), 1);
         assert_eq!(result.output_delays.len(), 1);
@@ -943,12 +976,12 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
             other: vec![],
         };
 
-        let written = write_sdc(&sdc);
+        let written = write_sdc_timing(&sdc);
         assert!(written.contains("create_clock"));
         assert!(written.contains("10.0"));
         assert!(written.contains("clk"));
 
-        let parsed = parse_sdc(&written).unwrap();
+        let parsed = parse_sdc_timing(&written).unwrap();
         assert_eq!(parsed.clocks.len(), 1);
         assert_eq!(parsed.clocks[0].period, Some(10.0));
     }

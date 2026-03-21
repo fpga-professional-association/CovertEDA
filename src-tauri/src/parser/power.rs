@@ -121,6 +121,76 @@ pub fn parse_radiant_power(content: &str) -> BackendResult<PowerReport> {
     })
 }
 
+/// Parse Vivado power report
+///
+/// Vivado power report has a different format from Radiant.
+/// This is a basic parser that extracts total power and breakdown.
+pub fn parse_vivado_power(content: &str) -> BackendResult<PowerReport> {
+    let mut total_mw = 0.0;
+    let mut junction_temp_c = 25.0;
+    let mut breakdown = vec![];
+
+    // Parse "Total On-Chip Power (W)" or "Total Power"
+    if let Ok(re) = Regex::new(r"Total\s+(?:On-Chip\s+)?Power[^:]*:\s*([\d.]+)\s*W") {
+        if let Some(caps) = re.captures(content) {
+            if let Ok(val) = caps[1].parse::<f64>() {
+                total_mw = val * 1000.0;
+            }
+        }
+    }
+
+    // Parse static/dynamic breakdown
+    if let Ok(re) = Regex::new(r"(?:Device\s+)?Static[^:]*:\s*([\d.]+)\s*W") {
+        if let Some(caps) = re.captures(content) {
+            if let Ok(val) = caps[1].parse::<f64>() {
+                breakdown.push(PowerBreakdown {
+                    category: "Static".to_string(),
+                    mw: val * 1000.0,
+                    percentage: 0.0,
+                });
+            }
+        }
+    }
+
+    if let Ok(re) = Regex::new(r"Dynamic[^:]*:\s*([\d.]+)\s*W") {
+        if let Some(caps) = re.captures(content) {
+            if let Ok(val) = caps[1].parse::<f64>() {
+                breakdown.push(PowerBreakdown {
+                    category: "Dynamic".to_string(),
+                    mw: val * 1000.0,
+                    percentage: 0.0,
+                });
+            }
+        }
+    }
+
+    // Parse junction temperature
+    if let Ok(re) = Regex::new(r"Junction Temperature[^:]*:\s*([\d.]+)\s*C") {
+        if let Some(caps) = re.captures(content) {
+            if let Ok(val) = caps[1].parse::<f64>() {
+                junction_temp_c = val;
+            }
+        }
+    }
+
+    // Calculate percentages
+    if total_mw > 0.0 {
+        for entry in &mut breakdown {
+            entry.percentage = (entry.mw / total_mw) * 100.0;
+        }
+    }
+
+    Ok(PowerReport {
+        total_mw,
+        junction_temp_c,
+        ambient_temp_c: 25.0,
+        theta_ja: 0.0,
+        confidence: "Medium".to_string(),
+        breakdown,
+        by_rail: vec![],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

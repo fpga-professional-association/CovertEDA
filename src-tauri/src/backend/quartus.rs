@@ -799,7 +799,7 @@ puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constrai
         constraints: &[PinConstraint],
         output_file: &Path,
     ) -> BackendResult<()> {
-        let content = crate::parser::constraints::write_sdc(constraints);
+        let content = crate::parser::constraints::write_sdc_pins(constraints);
         std::fs::write(output_file, content)?;
         Ok(())
     }
