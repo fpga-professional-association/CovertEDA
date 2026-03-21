@@ -363,3 +363,31 @@ pub struct LicenseInfo {
     pub server: String,
     pub vendor: String,
 }
+
+// ── Timing Constraints (SDC) ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimingConstraint {
+    pub constraint_type: String,
+    pub name: Option<String>,
+    pub clock: Option<String>,
+    pub period: Option<f64>,
+    pub value: Option<f64>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub targets: Vec<String>,
+    pub raw: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SdcFile {
+    pub clocks: Vec<TimingConstraint>,
+    pub input_delays: Vec<TimingConstraint>,
+    pub output_delays: Vec<TimingConstraint>,
+    pub false_paths: Vec<TimingConstraint>,
+    pub multicycle_paths: Vec<TimingConstraint>,
+    pub max_delays: Vec<TimingConstraint>,
+    pub min_delays: Vec<TimingConstraint>,
+    pub clock_groups: Vec<TimingConstraint>,
+    pub other: Vec<TimingConstraint>,
+}

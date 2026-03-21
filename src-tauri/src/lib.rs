@@ -1,14 +1,23 @@
 pub mod backend;
+pub mod bitstream_security;
 pub mod commands;
 pub mod config;
+pub mod eco_editor;
 pub mod files;
 pub mod git;
+pub mod hdl_encrypt;
 pub mod makefile;
 pub mod parser;
 pub mod process;
 pub mod programmer;
 pub mod project;
+pub mod reveal;
+pub mod run_manager;
+pub mod sei_editor;
+pub mod sim_wizard;
+pub mod source_templates;
 pub mod ssh;
+pub mod strategy;
 pub mod types;
 
 use tauri::Manager;

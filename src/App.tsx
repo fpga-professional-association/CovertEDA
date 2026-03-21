@@ -29,6 +29,12 @@ const KeyboardShortcuts = lazy(() => import("./components/KeyboardShortcuts"));
 const IpCatalogSection = lazy(() => import("./components/IpCatalogSection"));
 const GitPanel = lazy(() => import("./components/GitPanel"));
 const SshPanel = lazy(() => import("./components/SshPanel"));
+const PowerCalculator = lazy(() => import("./components/PowerCalculator"));
+const RevealDebug = lazy(() => import("./components/RevealDebug"));
+const RunManager = lazy(() => import("./components/RunManager"));
+const EcoEditor = lazy(() => import("./components/EcoEditor"));
+const SimWizard = lazy(() => import("./components/SimWizard"));
+const SourceTemplates = lazy(() => import("./components/SourceTemplates"));
 import {
   startBuild as tauriStartBuild,
   listen,
@@ -1397,6 +1403,12 @@ export default function App() {
             <NavBtn icon={<Git />} label="Git" active={sec === "git"} onClick={() => navClick("git")} accent={C.ok} tooltip="Git — branches, tags, commit log, push/pull" badge={gitState?.behind ? true : undefined} />
             <NavBtn icon={<Server />} label="SSH" active={sec === "ssh"} onClick={() => navClick("ssh")} accent={C.cyan} tooltip="SSH Build Server — run builds on remote machines" />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
+            <NavBtn icon={<Zap />} label="Power" active={sec === "power"} onClick={() => navClick("power")} accent={C.orange} tooltip="Power Calculator — power analysis and thermal margins" />
+            <NavBtn icon={<Brain />} label="Reveal" active={sec === "reveal"} onClick={() => navClick("reveal")} accent={C.pink} tooltip="Reveal Debug — integrated logic analyzer and signal capture" />
+            <NavBtn icon={<Box />} label="Runs" active={sec === "runs"} onClick={() => navClick("runs")} accent={C.cyan} tooltip="Run Manager — multi-run management and comparison" />
+            <NavBtn icon={<Chip />} label="ECO" active={sec === "eco"} onClick={() => navClick("eco")} accent={C.purple} tooltip="ECO Editor — engineering change orders for I/O, PLL, memory" />
+            <NavBtn icon={<Play />} label="Sim" active={sec === "simulation"} onClick={() => navClick("simulation")} accent={C.ok} tooltip="Simulation Wizard — HDL simulation setup and configuration" />
+            <NavBtn icon={<Doc />} label="Tmpl" active={sec === "templates"} onClick={() => navClick("templates")} accent={C.cyan} tooltip="Source Templates — HDL code generator and examples" />
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
@@ -1732,6 +1744,57 @@ export default function App() {
                 <Programmer
                   device={project?.device ?? B.defaultDev}
                   backendId={bid}
+                />
+              </div>
+            )}
+
+            {/* Power Calculator Section */}
+            {visitedSecs.has("power") && (
+              <div style={{ display: sec === "power" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <PowerCalculator />
+              </div>
+            )}
+
+            {/* Reveal Debug Section */}
+            {visitedSecs.has("reveal") && (
+              <div style={{ display: sec === "reveal" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <RevealDebug />
+              </div>
+            )}
+
+            {/* Run Manager Section */}
+            {visitedSecs.has("runs") && (
+              <div style={{ display: sec === "runs" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <RunManager
+                  runs={null}
+                />
+              </div>
+            )}
+
+            {/* ECO Editor Section */}
+            {visitedSecs.has("eco") && (
+              <div style={{ display: sec === "eco" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <EcoEditor
+                  changes={null}
+                />
+              </div>
+            )}
+
+            {/* Simulation Wizard Section */}
+            {visitedSecs.has("simulation") && (
+              <div style={{ display: sec === "simulation" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <SimWizard />
+              </div>
+            )}
+
+            {/* Source Templates Section */}
+            {visitedSecs.has("templates") && (
+              <div style={{ display: sec === "templates" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
+                <SourceTemplates
+                  templates={null}
+                  onInsert={(code) => {
+                    console.log("Template inserted:", code);
+                  }}
                 />
               </div>
             )}

@@ -276,7 +276,13 @@ export type Section =
   | "programmer"
   | "docs"
   | "git"
-  | "ssh";
+  | "ssh"
+  | "power"
+  | "reveal"
+  | "runs"
+  | "eco"
+  | "simulation"
+  | "templates";
 
 // ── SSH Remote Build Types ──
 export type SshToolKind = "openssh" | "plink" | "custom";
@@ -433,4 +439,109 @@ export interface LicenseFileInfo {
 export interface LicenseCheckResult {
   licenseFiles: LicenseFileInfo[];
   features: LicenseFeature[];
+}
+
+// ── Power Analysis ──
+export interface PowerModule {
+  name: string;
+  static_mw: number;
+  dynamic_mw: number;
+  total_mw: number;
+}
+
+export interface PowerReport {
+  total_power_w: number;
+  static_power_w: number;
+  dynamic_power_w: number;
+  logic_power_w: number;
+  io_power_w: number;
+  clock_power_w: number;
+  bram_power_w: number;
+  dsp_power_w: number;
+  junction_temp_c: number;
+  ambient_temp_c: number;
+  thermal_margin_c: number;
+  modules: PowerModule[];
+}
+
+// ── Reveal Debug ──
+export interface TriggerSignal {
+  name: string;
+  operator: "equals" | "not_equals" | "rising" | "falling" | "dont_care";
+  value: string;
+}
+
+export interface RevealConfig {
+  project_name: string;
+  sample_depth: number;
+  sample_clock: string;
+  trigger_signals: TriggerSignal[];
+  trace_signals: string[];
+  trigger_mode: "and" | "or" | "sequential";
+}
+
+// ── Implementation Runs ──
+export interface RunResults {
+  fmax_mhz?: number;
+  wns_ns?: number;
+  lut_utilization?: number;
+  ff_utilization?: number;
+  bram_utilization?: number;
+  total_power_w?: number;
+  build_time_secs: number;
+}
+
+export interface BuildStrategy {
+  name: string;
+  description: string;
+  synth_options: Record<string, string>;
+  map_options: Record<string, string>;
+  par_options: Record<string, string>;
+  bitgen_options: Record<string, string>;
+}
+
+export interface ImplementationRun {
+  id: string;
+  name: string;
+  strategy: BuildStrategy;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  created_at: string;
+  completed_at?: string;
+  results?: RunResults;
+}
+
+// ── Engineering Change Orders ──
+export interface EcoChange {
+  type: "io_setting" | "pll_parameter" | "memory_init" | "sysconfig";
+  target: string;
+  parameter: string;
+  old_value: string;
+  new_value: string;
+}
+
+// ── Simulation ──
+export interface SimConfig {
+  simulator: "active_hdl" | "modelsim" | "icarus" | "verilator";
+  top_module: string;
+  testbench: string;
+  sim_time: string;
+  timescale: string;
+  use_sdf: boolean;
+}
+
+// ── Source Templates ──
+export interface TemplateParameter {
+  name: string;
+  description: string;
+  default_value: string;
+  param_type: string;
+}
+
+export interface SourceTemplate {
+  name: string;
+  category: string;
+  language: string;
+  description: string;
+  template: string;
+  parameters: TemplateParameter[];
 }

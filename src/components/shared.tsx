@@ -450,3 +450,45 @@ export function ResourceBar({
     </div>
   );
 }
+
+// ── Collapsible ──
+export function Collapsible({
+  title,
+  children,
+  defaultOpen,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  const { C, MONO } = useTheme();
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: "100%",
+          padding: "8px 0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "transparent",
+          border: "none",
+          borderBottom: `1px solid ${C.b1}`,
+          fontSize: 9,
+          fontFamily: MONO,
+          fontWeight: 600,
+          color: C.t2,
+          cursor: "pointer",
+          transition: "color 100ms ease-out",
+        }}
+      >
+        <span>{title}</span>
+        <span style={{ color: C.t3 }}>{open ? "−" : "+"}</span>
+      </button>
+      {open && <div style={{ paddingTop: 8 }}>{children}</div>}
+    </div>
+  );
+}
