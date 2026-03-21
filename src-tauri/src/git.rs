@@ -194,9 +194,9 @@ pub fn commit_all(project_dir: &Path, message: &str) -> Result<String, String> {
         .find_tree(tree_oid)
         .map_err(|e| format!("Tree find error: {}", e))?;
 
-    let sig = repo
-        .signature()
-        .map_err(|e| format!("Signature error (set user.name and user.email in git config): {}", e))?;
+    let sig = repo.signature().unwrap_or_else(|_| {
+        git2::Signature::now("CovertEDA User", "user@coverteda.local").unwrap()
+    });
 
     let head = repo.head().map_err(|e| format!("No HEAD: {}", e))?;
     let parent = head

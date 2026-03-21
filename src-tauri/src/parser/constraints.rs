@@ -959,7 +959,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
                 constraint_type: "create_clock".to_string(),
                 name: Some("clk".to_string()),
                 clock: Some("clk".to_string()),
-                period: Some(10.0),
+                period: Some(10.5),
                 value: None,
                 from: None,
                 to: None,
@@ -978,11 +978,11 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
         let written = write_sdc_timing(&sdc);
         assert!(written.contains("create_clock"));
-        assert!(written.contains("10.0"));
+        assert!(written.contains("10.5"));
         assert!(written.contains("clk"));
 
         let parsed = parse_sdc_timing(&written).unwrap();
         assert_eq!(parsed.clocks.len(), 1);
-        assert_eq!(parsed.clocks[0].period, Some(10.0));
+        assert_eq!(parsed.clocks[0].period, Some(10.5));
     }
 }

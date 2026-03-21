@@ -40,5 +40,10 @@ jobs:
       - name: Frontend tests
         run: npx vitest run
 
+      - name: Configure git for tests
+        run: |
+          git config --global user.name "CI Bot"
+          git config --global user.email "ci@coverteda.local"
+
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
