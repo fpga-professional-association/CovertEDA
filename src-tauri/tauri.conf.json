@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/next/crates/tauri-config-schema/schema.json",
   "productName": "CovertEDA",
-  "version": "0.2.5",
+  "version": "0.4.0",
   "identifier": "com.coverteda.desktop",
   "build": {
     "frontendDist": "../dist",
