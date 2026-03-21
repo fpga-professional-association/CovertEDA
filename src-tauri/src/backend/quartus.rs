@@ -1837,4 +1837,189 @@ Info | I001 | Test info | loc3 | Note it
         assert!(ip_path.contains("ip"));
         assert!(ip_path.contains("test_ip"));
     }
+
+    // ── QSF Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_qsf_blinky_led_constraints() {
+        let b = make_backend();
+        let qsf_content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let tmp = tempfile::tempdir().unwrap();
+        let qsf_file = tmp.path().join("blinky.qsf");
+        std::fs::write(&qsf_file, qsf_content).unwrap();
+
+        let constraints = b.read_constraints(&qsf_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk_50m"));
+        assert!(pin_names.contains(&"rst_n"));
+        assert!(pin_names.iter().any(|p| p.contains("led")));
+    }
+
+    #[test]
+    fn test_parse_qsf_ethernet_mac_constraints() {
+        let b = make_backend();
+        let qsf_content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf");
+        let tmp = tempfile::tempdir().unwrap();
+        let qsf_file = tmp.path().join("eth.qsf");
+        std::fs::write(&qsf_file, qsf_content).unwrap();
+
+        let constraints = b.read_constraints(&qsf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_qsf_nios_hello_constraints() {
+        let b = make_backend();
+        let qsf_content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let tmp = tempfile::tempdir().unwrap();
+        let qsf_file = tmp.path().join("nios.qsf");
+        std::fs::write(&qsf_file, qsf_content).unwrap();
+
+        let constraints = b.read_constraints(&qsf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_qsf_pcie_endpoint_constraints() {
+        let b = make_backend();
+        let qsf_content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf");
+        let tmp = tempfile::tempdir().unwrap();
+        let qsf_file = tmp.path().join("pcie.qsf");
+        std::fs::write(&qsf_file, qsf_content).unwrap();
+
+        let constraints = b.read_constraints(&qsf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_qsf_signal_proc_constraints() {
+        let b = make_backend();
+        let qsf_content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf");
+        let tmp = tempfile::tempdir().unwrap();
+        let qsf_file = tmp.path().join("ddc.qsf");
+        std::fs::write(&qsf_file, qsf_content).unwrap();
+
+        let constraints = b.read_constraints(&qsf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── SDC Timing Constraint Tests ──
+
+    #[test]
+    fn test_parse_sdc_blinky_led_timing() {
+        let b = make_backend();
+        let sdc_content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("blinky.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_ethernet_mac_timing() {
+        let b = make_backend();
+        let sdc_content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("eth.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_nios_hello_timing() {
+        let b = make_backend();
+        let sdc_content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("nios.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_pcie_endpoint_timing() {
+        let b = make_backend();
+        let sdc_content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("pcie.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_signal_proc_timing() {
+        let b = make_backend();
+        let sdc_content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("ddc.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_cyclone_iv() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "EP4CE6E22C8", "blinky_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("project_new"));
+        assert!(script.contains("blinky_top"));
+        assert!(script.contains("EP4CE6E22C8"));
+    }
+
+    #[test]
+    fn test_generate_build_script_cyclone_v() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "5CSXFC6D6F31C6", "uart_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("5CSXFC6D6F31C6"));
+        assert!(script.contains("execute_module"));
+    }
+
+    #[test]
+    fn test_generate_build_script_stratix_v() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "5SGB3D4L1F40C2", "axi_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("5SGB3D4L1F40C2"));
+        assert!(script.contains("syn"));
+    }
+
+    #[test]
+    fn test_generate_build_script_max_v() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "5M2410Z", "ddc_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("5M2410Z"));
+    }
+
+    #[test]
+    fn test_generate_build_script_pro_edition() {
+        let b = make_pro_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "1SG280LU3F50E2VG", "eth_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("1SG280LU3F50E2VG"));
+        assert!(script.contains("project_new"));
+    }
 }

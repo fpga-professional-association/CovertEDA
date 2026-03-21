@@ -1117,4 +1117,186 @@ mod tests {
         let (func, _, _) = super::super::classify_lattice_pin("ADC_DP0");
         assert_eq!(func, "ADC");
     }
+
+    // ── PDC Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_pdc_blinky_led_constraints() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let pdc_content = include_str!("../../../examples/radiant/blinky_led/constraints/blinky.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("blinky.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_dsp_fir_filter_constraints() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let pdc_content = include_str!("../../../examples/radiant/dsp_fir_filter/constraints/fir.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("fir.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_i2c_bridge_constraints() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let pdc_content = include_str!("../../../examples/radiant/i2c_bridge/constraints/i2c.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("i2c.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_spi_flash_constraints() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let pdc_content = include_str!("../../../examples/radiant/spi_flash/constraints/spi.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("spi.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_uart_controller_constraints() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let pdc_content = include_str!("../../../examples/radiant/uart_controller/constraints/uart.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("uart.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── SDC Timing Constraint Tests ──
+
+    #[test]
+    fn test_parse_sdc_blinky_led_timing() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let sdc_content = include_str!("../../../examples/radiant/blinky_led/constraints/blinky.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("blinky.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_dsp_fir_filter_timing() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let sdc_content = include_str!("../../../examples/radiant/dsp_fir_filter/constraints/fir.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("fir.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_i2c_bridge_timing() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let sdc_content = include_str!("../../../examples/radiant/i2c_bridge/constraints/i2c.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("i2c.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_spi_flash_timing() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let sdc_content = include_str!("../../../examples/radiant/spi_flash/constraints/spi.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("spi.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_uart_controller_timing() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let sdc_content = include_str!("../../../examples/radiant/uart_controller/constraints/uart.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("uart.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_lifcl40() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40-7BG400I", "blinky_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_open"));
+        assert!(script.contains("blinky_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lifcl85() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-85-7BG400I", "uart_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_open"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lfe5u85f() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5U-85F-7BG381I", "ddc_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("LFE5U-85F-7BG381I") || script.contains("device"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lfe5um5g() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5UM5G-85F-8BG381I", "eth_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_open"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lifcl40_40() {
+        let b = RadiantBackend { version: "test".into(), install_dir: None, deferred: false };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("test.rdf"), "").unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40-7FG400I", "axi_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("save_project"));
+    }
 }

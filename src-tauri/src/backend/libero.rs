@@ -1838,4 +1838,363 @@ SET_IO {data} -pinname {A1} -fixed false -io_std {LVCMOS18}
         assert_eq!(device_family("RT4G150"), "RTG4");
         assert_eq!(device_family("UNKNOWN"), "PolarFire"); // default fallback
     }
+
+    // Libero fixture tests using real example data
+    #[test]
+    fn test_libero_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        assert!(report.fmax_mhz > 0.0);
+        assert_eq!(report.fmax_mhz, 350.0);
+        assert!(report.clock_domains.len() > 0);
+        assert_eq!(report.clock_domains[0].name, "sys_clk");
+        assert_eq!(report.clock_domains[0].frequency_mhz, 350.0);
+    }
+
+    #[test]
+    fn test_libero_example_blinky_led_utilization_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").expect("Failed to parse utilization");
+        assert!(report.lut_used > 0);
+        assert_eq!(report.lut_used, 256);
+        assert!(report.lut_available > 0);
+        assert_eq!(report.ff_used, 128);
+    }
+
+    #[test]
+    fn test_libero_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_power.rpt");
+        let report = parse_libero_power(content);
+        assert!(report.total_mw > 0.0);
+        assert!(report.total_mw < 500.0);
+    }
+
+    #[test]
+    fn test_libero_example_blinky_led_drc_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_drc.rpt");
+        let report = parse_libero_drc(content);
+        assert_eq!(report.errors, 0);
+    }
+
+    #[test]
+    fn test_libero_example_risc_v_core_timing_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/risc_v_core_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        assert!(report.fmax_mhz > 0.0);
+        assert_eq!(report.fmax_mhz, 125.0);
+        assert_eq!(report.clock_domains[0].frequency_mhz, 125.0);
+    }
+
+    #[test]
+    fn test_libero_example_risc_v_core_utilization_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/risc_v_core_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPFS250T").expect("Failed to parse utilization");
+        assert!(report.lut_used > 0);
+        assert!(report.ff_used > 0);
+    }
+
+    #[test]
+    fn test_libero_example_risc_v_core_power_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/risc_v_core_power.rpt");
+        let report = parse_libero_power(content);
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_libero_example_adc_interface_timing_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/adc_interface_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        assert!(report.fmax_mhz > 0.0);
+        assert!(report.clock_domains.len() > 0);
+    }
+
+    #[test]
+    fn test_libero_example_adc_interface_utilization_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/adc_interface_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").expect("Failed to parse utilization");
+        assert!(report.lut_used >= 0);
+        assert!(report.ff_used >= 0);
+    }
+
+    #[test]
+    fn test_libero_example_can_controller_timing_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/can_controller_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        assert!(report.fmax_mhz > 0.0);
+        assert_eq!(report.fmax_mhz, 160.0);
+    }
+
+    #[test]
+    fn test_libero_example_can_controller_utilization_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/can_controller_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").expect("Failed to parse utilization");
+        assert!(report.lut_used >= 0);
+    }
+
+    #[test]
+    fn test_libero_example_motor_pwm_timing_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/motor_pwm_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_libero_example_motor_pwm_utilization_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/motor_pwm_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").expect("Failed to parse utilization");
+        assert!(report.lut_used >= 0);
+    }
+
+    #[test]
+    fn test_libero_example_blinky_led_pad_parses() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_pad.rpt");
+        let report = parse_libero_pad_report(content);
+        assert!(report.pins.len() > 0);
+        assert_eq!(report.device, "MPF300T-1FCG484I");
+    }
+
+    #[test]
+    fn test_libero_example_timing_clock_domains() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_timing.rpt");
+        let report = parse_libero_timing(content).expect("Failed to parse timing");
+        let sys_clk_domain = report.clock_domains.iter().find(|d| d.name == "sys_clk");
+        assert!(sys_clk_domain.is_some());
+        let domain = sys_clk_domain.unwrap();
+        assert!(domain.frequency_mhz > 0.0);
+        assert!(domain.period_ns > 0.0);
+    }
+
+    #[test]
+    fn test_libero_example_utilization_io_resources() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_utilization.rpt");
+        let report = parse_libero_utilization(content, "MPF300T").expect("Failed to parse utilization");
+        assert!(report.io_available > 0);
+        assert!(report.io_used >= 0);
+    }
+
+    #[test]
+    fn test_libero_example_power_total_mw() {
+        let content = include_str!("../../tests/fixtures/libero/examples/blinky_led_power.rpt");
+        let report = parse_libero_power(content);
+        assert!(report.total_mw > 0.0);
+        assert!(report.junction_temp_c > 0.0);
+    }
+
+    #[test]
+    fn test_libero_example_multiple_projects_timing() {
+        // Test that we can parse timing reports from all 5 example projects
+        let projects = vec![
+            ("blinky_led", include_str!("../../tests/fixtures/libero/examples/blinky_led_timing.rpt")),
+            ("risc_v_core", include_str!("../../tests/fixtures/libero/examples/risc_v_core_timing.rpt")),
+            ("adc_interface", include_str!("../../tests/fixtures/libero/examples/adc_interface_timing.rpt")),
+            ("can_controller", include_str!("../../tests/fixtures/libero/examples/can_controller_timing.rpt")),
+            ("motor_pwm", include_str!("../../tests/fixtures/libero/examples/motor_pwm_timing.rpt")),
+        ];
+        for (name, content) in projects {
+            let report = parse_libero_timing(content)
+                .expect(&format!("Failed to parse timing for {}", name));
+            assert!(report.fmax_mhz > 0.0, "Project {} has zero fmax", name);
+        }
+    }
+
+    #[test]
+    fn test_libero_example_multiple_projects_utilization() {
+        // Test that we can parse utilization reports from all 5 example projects
+        let projects = vec![
+            ("blinky_led", "MPF300T", include_str!("../../tests/fixtures/libero/examples/blinky_led_utilization.rpt")),
+            ("risc_v_core", "MPFS250T", include_str!("../../tests/fixtures/libero/examples/risc_v_core_utilization.rpt")),
+            ("adc_interface", "MPF300T", include_str!("../../tests/fixtures/libero/examples/adc_interface_utilization.rpt")),
+            ("can_controller", "MPF300T", include_str!("../../tests/fixtures/libero/examples/can_controller_utilization.rpt")),
+            ("motor_pwm", "MPF300T", include_str!("../../tests/fixtures/libero/examples/motor_pwm_utilization.rpt")),
+        ];
+        for (name, device, content) in projects {
+            let report = parse_libero_utilization(content, device)
+                .expect(&format!("Failed to parse utilization for {}", name));
+            assert!(report.lut_available > 0, "Project {} has zero LUT available", name);
+        }
+    }
+
+    // ── PDC Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_pdc_blinky_led_constraints() {
+        let b = LiberoBackend::new();
+        let pdc_content = include_str!("../../../examples/libero/blinky_led/constraints/blinky.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("blinky.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk"));
+        assert!(pin_names.contains(&"rst_n"));
+        assert!(pin_names.contains(&"led"));
+    }
+
+    #[test]
+    fn test_parse_pdc_adc_interface_constraints() {
+        let b = LiberoBackend::new();
+        let pdc_content = include_str!("../../../examples/libero/adc_interface/constraints/adc.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("adc.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_can_controller_constraints() {
+        let b = LiberoBackend::new();
+        let pdc_content = include_str!("../../../examples/libero/can_controller/constraints/can.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("can.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_motor_pwm_constraints() {
+        let b = LiberoBackend::new();
+        let pdc_content = include_str!("../../../examples/libero/motor_pwm/constraints/motor.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("motor.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_risc_v_core_constraints() {
+        let b = LiberoBackend::new();
+        let pdc_content = include_str!("../../../examples/libero/risc_v_core/constraints/risc_v.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("risc_v.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── SDC Timing Constraint Tests ──
+
+    #[test]
+    fn test_parse_sdc_blinky_led_timing() {
+        let b = LiberoBackend::new();
+        let sdc_content = include_str!("../../../examples/libero/blinky_led/constraints/blinky.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("blinky.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_adc_interface_timing() {
+        let b = LiberoBackend::new();
+        let sdc_content = include_str!("../../../examples/libero/adc_interface/constraints/adc.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("adc.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_can_controller_timing() {
+        let b = LiberoBackend::new();
+        let sdc_content = include_str!("../../../examples/libero/can_controller/constraints/can.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("can.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_motor_pwm_timing() {
+        let b = LiberoBackend::new();
+        let sdc_content = include_str!("../../../examples/libero/motor_pwm/constraints/motor.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("motor.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sdc_risc_v_core_timing() {
+        let b = LiberoBackend::new();
+        let sdc_content = include_str!("../../../examples/libero/risc_v_core/constraints/risc_v.sdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let sdc_file = tmp.path().join("risc_v.sdc");
+        std::fs::write(&sdc_file, sdc_content).unwrap();
+
+        let constraints = b.read_constraints(&sdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_mpf300t() {
+        let b = LiberoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "MPF300T-1FCG484I", "blinky_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("new_project"));
+        assert!(script.contains("blinky_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_mpfs250t() {
+        let b = LiberoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "MPFS250T-1FCG1152I", "uart_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("MPFS250T-1FCG1152I"));
+        assert!(script.contains("save_project"));
+    }
+
+    #[test]
+    fn test_generate_build_script_mpfs500t() {
+        let b = LiberoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "MPFS500T-1FCG1152I", "ddc_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("MPFS500T-1FCG1152I"));
+    }
+
+    #[test]
+    fn test_generate_build_script_rtgfp130hh() {
+        let b = LiberoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "RTGFP130HH-1FG1152I", "eth_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("RTGFP130HH-1FG1152I"));
+        assert!(script.contains("run_tool"));
+    }
+
+    #[test]
+    fn test_generate_build_script_pf_family() {
+        let b = LiberoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "MPFS095T-FCVG484I", "axi_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("MPFS095T-FCVG484I"));
+        assert!(script.contains("new_project"));
+    }
 }

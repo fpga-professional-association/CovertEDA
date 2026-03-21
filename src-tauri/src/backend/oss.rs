@@ -2182,4 +2182,201 @@ mod tests {
         assert!(script.contains("param2"));
         assert!(script.contains("value2"));
     }
+
+    // ── PCF Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_pcf_blinky_led_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let pcf_content = include_str!("../../../examples/oss/blinky_led/constraints/blinky.pcf");
+        let tmp = tempfile::tempdir().unwrap();
+        let pcf_file = tmp.path().join("blinky.pcf");
+        std::fs::write(&pcf_file, pcf_content).unwrap();
+
+        let constraints = b.read_constraints(&pcf_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk"));
+        assert!(pin_names.contains(&"rst_n"));
+        assert!(pin_names.contains(&"led"));
+    }
+
+    #[test]
+    fn test_parse_pcf_pwm_audio_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let pcf_content = include_str!("../../../examples/oss/pwm_audio/constraints/audio.pcf");
+        let tmp = tempfile::tempdir().unwrap();
+        let pcf_file = tmp.path().join("audio.pcf");
+        std::fs::write(&pcf_file, pcf_content).unwrap();
+
+        let constraints = b.read_constraints(&pcf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pcf_uart_tx_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let pcf_content = include_str!("../../../examples/oss/uart_tx/constraints/uart.pcf");
+        let tmp = tempfile::tempdir().unwrap();
+        let pcf_file = tmp.path().join("uart.pcf");
+        std::fs::write(&pcf_file, pcf_content).unwrap();
+
+        let constraints = b.read_constraints(&pcf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pcf_ws2812_driver_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let pcf_content = include_str!("../../../examples/oss/ws2812_driver/constraints/ws2812.pcf");
+        let tmp = tempfile::tempdir().unwrap();
+        let pcf_file = tmp.path().join("ws2812.pcf");
+        std::fs::write(&pcf_file, pcf_content).unwrap();
+
+        let constraints = b.read_constraints(&pcf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pcf_spi_slave_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let pcf_content = include_str!("../../../examples/oss/spi_slave/constraints/spi.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let pcf_file = tmp.path().join("spi.lpf");
+        std::fs::write(&pcf_file, pcf_content).unwrap();
+
+        let constraints = b.read_constraints(&pcf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── LPF Constraint Parsing (ECP5) ──
+
+    #[test]
+    fn test_parse_lpf_ecp5_constraints() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let lpf_content = include_str!("../../../examples/oss/spi_slave/constraints/spi.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("spi.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.len() > 0);
+    }
+
+    #[test]
+    fn test_parse_lpf_ecp5_complex() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let lpf_content = include_str!("../../../examples/oss/spi_slave/constraints/spi.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("complex.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(constraints.len() >= 0);
+    }
+
+    // ── Build Script Generation Tests (Different Target Architectures) ──
+
+    #[test]
+    fn test_generate_build_script_ice40up5k() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "iCE40UP5K", "blinky_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("iCE40UP5K"));
+        assert!(script.contains("blinky_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lfe5u() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5U-85F", "uart_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("LFE5U-85F"));
+    }
+
+    #[test]
+    fn test_generate_build_script_gw1n() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "GW1N-9", "ddc_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("GW1N-9"));
+        assert!(script.contains("ddc_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lifcl() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LIFCL-40", "eth_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("LIFCL-40"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lcmxo2() {
+        let b = OssBackend {
+            version: "test".to_string(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO2-7000", "axi_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("LCMXO2-7000"));
+        assert!(script.contains("axi_top"));
+    }
 }

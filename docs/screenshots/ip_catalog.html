@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CovertEDA - IP Catalog</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background: #0a0a0f;
+    }
+
+    .sidebar {
+      width: 80px;
+      background: #12121a;
+      border-right: 1px solid #2a2a3e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 16px;
+    }
+
+    .nav-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      transition: all 0.2s ease;
+      color: #666;
+    }
+
+    .nav-icon:hover {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .nav-icon.active {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.15);
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 24px;
+      border-bottom: 1px solid #2a2a3e;
+      background: #12121a;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #e0e0e0;
+      margin-bottom: 12px;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .search-box {
+      flex: 1;
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 4px;
+      padding: 8px 12px;
+      color: #e0e0e0;
+      font-size: 12px;
+      max-width: 300px;
+    }
+
+    .search-box::placeholder {
+      color: #666;
+    }
+
+    .filter-btn {
+      padding: 8px 16px;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      border-color: #00d4ff;
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.05);
+    }
+
+    .filter-btn.active {
+      background: rgba(0, 212, 255, 0.15);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .category {
+      margin-bottom: 8px;
+    }
+
+    .category-header {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #00d4ff;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .category-icon {
+      font-size: 14px;
+    }
+
+    .ip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .ip-card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .ip-card:hover {
+      background: #20203a;
+      border-color: #00d4ff;
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .ip-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e0e0e0;
+      margin-bottom: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .ip-description {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .ip-params {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 9px;
+      color: #666;
+    }
+
+    .param {
+      margin: 4px 0;
+      padding: 2px 0;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .param-label {
+      color: #888;
+    }
+
+    .param-value {
+      color: #e0e0e0;
+    }
+
+    .vendor-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .vendor-badge {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      font-weight: 600;
+    }
+
+    .vendor-badge.lattice {
+      border-color: #a855f7;
+      color: #d8b4fe;
+    }
+
+    .vendor-badge.intel {
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+
+    .vendor-badge.xilinx {
+      border-color: #f59e0b;
+      color: #fcd34d;
+    }
+
+    .vendor-badge.microchip {
+      border-color: #ec4899;
+      color: #fbcfe8;
+    }
+
+    .vendor-badge.efinix {
+      border-color: #10b981;
+      color: #a7f3d0;
+    }
+
+    .vendor-badge.opensource {
+      border-color: #888;
+      color: #d1d5db;
+    }
+
+    .ip-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #666;
+    }
+
+    .add-btn {
+      background: rgba(0, 212, 255, 0.15);
+      color: #00d4ff;
+      border: 1px solid #00d4ff;
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .add-btn:hover {
+      background: rgba(0, 212, 255, 0.25);
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a3e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4e;
+    }
+
+    .section-divider {
+      height: 1px;
+      background: #2a2a3e;
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-icon">⚙️</div>
+      <div class="nav-icon">📊</div>
+      <div class="nav-icon">📄</div>
+      <div class="nav-icon active">🔌</div>
+      <div class="nav-icon">⚡</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="header">
+        <div class="header-title">IP Catalog</div>
+        <div class="header-controls">
+          <input class="search-box" type="text" placeholder="Search IP cores...">
+          <button class="filter-btn">Lattice</button>
+          <button class="filter-btn">Intel</button>
+          <button class="filter-btn">Xilinx</button>
+          <button class="filter-btn">All</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <!-- Memory Category -->
+        <div class="category">
+          <div class="category-header">
+            <span class="category-icon">🗂️</span>
+            Memory Blocks
+          </div>
+          <div class="ip-grid">
+            <div class="ip-card">
+              <div class="ip-name">BRAM_SINGLE_PORT</div>
+              <div class="ip-description">Single-port synchronous block RAM with configurable width and depth</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">8–512 bits</span></div>
+                <div class="param"><span class="param-label">Depth:</span> <span class="param-value">16–65536 words</span></div>
+                <div class="param"><span class="param-label">Init:</span> <span class="param-value">Optional</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">BRAM_DUAL_PORT</div>
+              <div class="ip-description">Dual-port synchronous RAM allowing independent read/write on each port</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Port A/B Width:</span> <span class="param-value">8–256 bits</span></div>
+                <div class="param"><span class="param-label">Asymmetric:</span> <span class="param-value">Yes</span></div>
+                <div class="param"><span class="param-label">Output Reg:</span> <span class="param-value">On/Off</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">FIFO_ASYNC</div>
+              <div class="ip-description">Asynchronous FIFO for clock domain crossing with Gray code synchronization</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">1–256 bits</span></div>
+                <div class="param"><span class="param-label">Depth:</span> <span class="param-value">16–65536</span></div>
+                <div class="param"><span class="param-label">Flags:</span> <span class="param-value">Full/Empty</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Lattice, Xilinx</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- DSP/Math Category -->
+        <div class="category">
+          <div class="category-header">
+            <span class="category-icon">✖️</span>
+            DSP & Math
+          </div>
+          <div class="ip-grid">
+            <div class="ip-card">
+              <div class="ip-name">MULTIPLIER</div>
+              <div class="ip-description">Configurable hardware multiplier using DSP blocks, supports signed/unsigned</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Width A/B:</span> <span class="param-value">2–36 bits</span></div>
+                <div class="param"><span class="param-label">Mode:</span> <span class="param-value">Signed/Unsigned</span></div>
+                <div class="param"><span class="param-label">Pipelining:</span> <span class="param-value">0–3 stages</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">MAC_BLOCK</div>
+              <div class="ip-description">Multiply-Accumulate block for DSP applications with optional feedback</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge xilinx">Xilinx</span>
+                <span class="vendor-badge intel">Intel</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">18×25 bits</span></div>
+                <div class="param"><span class="param-label">Feedback:</span> <span class="param-value">Optional</span></div>
+                <div class="param"><span class="param-label">Cascadable:</span> <span class="param-value">Yes</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Xilinx, Intel</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">ADDER_SUBTRACTOR</div>
+              <div class="ip-description">Pipelined adder/subtractor with carry propagation control</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">2–256 bits</span></div>
+                <div class="param"><span class="param-label">Pipeline:</span> <span class="param-value">0–8 stages</span></div>
+                <div class="param"><span class="param-label">Carry In:</span> <span class="param-value">Optional</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Lattice, Intel</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- I/O Category -->
+        <div class="category">
+          <div class="category-header">
+            <span class="category-icon">🔗</span>
+            I/O & Clock Management
+          </div>
+          <div class="ip-grid">
+            <div class="ip-card">
+              <div class="ip-name">PLL_CLK_GEN</div>
+              <div class="ip-description">Phase-Locked Loop for clock multiplication, division, and phase adjustment</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Input:</span> <span class="param-value">5–100 MHz</span></div>
+                <div class="param"><span class="param-label">Output:</span> <span class="param-value">10–500 MHz</span></div>
+                <div class="param"><span class="param-label">Mult/Div:</span> <span class="param-value">Configurable</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">LVDS_BUFFER</div>
+              <div class="ip-description">Low-voltage differential signaling transceiver for high-speed I/O</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Speed:</span> <span class="param-value">Up to 3 Gbps</span></div>
+                <div class="param"><span class="param-label">Swing:</span> <span class="param-value">±400 mV nominal</span></div>
+                <div class="param"><span class="param-label">Term:</span> <span class="param-value">On-chip 100Ω</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Intel, Xilinx</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">DDR3_CONTROLLER</div>
+              <div class="ip-description">High-performance DDR3 memory interface with built-in calibration</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Speed:</span> <span class="param-value">800–1600 MHz</span></div>
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">8–64 bits</span></div>
+                <div class="param"><span class="param-label">Auto-Cal:</span> <span class="param-value">Yes</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Intel, Xilinx</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Communication Category -->
+        <div class="category">
+          <div class="category-header">
+            <span class="category-icon">📡</span>
+            Communication Protocols
+          </div>
+          <div class="ip-grid">
+            <div class="ip-card">
+              <div class="ip-name">UART_BRIDGE</div>
+              <div class="ip-description">Full-duplex UART with configurable baud rate and parity options</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Baud:</span> <span class="param-value">300–3M bps</span></div>
+                <div class="param"><span class="param-label">Parity:</span> <span class="param-value">None/Odd/Even</span></div>
+                <div class="param"><span class="param-label">FIFO:</span> <span class="param-value">16/32/64 word</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">SPI_MASTER</div>
+              <div class="ip-description">Serial Peripheral Interface master with clock/data phase control</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge intel">Intel</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Clock Div:</span> <span class="param-value">2–512</span></div>
+                <div class="param"><span class="param-label">CPOL/CPHA:</span> <span class="param-value">All 4 modes</span></div>
+                <div class="param"><span class="param-label">Width:</span> <span class="param-value">8–32 bits</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Multi-vendor</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+
+            <div class="ip-card">
+              <div class="ip-name">I2C_MASTER</div>
+              <div class="ip-description">I2C master with multi-master support and clock stretching</div>
+              <div class="vendor-badges">
+                <span class="vendor-badge lattice">Lattice</span>
+                <span class="vendor-badge xilinx">Xilinx</span>
+              </div>
+              <div class="ip-params">
+                <div class="param"><span class="param-label">Speed:</span> <span class="param-value">100k/400k/1M</span></div>
+                <div class="param"><span class="param-label">Addressing:</span> <span class="param-value">7/10 bit</span></div>
+                <div class="param"><span class="param-label">Multi-Master:</span> <span class="param-value">Yes</span></div>
+              </div>
+              <div class="ip-footer">
+                <span>Lattice, Xilinx</span>
+                <button class="add-btn">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

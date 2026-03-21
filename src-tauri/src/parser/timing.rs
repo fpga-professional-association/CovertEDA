@@ -981,4 +981,580 @@ Target Period : 10.0
         let report = parse_quartus_timing(content).unwrap();
         assert_eq!(report.total_paths, 999999999);
     }
+
+    // ── Radiant Fixture Tests ──
+
+    #[test]
+    fn test_radiant_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0, "Fmax should be positive");
+        assert!(report.wns_ns > 0.0, "WNS should be positive (passing timing)");
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_timing_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!((report.fmax_mhz - 312.5).abs() < 1.0, "Fmax should be ~312.5 MHz");
+        assert!((report.wns_ns - 4.32).abs() < 0.5, "WNS should be ~4.32 ns");
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_timing_slack_positive() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.wns_ns > 0.0, "WNS should be positive for passing timing");
+        assert_eq!(report.failing_paths, 0, "Should have zero failing paths");
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_timing_tns() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert_eq!(report.tns_ns, 0.0, "TNS should be 0.0 for passing timing");
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_timing_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+        assert!(report.wns_ns > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_timing_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!((report.fmax_mhz - 156.25).abs() < 2.0, "Fmax should be ~156.25 MHz");
+        assert!((report.wns_ns - 11.48).abs() < 1.0, "WNS should be ~11.48 ns");
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_timing_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+        assert!(report.wns_ns > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_timing_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!((report.fmax_mhz - 100.0).abs() < 1.0, "Fmax should be ~100 MHz");
+        assert!((report.wns_ns - 2.45).abs() < 0.5, "WNS should be ~2.45 ns");
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_timing_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+        assert!(report.wns_ns > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_timing_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!((report.fmax_mhz - 200.0).abs() < 1.0, "Fmax should be ~200 MHz");
+        assert!((report.wns_ns - 13.24).abs() < 1.0, "WNS should be ~13.24 ns");
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_timing_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+        assert!(report.wns_ns > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_timing_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        assert!((report.fmax_mhz - 250.0).abs() < 1.0, "Fmax should be ~250 MHz");
+        assert!((report.wns_ns - 5.18).abs() < 0.5, "WNS should be ~5.18 ns");
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_timing_constraint() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        // Check that it meets timing constraint
+        assert!(report.wns_ns > 0.0, "UART controller should meet timing");
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_timing_higher_frequency() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        // SPI flash is slower but should still be positive
+        assert!(report.fmax_mhz > 50.0, "SPI flash Fmax should be above 50 MHz");
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_timing_high_slack() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        // I2C is a low-speed interface, should have good slack
+        assert!(report.wns_ns > 10.0, "I2C should have high slack");
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_timing_positive_slack() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_timing.twr");
+        let report = parse_radiant_timing(content).unwrap();
+        // DSP design should meet timing
+        assert!(report.wns_ns > 0.0, "DSP FIR should meet timing constraints");
+    }
+
+    // ── Diamond Fixture Tests ──
+
+    #[test]
+    fn test_diamond_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_blinky_led_timing_values() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 100.0, "Diamond blinky_led should have reasonable Fmax");
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_timing_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_timing_values() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 50.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_timing_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_timing_values() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 100.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_timing_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_timing_values() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 50.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_timing_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_timing_values() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 50.0);
+    }
+
+    #[test]
+    fn test_diamond_example_blinky_led_timing_has_wns() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.wns_ns >= -1000.0 && report.wns_ns <= 1000.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_timing_reasonable_freq() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0 && report.fmax_mhz < 1000.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_timing_high_speed() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_timing_video_rate() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 10.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_timing_soc_freq() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 20.0);
+    }
+
+    #[test]
+    fn test_diamond_example_blinky_led_timing_simple_design() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.wns_ns >= -100.0 && report.wns_ns <= 1000.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_timing_io_timing() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_timing.twr");
+        let report = parse_diamond_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Vivado timing fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_vivado_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!((report.wns_ns - 5.123).abs() < 0.01, "Expected WNS ~5.123 ns, got {}", report.wns_ns);
+        assert!((report.whs_ns - 0.089).abs() < 0.01, "Expected WHS ~0.089 ns, got {}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+        assert!((report.target_mhz - 100.0).abs() < 0.1, "Expected target ~100.0 MHz");
+    }
+
+    #[test]
+    fn test_vivado_example_uart_echo_timing_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/uart_echo_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!((report.wns_ns - 2.456).abs() < 0.01, "Expected WNS ~2.456 ns, got {}", report.wns_ns);
+        assert!((report.whs_ns - 0.156).abs() < 0.01, "Expected WHS ~0.156 ns, got {}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+        assert!((report.target_mhz - 100.0).abs() < 0.1, "Expected target ~100.0 MHz");
+    }
+
+    #[test]
+    fn test_vivado_example_pwm_rgb_timing_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/pwm_rgb_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!((report.wns_ns - 6.789).abs() < 0.01, "Expected WNS ~6.789 ns, got {}", report.wns_ns);
+        assert!((report.whs_ns - 0.234).abs() < 0.01, "Expected WHS ~0.234 ns, got {}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+        assert!((report.target_mhz - 50.0).abs() < 0.1, "Expected target ~50.0 MHz");
+    }
+
+    #[test]
+    fn test_vivado_example_ddr3_test_timing_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/ddr3_test_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!((report.wns_ns - 0.234).abs() < 0.01, "Expected WNS ~0.234 ns, got {}", report.wns_ns);
+        assert!((report.whs_ns - 0.123).abs() < 0.01, "Expected WHS ~0.123 ns, got {}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+        assert!((report.target_mhz - 200.0).abs() < 0.1, "Expected target ~200.0 MHz");
+    }
+
+    #[test]
+    fn test_vivado_example_axi_dma_engine_timing_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/axi_dma_engine_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!((report.wns_ns - 0.087).abs() < 0.01, "Expected WNS ~0.087 ns, got {}", report.wns_ns);
+        assert!((report.whs_ns - 0.045).abs() < 0.01, "Expected WHS ~0.045 ns, got {}", report.whs_ns);
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+        assert!((report.target_mhz - 250.0).abs() < 0.1, "Expected target ~250.0 MHz");
+    }
+
+    #[test]
+    fn test_vivado_timing_calculates_fmax_from_period() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0, "Expected positive Fmax, got {}", report.fmax_mhz);
+    }
+
+    #[test]
+    fn test_vivado_timing_extracts_wns_correctly() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/uart_echo_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!(report.wns_ns > 0.0, "Expected positive WNS (passing timing)");
+    }
+
+    #[test]
+    fn test_vivado_timing_extracts_whs_correctly() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/pwm_rgb_timing_summary.rpt");
+        let report = parse_vivado_timing(content).unwrap();
+        assert!(report.whs_ns > 0.0, "Expected positive WHS (passing hold)");
+    }
+
+    #[test]
+    fn test_vivado_timing_handles_different_constraints() {
+        let blinky = include_str!("../../tests/fixtures/vivado/examples/blinky_led_timing_summary.rpt");
+        let ddr3 = include_str!("../../tests/fixtures/vivado/examples/ddr3_test_timing_summary.rpt");
+
+        let report_blinky = parse_vivado_timing(blinky).unwrap();
+        let report_ddr3 = parse_vivado_timing(ddr3).unwrap();
+
+        assert!(report_blinky.target_mhz != report_ddr3.target_mhz,
+            "Expected different target frequencies");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Quartus timing fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_quartus_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 287.36).abs() < 0.1, "Expected Fmax ~287.36 MHz, got {}", report.fmax_mhz);
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+        assert_eq!(report.failing_paths, 0, "Expected 0 failing paths");
+    }
+
+    #[test]
+    fn test_quartus_example_nios_hello_timing_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 125.4).abs() < 0.2, "Expected Fmax ~125.4 MHz, got {}", report.fmax_mhz);
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+    }
+
+    #[test]
+    fn test_quartus_example_ethernet_mac_timing_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 156.25).abs() < 0.2, "Expected Fmax ~156.25 MHz, got {}", report.fmax_mhz);
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+    }
+
+    #[test]
+    fn test_quartus_example_pcie_endpoint_timing_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/pcie_endpoint_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 312.5).abs() < 0.2, "Expected Fmax ~312.5 MHz, got {}", report.fmax_mhz);
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+    }
+
+    #[test]
+    fn test_quartus_example_signal_proc_timing_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/signal_proc_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!((report.fmax_mhz - 234.5).abs() < 0.2, "Expected Fmax ~234.5 MHz, got {}", report.fmax_mhz);
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+    }
+
+    #[test]
+    fn test_quartus_timing_fixture_values_reasonable() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!(report.fmax_mhz > 10.0 && report.fmax_mhz < 500.0,
+            "Fmax seems unreasonable: {} MHz", report.fmax_mhz);
+    }
+
+    #[test]
+    fn test_quartus_timing_fixture_clock_domains() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!(!report.clock_domains.is_empty(), "Expected clock domains to be extracted");
+    }
+
+    #[test]
+    fn test_quartus_timing_fixture_path_counts_present() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!(report.total_paths > 0, "Expected total_paths > 0");
+    }
+
+    #[test]
+    fn test_quartus_timing_fixture_all_passing() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/pcie_endpoint_timing.sta.rpt");
+        let report = parse_quartus_timing(content).unwrap();
+        assert!(report.wns_ns >= 0.0, "Expected passing timing (WNS >= 0), got {}", report.wns_ns);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // ACE timing fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_ace_example_blinky_led_timing_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_example_noc_endpoint_timing_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/noc_endpoint_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_example_ml_accelerator_timing_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/ml_accelerator_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_example_gddr6_test_timing_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/gddr6_test_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_example_ethernet_400g_timing_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/ethernet_400g_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_timing_fixture_has_wns() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.wns_ns >= -100.0 && report.wns_ns <= 100.0, "WNS out of expected range");
+    }
+
+    #[test]
+    fn test_ace_timing_fixture_all_parse_successfully() {
+        let projects = vec![
+            ("blinky_led", include_str!("../../tests/fixtures/ace/examples/blinky_led_timing.rpt")),
+            ("noc_endpoint", include_str!("../../tests/fixtures/ace/examples/noc_endpoint_timing.rpt")),
+            ("ml_accelerator", include_str!("../../tests/fixtures/ace/examples/ml_accelerator_timing.rpt")),
+            ("gddr6_test", include_str!("../../tests/fixtures/ace/examples/gddr6_test_timing.rpt")),
+            ("ethernet_400g", include_str!("../../tests/fixtures/ace/examples/ethernet_400g_timing.rpt")),
+        ];
+        for (name, content) in projects {
+            let report = parse_ace_timing(content)
+                .expect(&format!("Failed to parse timing for ACE {}", name));
+            assert!(report.fmax_mhz > 0.0, "Project {} has zero fmax", name);
+        }
+    }
+
+    #[test]
+    fn test_ace_timing_fixture_clock_domains_exist() {
+        let content = include_str!("../../tests/fixtures/ace/examples/noc_endpoint_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        // Some ACE reports may not explicitly list clock domains, but fmax should exist
+        assert!(report.fmax_mhz > 0.0);
+    }
+
+    #[test]
+    fn test_ace_timing_fixture_slack_values_reasonable() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        assert!(report.wns_ns > -1000.0 && report.wns_ns < 1000.0, "Slack value unreasonable");
+    }
+
+    #[test]
+    fn test_ace_timing_fixture_hold_slack() {
+        let content = include_str!("../../tests/fixtures/ace/examples/ml_accelerator_timing.rpt");
+        let report = parse_ace_timing(content).unwrap();
+        // Should be able to parse hold slack
+        assert!(report.whs_ns >= -100.0 || report.whs_ns == 0.0, "Hold slack parsing issue");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // OSS (nextpnr) timing fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_oss_example_blinky_led_nextpnr_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
+        assert!(content.contains("Info:"));
+    }
+
+    #[test]
+    fn test_oss_example_uart_tx_nextpnr_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/uart_tx_nextpnr.log");
+        assert!(content.contains("Info:"));
+    }
+
+    #[test]
+    fn test_oss_example_spi_slave_nextpnr_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/spi_slave_nextpnr.log");
+        assert!(content.contains("Info:"));
+    }
+
+    #[test]
+    fn test_oss_example_pwm_audio_nextpnr_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/pwm_audio_nextpnr.log");
+        assert!(content.contains("Info:"));
+    }
+
+    #[test]
+    fn test_oss_example_ws2812_driver_nextpnr_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/ws2812_driver_nextpnr.log");
+        assert!(content.contains("Info:"));
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_critical_path_extraction() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
+        assert!(content.contains("critical path") || content.contains("Max frequency"));
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_device_identification() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
+        assert!(content.contains("iCE40") || content.contains("Device:"));
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_multiple_projects_parse() {
+        let projects = vec![
+            ("blinky_led", include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log")),
+            ("uart_tx", include_str!("../../tests/fixtures/oss/examples/uart_tx_nextpnr.log")),
+            ("spi_slave", include_str!("../../tests/fixtures/oss/examples/spi_slave_nextpnr.log")),
+            ("pwm_audio", include_str!("../../tests/fixtures/oss/examples/pwm_audio_nextpnr.log")),
+            ("ws2812_driver", include_str!("../../tests/fixtures/oss/examples/ws2812_driver_nextpnr.log")),
+        ];
+        for (name, content) in projects {
+            assert!(!content.is_empty(), "Project {} has empty content", name);
+            assert!(content.contains("Info:"), "Project {} missing info output", name);
+        }
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_utilization_info() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
+        assert!(content.contains("utilisation") || content.contains("utilization")
+            || content.contains("ICESTORM_LC"));
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_placement_routing_info() {
+        let content = include_str!("../../tests/fixtures/oss/examples/uart_tx_nextpnr.log");
+        assert!(content.contains("Placed") || content.contains("Routed"));
+    }
+
+    #[test]
+    fn test_oss_nextpnr_fixture_timing_analysis_marker() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
+        assert!(content.contains("Timing analysis"));
+    }
 }

@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CovertEDA - Utilization Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background: #0a0a0f;
+    }
+
+    .sidebar {
+      width: 80px;
+      background: #12121a;
+      border-right: 1px solid #2a2a3e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 16px;
+    }
+
+    .nav-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      transition: all 0.2s ease;
+      color: #666;
+    }
+
+    .nav-icon:hover {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .nav-icon.active {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.15);
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 24px;
+      border-bottom: 1px solid #2a2a3e;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #12121a;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #e0e0e0;
+    }
+
+    .header-tabs {
+      display: flex;
+      gap: 16px;
+      margin-left: 40px;
+    }
+
+    .tab {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      color: #888;
+      border: none;
+      background: none;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .tab:hover {
+      color: #e0e0e0;
+    }
+
+    .tab.active {
+      color: #00d4ff;
+      border-bottom: 2px solid #00d4ff;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .resource-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+    }
+
+    .resource-item {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .resource-name {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 0.3px;
+      margin-bottom: 12px;
+    }
+
+    .resource-bar {
+      background: #1a1a2e;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .resource-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .resource-fill.low {
+      background: linear-gradient(90deg, #00d4ff, #00ff88);
+      width: 25%;
+    }
+
+    .resource-fill.medium {
+      background: linear-gradient(90deg, #00d4ff, #ffaa00);
+      width: 45%;
+    }
+
+    .resource-fill.high {
+      background: linear-gradient(90deg, #ffaa00, #ff4444);
+      width: 67%;
+    }
+
+    .resource-fill.critical {
+      background: #ff4444;
+      width: 78%;
+    }
+
+    .resource-label {
+      font-size: 10px;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .resource-stats {
+      font-size: 9px;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .util-percentage {
+      font-size: 18px;
+      font-weight: 700;
+      color: #e0e0e0;
+      margin-bottom: 4px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .summary-item {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .summary-label {
+      font-size: 10px;
+      color: #888;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .summary-value {
+      font-size: 14px;
+      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+      color: #e0e0e0;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .table th {
+      text-align: left;
+      padding: 12px;
+      background: #20203a;
+      border-bottom: 1px solid #2a2a3e;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #888;
+    }
+
+    .table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2a2a3e;
+      color: #e0e0e0;
+    }
+
+    .table tr:hover {
+      background: #20203a;
+    }
+
+    .resource-type {
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+    }
+
+    .warning-badge {
+      background: rgba(255, 170, 0, 0.2);
+      color: #ffaa00;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      border: 1px solid #ffaa00;
+    }
+
+    .critical-badge {
+      background: rgba(255, 68, 68, 0.2);
+      color: #ff4444;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      border: 1px solid #ff4444;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a3e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-icon">⚙️</div>
+      <div class="nav-icon active">📊</div>
+      <div class="nav-icon">📄</div>
+      <div class="nav-icon">🔌</div>
+      <div class="nav-icon">⚡</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="header">
+        <div style="display: flex; align-items: center; gap: 24px;">
+          <div class="header-title">pqc-accelerator — Reports</div>
+          <div class="header-tabs">
+            <button class="tab">Timing</button>
+            <button class="tab active">Utilization</button>
+            <button class="tab">Power</button>
+            <button class="tab">DRC</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <!-- Resource Utilization Overview -->
+        <div class="card">
+          <div class="section-title">Resource Utilization</div>
+          <div class="resource-grid">
+            <div class="resource-item">
+              <div class="resource-name">LUT</div>
+              <div class="resource-bar">
+                <div class="resource-fill medium"></div>
+              </div>
+              <div class="resource-label">
+                <span>4,217 / 6,864</span>
+                <span style="color: #ffaa00; font-weight: 600;">61.4%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+
+            <div class="resource-item">
+              <div class="resource-name">Flip-Flop</div>
+              <div class="resource-bar">
+                <div class="resource-fill low" style="width: 32%;"></div>
+              </div>
+              <div class="resource-label">
+                <span>2,187 / 6,864</span>
+                <span style="color: #00ff88; font-weight: 600;">32.1%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+
+            <div class="resource-item">
+              <div class="resource-name">BRAM</div>
+              <div class="resource-bar">
+                <div class="resource-fill high"></div>
+              </div>
+              <div class="resource-label">
+                <span>8 / 12</span>
+                <span style="color: #ffaa00; font-weight: 600;">67.0%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+
+            <div class="resource-item">
+              <div class="resource-name">DSP</div>
+              <div class="resource-bar">
+                <div class="resource-fill low" style="width: 12%;"></div>
+              </div>
+              <div class="resource-label">
+                <span>3 / 24</span>
+                <span style="color: #00ff88; font-weight: 600;">12.5%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+
+            <div class="resource-item">
+              <div class="resource-name">I/O Pins</div>
+              <div class="resource-bar">
+                <div class="resource-fill critical"></div>
+              </div>
+              <div class="resource-label">
+                <span>47 / 206</span>
+                <span style="color: #ff4444; font-weight: 600;">78.2%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+
+            <div class="resource-item">
+              <div class="resource-name">Clock Mgmt</div>
+              <div class="resource-bar">
+                <div class="resource-fill low" style="width: 25%;"></div>
+              </div>
+              <div class="resource-label">
+                <span>1 / 4</span>
+                <span style="color: #00ff88; font-weight: 600;">25.0%</span>
+              </div>
+              <div class="resource-stats">
+                <span>Used</span>
+                <span>Total</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Device Summary -->
+        <div class="card">
+          <div class="section-title">Device Summary</div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-label">Device</div>
+              <div class="summary-value">LIFCL-40-7BG400I</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Package</div>
+              <div class="summary-value">BG400 (19x19)</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Speed Grade</div>
+              <div class="summary-value">7</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Logic Capacity</div>
+              <div class="summary-value">40K LUT</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Memory</div>
+              <div class="summary-value">2.3 Mb (12 BRAM)</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">DSP Blocks</div>
+              <div class="summary-value">24 @ 18x18</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">I/O Banks</div>
+              <div class="summary-value">10 banks</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Total Pins</div>
+              <div class="summary-value">206 I/O</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Breakdown -->
+        <div class="card" style="flex: 1;">
+          <div class="section-title">Resource Usage by Module (Top 10)</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Module</th>
+                <th style="width: 15%;">LUT</th>
+                <th style="width: 15%;">FF</th>
+                <th style="width: 12%;">BRAM</th>
+                <th style="width: 12%;">DSP</th>
+                <th style="width: 15%;">I/O</th>
+                <th style="width: 10%;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="resource-type">pqc_engine</span></td>
+                <td>1,847</td>
+                <td>1,023</td>
+                <td>—</td>
+                <td>2</td>
+                <td>—</td>
+                <td><span class="warning-badge">CRITICAL</span></td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">sha3_core</span></td>
+                <td>1,246</td>
+                <td>542</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">dsp_chain</span></td>
+                <td>412</td>
+                <td>187</td>
+                <td>2</td>
+                <td>3</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">fifo_async</span></td>
+                <td>284</td>
+                <td>256</td>
+                <td>3</td>
+                <td>—</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">uart_bridge</span></td>
+                <td>156</td>
+                <td>94</td>
+                <td>—</td>
+                <td>—</td>
+                <td>6</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">i2c_master</span></td>
+                <td>128</td>
+                <td>68</td>
+                <td>—</td>
+                <td>—</td>
+                <td>2</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">mem_controller</span></td>
+                <td>234</td>
+                <td>198</td>
+                <td>3</td>
+                <td>—</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">state_machine</span></td>
+                <td>156</td>
+                <td>84</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">glue_logic</span></td>
+                <td>428</td>
+                <td>312</td>
+                <td>—</td>
+                <td>—</td>
+                <td>39</td>
+                <td><span class="critical-badge">HIGH</span></td>
+              </tr>
+              <tr>
+                <td><span class="resource-type">debug_core</span></td>
+                <td>180</td>
+                <td>106</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>OK</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

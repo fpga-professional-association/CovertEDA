@@ -1,0 +1,53 @@
+{
+  "metaData": {
+    "version": "1.2.1",
+    "device": "iCE40UP5K",
+    "reportFile": "nextpnr.rpt"
+  },
+  "clocks": {
+    "clk": {
+      "period": 20.76,
+      "frequency": 48.13,
+      "minSlack": 16.0,
+      "minSlackNet": "counter[23]",
+      "totalNets": 124,
+      "totalPaths": 156
+    }
+  },
+  "paths": [
+    {
+      "startCell": "counter_reg[23]",
+      "startPort": "Q",
+      "endCell": "led_reg",
+      "endPort": "D",
+      "startClockDomain": "clk",
+      "critical": false,
+      "delay": 4.82,
+      "slack": 16.0,
+      "elements": [
+        {
+          "name": "CLK_TO_Q",
+          "delay": 0.58
+        },
+        {
+          "name": "ROUTING",
+          "delay": 2.15
+        },
+        {
+          "name": "LOGIC",
+          "delay": 1.23
+        },
+        {
+          "name": "SETUP",
+          "delay": 0.86
+        }
+      ]
+    }
+  ],
+  "timing_summary": {
+    "worstNegativeSlack": 16.0,
+    "worstSlack": 16.0,
+    "setupViolations": 0,
+    "holdViolations": 0
+  }
+}

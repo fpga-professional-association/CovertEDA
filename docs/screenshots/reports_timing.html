@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CovertEDA - Timing Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background: #0a0a0f;
+    }
+
+    .sidebar {
+      width: 80px;
+      background: #12121a;
+      border-right: 1px solid #2a2a3e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 16px;
+    }
+
+    .nav-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      transition: all 0.2s ease;
+      color: #666;
+    }
+
+    .nav-icon:hover {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .nav-icon.active {
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.15);
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 24px;
+      border-bottom: 1px solid #2a2a3e;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #12121a;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #e0e0e0;
+    }
+
+    .header-tabs {
+      display: flex;
+      gap: 16px;
+      margin-left: 40px;
+    }
+
+    .tab {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      color: #888;
+      border: none;
+      background: none;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .tab:hover {
+      color: #e0e0e0;
+    }
+
+    .tab.active {
+      color: #00d4ff;
+      border-bottom: 2px solid #00d4ff;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .metric-value {
+      font-size: 32px;
+      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+      color: #00ff88;
+      margin-bottom: 8px;
+    }
+
+    .metric-unit {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .gauge-svg {
+      width: 100%;
+      max-width: 120px;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .progress-container {
+      background: #20203a;
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .progress-bar {
+      background: #1a1a2e;
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      background: linear-gradient(90deg, #00d4ff, #00ff88);
+      height: 100%;
+      width: 85%;
+    }
+
+    .progress-label {
+      font-size: 9px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .table th {
+      text-align: left;
+      padding: 12px;
+      background: #20203a;
+      border-bottom: 1px solid #2a2a3e;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #888;
+    }
+
+    .table td {
+      padding: 12px;
+      border-bottom: 1px solid #2a2a3e;
+      color: #e0e0e0;
+    }
+
+    .table tr:hover {
+      background: #20203a;
+    }
+
+    .slack-positive {
+      color: #00ff88;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+    }
+
+    .slack-negative {
+      color: #ff4444;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+    }
+
+    .path-name {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      max-width: 250px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clock-badge {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .clock-badge.active {
+      background: rgba(0, 212, 255, 0.15);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+
+    .timing-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .summary-item {
+      background: #20203a;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .summary-label {
+      font-size: 10px;
+      color: #888;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+      color: #e0e0e0;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a3e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-icon">⚙️</div>
+      <div class="nav-icon active">📊</div>
+      <div class="nav-icon">📄</div>
+      <div class="nav-icon">🔌</div>
+      <div class="nav-icon">⚡</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="header">
+        <div style="display: flex; align-items: center; gap: 24px;">
+          <div class="header-title">pqc-accelerator — Reports</div>
+          <div class="header-tabs">
+            <button class="tab active">Timing</button>
+            <button class="tab">Utilization</button>
+            <button class="tab">Power</button>
+            <button class="tab">DRC</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <!-- Key Metrics -->
+        <div class="card">
+          <div class="section-title">Timing Summary</div>
+          <div class="metric-grid">
+            <div class="metric">
+              <div class="metric-label">Fmax (Achievable)</div>
+              <div class="metric-value">125</div>
+              <div class="metric-unit">MHz</div>
+              <div class="progress-container">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: 100%;"></div>
+                </div>
+                <div class="progress-label">100% of target</div>
+              </div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">WNS (Worst Negative Slack)</div>
+              <div class="metric-value" style="color: #00ff88;">+1.87</div>
+              <div class="metric-unit">ns</div>
+              <div style="margin-top: 12px; font-size: 10px; color: #888;">Setup time met</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">THS (Timing Hold Slack)</div>
+              <div class="metric-value" style="color: #00ff88;">+0.42</div>
+              <div class="metric-unit">ns</div>
+              <div style="margin-top: 12px; font-size: 10px; color: #888;">Hold time met</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clock Domains -->
+        <div class="card">
+          <div class="section-title">Clock Domains</div>
+          <div class="timing-summary">
+            <div class="summary-item">
+              <div class="summary-label">Primary Clock</div>
+              <div class="summary-value">clk_25mhz</div>
+              <div style="font-size: 10px; color: #888; margin-top: 6px;">Constraint: 40.0 ns (25 MHz)</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Derived Clock</div>
+              <div class="summary-value">clk_dsp_pll</div>
+              <div style="font-size: 10px; color: #888; margin-top: 6px;">Generated: 8.0 ns (125 MHz)</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Asynchronous Domains</div>
+              <div class="summary-value">3</div>
+              <div style="font-size: 10px; color: #888; margin-top: 6px;">CDC paths analyzed</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Analysis Mode</div>
+              <div class="summary-value">STA</div>
+              <div style="font-size: 10px; color: #888; margin-top: 6px;">Corner: Typical (TT)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Critical Paths -->
+        <div class="card" style="flex: 1;">
+          <div class="section-title">Critical Paths (Top 10)</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 30%;">Source</th>
+                <th style="width: 30%;">Destination</th>
+                <th style="width: 15%;">Slack</th>
+                <th style="width: 15%;">Delay</th>
+                <th style="width: 10%;">Clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="path-name">pqc_engine/round_reg[3]</div></td>
+                <td><div class="path-name">sha3_core/state_in[127]</div></td>
+                <td><span class="slack-positive">+1.87 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">6.13 ns</td>
+                <td><span class="clock-badge active">clk_125m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">i2c_master/bit_cnt[2]</div></td>
+                <td><div class="path-name">i2c_master/state_nxt[0]</div></td>
+                <td><span class="slack-positive">+2.34 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">5.66 ns</td>
+                <td><span class="clock-badge">clk_25m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">dsp_mult/p[15]</div></td>
+                <td><div class="path-name">adder_stage/b[15]</div></td>
+                <td><span class="slack-positive">+2.51 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">5.49 ns</td>
+                <td><span class="clock-badge active">clk_125m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">uart_rx_sync/q_r[1]</div></td>
+                <td><div class="path-name">uart_core/rxd_sync</div></td>
+                <td><span class="slack-positive">+3.12 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">4.88 ns</td>
+                <td><span class="clock-badge">clk_25m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">fifo_wr/addr_gray[3]</div></td>
+                <td><div class="path-name">fifo_rd/addr_gray_sync[3]</div></td>
+                <td><span class="slack-positive">+1.45 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">6.55 ns</td>
+                <td><span class="clock-badge">async</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">counter/q[7]</div></td>
+                <td><div class="path-name">decoder/out[0]</div></td>
+                <td><span class="slack-positive">+3.67 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">4.33 ns</td>
+                <td><span class="clock-badge active">clk_125m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">mux_sel[4:0]</div></td>
+                <td><div class="path-name">alu/result[31:0]</div></td>
+                <td><span class="slack-positive">+4.21 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">3.79 ns</td>
+                <td><span class="clock-badge active">clk_125m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">mem_rdata[63:0]</div></td>
+                <td><div class="path-name">dsp_a[63:0]</div></td>
+                <td><span class="slack-positive">+2.88 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">5.12 ns</td>
+                <td><span class="clock-badge active">clk_125m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">fsm_state[1:0]</div></td>
+                <td><div class="path-name">fsm_nxt[1:0]</div></td>
+                <td><span class="slack-positive">+2.14 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">5.86 ns</td>
+                <td><span class="clock-badge">clk_25m</span></td>
+              </tr>
+              <tr>
+                <td><div class="path-name">ctrl/grant[3]</div></td>
+                <td><div class="path-name">arbiter/req[3]</div></td>
+                <td><span class="slack-positive">+3.43 ns</span></td>
+                <td style="font-family: 'IBM Plex Mono', monospace;">4.57 ns</td>
+                <td><span class="clock-badge">clk_25m</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

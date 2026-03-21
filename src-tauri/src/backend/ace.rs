@@ -1205,4 +1205,119 @@ mod tests {
         let re_read = parse_pdc_constraints(&written).unwrap();
         assert!(re_read.is_empty());
     }
+
+    // ── PDC Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_pdc_blinky_led_constraints() {
+        let b = backend();
+        let pdc_content = include_str!("../../../examples/ace/blinky_led/constraints/blinky.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("blinky.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_ml_accelerator_constraints() {
+        let b = backend();
+        let pdc_content = include_str!("../../../examples/ace/ml_accelerator/constraints/ml.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("ml.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_gddr6_test_constraints() {
+        let b = backend();
+        let pdc_content = include_str!("../../../examples/ace/gddr6_test/constraints/gddr6.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("gddr6.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_ethernet_400g_constraints() {
+        let b = backend();
+        let pdc_content = include_str!("../../../examples/ace/ethernet_400g/constraints/eth400g.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("eth400g.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pdc_noc_endpoint_constraints() {
+        let b = backend();
+        let pdc_content = include_str!("../../../examples/ace/noc_endpoint/constraints/noc.pdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let pdc_file = tmp.path().join("noc.pdc");
+        std::fs::write(&pdc_file, pdc_content).unwrap();
+
+        let constraints = b.read_constraints(&pdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_vivado_ace() {
+        let b = backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xcvu57p-fsvh2892-2L-e", "blinky_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("open_project"));
+        assert!(script.contains("blinky_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_xcvu440() {
+        let b = backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xcvu440-flga2892-2-e", "uart_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("open_project"));
+    }
+
+    #[test]
+    fn test_generate_build_script_xcvu7p() {
+        let b = backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xcvu7p-flgb2104-2-e", "ddc_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design"));
+    }
+
+    #[test]
+    fn test_generate_build_script_xcbu19p() {
+        let b = backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xcbu19p-ffve1760-2-e", "eth_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design"));
+    }
+
+    #[test]
+    fn test_generate_build_script_xczu28dr() {
+        let b = backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xczu28dr-ffvf1517-2-e", "axi_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("write_bitstream"));
+    }
 }

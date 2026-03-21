@@ -1096,4 +1096,215 @@ B16 | LVCMOS33
         let result = b.parse_utilization_report(tmp.path());
         assert!(result.is_err());
     }
+
+    // ── XDC Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_xdc_blinky_led_constraints() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/blinky_led/constraints/blinky.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("blinky.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints = b.read_constraints(&xdc_file).unwrap();
+        assert!(!constraints.is_empty());
+        // Verify specific pins from blinky.xdc
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk_in"));
+        assert!(pin_names.contains(&"rst_n"));
+        assert!(pin_names.iter().any(|p| p.contains("led_out")));
+    }
+
+    #[test]
+    fn test_parse_xdc_uart_echo_constraints() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/uart_echo/constraints/uart.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("uart.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints = b.read_constraints(&xdc_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk"));
+        assert!(pin_names.contains(&"uart_rx"));
+        assert!(pin_names.contains(&"uart_tx"));
+    }
+
+    #[test]
+    fn test_parse_xdc_ddr3_test_constraints() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/ddr3_test/constraints/ddr3.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("ddr3.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints = b.read_constraints(&xdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_xdc_pwm_rgb_constraints() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/pwm_rgb/constraints/pwm.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("pwm.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints = b.read_constraints(&xdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_xdc_axi_dma_engine_constraints() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/axi_dma_engine/constraints/dma.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("dma.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints = b.read_constraints(&xdc_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── XDC Roundtrip Tests (Parse → Write → Reparse) ──
+
+    #[test]
+    fn test_roundtrip_xdc_blinky_led() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/blinky_led/constraints/blinky.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("blinky.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&xdc_file).unwrap();
+        let orig_count = constraints_orig.len();
+
+        let output_file = tmp.path().join("blinky_out.xdc");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), orig_count);
+    }
+
+    #[test]
+    fn test_roundtrip_xdc_uart_echo() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/uart_echo/constraints/uart.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("uart.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&xdc_file).unwrap();
+        let orig_count = constraints_orig.len();
+
+        let output_file = tmp.path().join("uart_out.xdc");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), orig_count);
+    }
+
+    #[test]
+    fn test_roundtrip_xdc_ddr3_test() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/ddr3_test/constraints/ddr3.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("ddr3.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&xdc_file).unwrap();
+        let output_file = tmp.path().join("ddr3_out.xdc");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    #[test]
+    fn test_roundtrip_xdc_pwm_rgb() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/pwm_rgb/constraints/pwm.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("pwm.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&xdc_file).unwrap();
+        let output_file = tmp.path().join("pwm_out.xdc");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    #[test]
+    fn test_roundtrip_xdc_axi_dma_engine() {
+        let b = VivadoBackend::new();
+        let xdc_content = include_str!("../../../examples/vivado/axi_dma_engine/constraints/dma.xdc");
+        let tmp = tempfile::tempdir().unwrap();
+        let xdc_file = tmp.path().join("dma.xdc");
+        std::fs::write(&xdc_file, xdc_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&xdc_file).unwrap();
+        let output_file = tmp.path().join("dma_out.xdc");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_artix7_blinky() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a35tcpg236-1", "blinky_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design -top blinky_top"));
+        assert!(script.contains("write_bitstream -force blinky_top.bit"));
+    }
+
+    #[test]
+    fn test_generate_build_script_kintex7_project() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7k325tffg676-2", "uart_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design -top uart_top"));
+        assert!(script.contains("opt_design -directive Explore"));
+    }
+
+    #[test]
+    fn test_generate_build_script_virtex7_high_performance() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7v585tffg1157-1", "ddr3_controller", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("place_design -directive ExtraPostPlacementOpt"));
+        assert!(script.contains("route_design -directive Explore"));
+    }
+
+    #[test]
+    fn test_generate_build_script_zynq7_system() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7z020clg484-1", "zynq_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("synth_design -top zynq_top"));
+        assert!(script.contains("report_timing_summary"));
+    }
+
+    #[test]
+    fn test_generate_build_script_with_device_placeholder() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100tcsg324-1", "axi_top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("xc7a100tcsg324-1") || script.contains("device"));
+        assert!(script.contains("synth_design -top axi_top"));
+    }
 }

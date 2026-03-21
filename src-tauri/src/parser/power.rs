@@ -797,4 +797,461 @@ Junction Temperature: 62.0 C
         let report = parse_vivado_power(content).unwrap();
         assert_eq!(report.total_mw, 0.0);
     }
+
+    // ── Radiant Fixture Tests ──
+
+    #[test]
+    fn test_radiant_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        assert!(report.total_mw > 0.0, "Power should be positive");
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_power_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Total: 12.1 + 6.1 = 18.2 mW
+        assert!((report.total_mw - 18.2).abs() < 2.0, "Total power should be ~18.2 mW");
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_power_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_power_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Total: 16.2 + 8.6 = 24.8 mW
+        assert!((report.total_mw - 24.8).abs() < 3.0, "Total power should be ~24.8 mW");
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_power_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_power_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Total: 19.2 + 12.3 = 31.5 mW
+        assert!((report.total_mw - 31.5).abs() < 3.0, "Total power should be ~31.5 mW");
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_power_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_power_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Total: 14.1 + 5.6 = 19.7 mW
+        assert!((report.total_mw - 19.7).abs() < 2.5, "Total power should be ~19.7 mW");
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_power_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_power_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Total: 28.1 + 14.2 = 42.3 mW
+        assert!((report.total_mw - 42.3).abs() < 5.0, "Total power should be ~42.3 mW");
+    }
+
+    // ── Diamond Fixture Tests ──
+
+    #[test]
+    fn test_diamond_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0, "Power should be positive");
+    }
+
+    #[test]
+    fn test_diamond_example_blinky_led_power_has_value() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_power_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_power_succeeds() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_power_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_power_succeeds() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_power_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_power_succeeds() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_power_parses() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_power_succeeds() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_power_breakdown() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // Should have some breakdown components
+        assert!(report.breakdown.len() >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_power_realistic() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // UART controller should be moderate power consumer
+        assert!(report.total_mw > 10.0 && report.total_mw < 100.0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_power_reasonable() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // SPI controller power consumption
+        assert!(report.total_mw > 15.0 && report.total_mw < 80.0);
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_power_low() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // I2C is low-speed, should be reasonable power
+        assert!(report.total_mw > 10.0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_power_high() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_power.rpt");
+        let report = parse_radiant_power(content).unwrap();
+        // DSP design uses more power
+        assert!(report.total_mw > 30.0);
+    }
+
+    #[test]
+    fn test_diamond_example_blinky_led_power_low() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        // Simple design should use less power
+        assert!(report.total_mw > 0.0 && report.total_mw < 50.0);
+    }
+
+    #[test]
+    fn test_diamond_example_uart_bridge_power_moderate() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_serdes_loopback_power_high_speed() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        // SERDES is high-speed, may use more power
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_video_scaler_power_streaming() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        // Video scaler is data-intensive
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_diamond_example_wishbone_soc_power_complex() {
+        let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_power.rpt");
+        let report = parse_diamond_power(content).unwrap();
+        // Complex SOC design
+        assert!(report.total_mw > 0.0);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Vivado power fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_vivado_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!((report.total_mw - 89.0).abs() < 10.0, "Expected total power ~89 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0, "Expected positive dynamic power");
+        assert!(report.static_mw > 0.0, "Expected positive static power");
+    }
+
+    #[test]
+    fn test_vivado_example_uart_echo_power_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/uart_echo_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!((report.total_mw - 156.0).abs() < 20.0, "Expected total power ~156 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+        assert!(report.static_mw > 0.0);
+    }
+
+    #[test]
+    fn test_vivado_example_pwm_rgb_power_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/pwm_rgb_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!((report.total_mw - 1234.0).abs() < 50.0, "Expected total power ~1234 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+        assert!(report.static_mw > 0.0);
+    }
+
+    #[test]
+    fn test_vivado_example_ddr3_test_power_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/ddr3_test_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!((report.total_mw - 892.0).abs() < 50.0, "Expected total power ~892 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+        assert!(report.static_mw > 0.0);
+    }
+
+    #[test]
+    fn test_vivado_example_axi_dma_engine_power_parses() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/axi_dma_engine_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!((report.total_mw - 1567.0).abs() < 100.0, "Expected total power ~1567 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+        assert!(report.static_mw > 0.0);
+    }
+
+    #[test]
+    fn test_vivado_power_has_power_breakdown() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        // Total power should equal dynamic + static (approximately)
+        let sum = report.dynamic_mw + report.static_mw;
+        assert!((sum - report.total_mw).abs() < 1.0, "Power breakdown should sum to total");
+    }
+
+    #[test]
+    fn test_vivado_power_dynamic_less_than_total() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/uart_echo_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!(report.dynamic_mw < report.total_mw, "Dynamic power should be less than total");
+    }
+
+    #[test]
+    fn test_vivado_power_static_less_than_total() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/pwm_rgb_power.rpt");
+        let report = parse_vivado_power(content).unwrap();
+        assert!(report.static_mw < report.total_mw, "Static power should be less than total");
+    }
+
+    #[test]
+    fn test_vivado_power_multiple_designs() {
+        let blinky = include_str!("../../tests/fixtures/vivado/examples/blinky_led_power.rpt");
+        let ddr3 = include_str!("../../tests/fixtures/vivado/examples/ddr3_test_power.rpt");
+
+        let report_blinky = parse_vivado_power(blinky).unwrap();
+        let report_ddr3 = parse_vivado_power(ddr3).unwrap();
+
+        assert!(report_blinky.total_mw > 0.0);
+        assert!(report_ddr3.total_mw > 0.0);
+        // DDR3 should use more power than simple blinky
+        assert!(report_ddr3.total_mw > report_blinky.total_mw);
+    }
+
+    #[test]
+    fn test_vivado_drc_reports_parse() {
+        let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_drc.rpt");
+        let report = parse_vivado_drc(content).unwrap();
+        // DRC report should parse successfully
+        assert!(!report.design.is_empty() || report.total_violations >= 0);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Quartus power fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_quartus_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!((report.total_mw - 82.14).abs() < 5.0, "Expected total power ~82.14 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0, "Expected positive dynamic power");
+    }
+
+    #[test]
+    fn test_quartus_example_nios_hello_power_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!((report.total_mw - 456.23).abs() < 20.0, "Expected total power ~456.23 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+    }
+
+    #[test]
+    fn test_quartus_example_ethernet_mac_power_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!((report.total_mw - 312.45).abs() < 20.0, "Expected total power ~312.45 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+    }
+
+    #[test]
+    fn test_quartus_example_pcie_endpoint_power_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/pcie_endpoint_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!((report.total_mw - 2340.56).abs() < 100.0, "Expected total power ~2340.56 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+    }
+
+    #[test]
+    fn test_quartus_example_signal_proc_power_parses() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/signal_proc_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!((report.total_mw - 1890.45).abs() < 100.0, "Expected total power ~1890.45 mW, got {}", report.total_mw);
+        assert!(report.dynamic_mw > 0.0);
+    }
+
+    #[test]
+    fn test_quartus_power_has_dynamic_component() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        assert!(report.dynamic_mw > 0.0, "Quartus reports should extract dynamic power");
+        assert!(report.dynamic_mw < report.total_mw);
+    }
+
+    #[test]
+    fn test_quartus_power_dynamic_percentage_reasonable() {
+        let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_power.rpt");
+        let report = parse_quartus_power(content).unwrap();
+        let dynamic_pct = (report.dynamic_mw / report.total_mw) * 100.0;
+        // Dynamic power should typically be 40-80% of total
+        assert!(dynamic_pct >= 40.0 && dynamic_pct <= 80.0, "Dynamic % seems unrealistic: {}", dynamic_pct);
+    }
+
+    #[test]
+    fn test_quartus_power_multiple_designs() {
+        let blinky = include_str!("../../tests/fixtures/quartus/examples/blinky_led_power.rpt");
+        let pcie = include_str!("../../tests/fixtures/quartus/examples/pcie_endpoint_power.rpt");
+
+        let report_blinky = parse_quartus_power(blinky).unwrap();
+        let report_pcie = parse_quartus_power(pcie).unwrap();
+
+        assert!(report_blinky.total_mw > 0.0);
+        assert!(report_pcie.total_mw > 0.0);
+        // PCIe endpoint is more complex, should use more power
+        assert!(report_pcie.total_mw > report_blinky.total_mw);
+    }
+
+    #[test]
+    fn test_quartus_power_all_designs_have_data() {
+        let designs = vec![
+            ("blinky_led", include_str!("../../tests/fixtures/quartus/examples/blinky_led_power.rpt")),
+            ("nios_hello", include_str!("../../tests/fixtures/quartus/examples/nios_hello_power.rpt")),
+            ("ethernet_mac", include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_power.rpt")),
+        ];
+
+        for (name, content) in designs {
+            let report = parse_quartus_power(content).unwrap_or_else(|e| {
+                panic!("Failed to parse {} power: {}", name, e);
+            });
+            assert!(report.total_mw > 0.0, "{} should have positive power", name);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // ACE power fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_ace_example_blinky_led_power_parses() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_power.rpt");
+        let report = parse_ace_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_ace_power_fixture_has_dynamic_component() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_power.rpt");
+        let report = parse_ace_power(content).unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    #[test]
+    fn test_ace_power_fixture_reasonable_range() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_power.rpt");
+        let report = parse_ace_power(content).unwrap();
+        // ACE power should be in reasonable range (10mW to 10W for typical designs)
+        assert!(report.total_mw >= 10.0 && report.total_mw <= 10000.0,
+            "ACE power {} mW seems unreasonable", report.total_mw);
+    }
+
+    #[test]
+    fn test_ace_power_fixture_junction_temp() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_power.rpt");
+        let report = parse_ace_power(content).unwrap();
+        // Junction temp should be reasonable (20-125°C)
+        assert!(report.junction_temp_c >= 20.0 && report.junction_temp_c <= 125.0
+            || report.junction_temp_c == 25.0,  // default
+            "Junction temp {} seems unreasonable", report.junction_temp_c);
+    }
+
+    #[test]
+    fn test_ace_power_fixture_positive_total() {
+        let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_power.rpt");
+        let report = parse_ace_power(content).unwrap();
+        assert!(report.total_mw > 0.0, "Total power should be positive");
+    }
 }

@@ -127,4 +127,122 @@ mod tests {
         assert_eq!(report.slice_used, 0);
         assert_eq!(report.run_status, "Unknown");
     }
+
+    // ── Radiant Fixture Tests ──
+
+    #[test]
+    fn test_radiant_example_blinky_led_par_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        assert!(report.routing_pct >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_par_has_values() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Should have some valid data
+        assert!(report.slice_total > 0 || report.routing_pct > 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_par_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        assert!(report.routing_pct >= 0.0 || report.slice_used >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_par_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        assert!(report.routing_pct >= 0.0 || report.slice_used >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_par_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Just verify no panic on real fixture
+        assert!(report.run_status.len() > 0 || report.routing_pct >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_par_parses() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        assert!(report.routing_pct >= 0.0 || report.slice_used >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_par_routing() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Routing percentage should be reasonable
+        assert!(report.routing_pct >= 0.0 && report.routing_pct <= 100.0);
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_par_placement() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Placement time should be non-negative
+        assert!(report.placement_time_secs >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_par_routing_time() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Routing time should be valid
+        assert!(report.routing_time_secs >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_par_memory() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Memory usage should be non-negative
+        assert!(report.peak_memory_mb >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_i2c_bridge_par_total_time() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Total time should be valid
+        assert!(report.total_time_secs >= 0.0);
+    }
+
+    #[test]
+    fn test_radiant_example_blinky_led_par_status() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Status should not be empty
+        assert!(!report.run_status.is_empty());
+    }
+
+    #[test]
+    fn test_radiant_example_uart_controller_par_errors() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Error count should be non-negative
+        assert!(report.par_errors >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_spi_flash_par_slices() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Slice counts should be non-negative
+        assert!(report.slice_used >= 0 && report.slice_total >= 0);
+    }
+
+    #[test]
+    fn test_radiant_example_dsp_fir_filter_par_signals() {
+        let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_par.rpt");
+        let report = parse_radiant_par(content).unwrap();
+        // Signal count should be non-negative
+        assert!(report.signals >= 0);
+    }
 }

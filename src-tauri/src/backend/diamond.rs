@@ -1785,4 +1785,207 @@ WARNING W456: Unused net clk at module top
         assert!(output_dir.contains("ip"), "output dir should reference ip subdirectory");
         assert!(output_dir.contains("mem_inst"), "output dir should include instance name");
     }
+
+    // ── LPF Parsing Tests (Real Fixture Data) ──
+
+    #[test]
+    fn test_parse_lpf_blinky_led_constraints() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("blinky.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
+        assert!(pin_names.contains(&"clk"));
+        assert!(pin_names.contains(&"reset_n"));
+        assert!(pin_names.iter().any(|p| p.contains("led_out")));
+    }
+
+    #[test]
+    fn test_parse_lpf_serdes_loopback_constraints() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("serdes.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_lpf_uart_bridge_constraints() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("uart.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_lpf_video_scaler_constraints() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/video_scaler/constraints/scaler.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("scaler.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    #[test]
+    fn test_parse_lpf_wishbone_soc_constraints() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/wishbone_soc/constraints/soc.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("soc.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints = b.read_constraints(&lpf_file).unwrap();
+        assert!(!constraints.is_empty());
+    }
+
+    // ── LPF Roundtrip Tests (Parse → Write → Reparse) ──
+
+    #[test]
+    fn test_roundtrip_lpf_blinky_led() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("blinky.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&lpf_file).unwrap();
+        let orig_count = constraints_orig.len();
+
+        let output_file = tmp.path().join("blinky_out.lpf");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), orig_count);
+    }
+
+    #[test]
+    fn test_roundtrip_lpf_serdes_loopback() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("serdes.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&lpf_file).unwrap();
+        let output_file = tmp.path().join("serdes_out.lpf");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    #[test]
+    fn test_roundtrip_lpf_uart_bridge() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("uart.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&lpf_file).unwrap();
+        let output_file = tmp.path().join("uart_out.lpf");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    #[test]
+    fn test_roundtrip_lpf_video_scaler() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/video_scaler/constraints/scaler.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("scaler.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&lpf_file).unwrap();
+        let output_file = tmp.path().join("scaler_out.lpf");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    #[test]
+    fn test_roundtrip_lpf_wishbone_soc() {
+        let b = DiamondBackend::new();
+        let lpf_content = include_str!("../../../examples/diamond/wishbone_soc/constraints/soc.lpf");
+        let tmp = tempfile::tempdir().unwrap();
+        let lpf_file = tmp.path().join("soc.lpf");
+        std::fs::write(&lpf_file, lpf_content).unwrap();
+
+        let constraints_orig = b.read_constraints(&lpf_file).unwrap();
+        let output_file = tmp.path().join("soc_out.lpf");
+        b.write_constraints(&constraints_orig, &output_file).unwrap();
+        let constraints_reparsed = b.read_constraints(&output_file).unwrap();
+        assert_eq!(constraints_reparsed.len(), constraints_orig.len());
+    }
+
+    // ── Build Script Generation Tests (Different Configurations) ──
+
+    #[test]
+    fn test_generate_build_script_lcmxo3lf() {
+        let b = DiamondBackend::new();
+        let tmp = make_ldf_dir();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "blinky_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run Synthesis"));
+        assert!(script.contains("blinky_top"));
+    }
+
+    #[test]
+    fn test_generate_build_script_lcmxo3d() {
+        let b = DiamondBackend::new();
+        let tmp = make_ldf_dir();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3D-9400HC", "uart_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run Synthesis"));
+    }
+
+    #[test]
+    fn test_generate_build_script_ecp5() {
+        let b = DiamondBackend::new();
+        let tmp = make_ldf_dir();
+        let script = b.generate_build_script(
+            tmp.path(), "LFE5U-25F-6BG256C", "ddc_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run Synthesis"));
+        assert!(script.contains("prj_run Map"));
+    }
+
+    #[test]
+    fn test_generate_build_script_mxo2() {
+        let b = DiamondBackend::new();
+        let tmp = make_ldf_dir();
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO2-7000HC", "axi_top", &[], &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("prj_run PAR"));
+    }
+
+    #[test]
+    fn test_generate_build_script_with_verilog_detection() {
+        let b = DiamondBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("design.v"), "module design(); endmodule").unwrap();
+
+        let script = b.generate_build_script(
+            tmp.path(), "LCMXO3LF-6900C", "design", &[], &HashMap::new(),
+        ).unwrap();
+
+        assert!(script.contains("prj_src add"));
+    }
 }

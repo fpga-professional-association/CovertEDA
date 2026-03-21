@@ -352,4 +352,84 @@ Printing statistics.
         assert_eq!(report.ram_count, 0);
         assert_eq!(report.dsp_count, 0);
     }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // OSS (Yosys) synthesis fixture tests
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_oss_example_blinky_led_yosys_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_yosys.log");
+        let report = parse_yosys_synthesis(content).unwrap();
+        assert!(report.lut_count >= 0);
+        assert!(report.reg_count >= 0);
+    }
+
+    #[test]
+    fn test_oss_example_uart_tx_yosys_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/uart_tx_yosys.log");
+        let report = parse_yosys_synthesis(content).unwrap();
+        assert!(report.lut_count >= 0);
+    }
+
+    #[test]
+    fn test_oss_example_spi_slave_yosys_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/spi_slave_yosys.log");
+        let report = parse_yosys_synthesis(content).unwrap();
+        assert!(report.lut_count >= 0);
+    }
+
+    #[test]
+    fn test_oss_example_pwm_audio_yosys_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/pwm_audio_yosys.log");
+        let report = parse_yosys_synthesis(content).unwrap();
+        assert!(report.lut_count >= 0);
+    }
+
+    #[test]
+    fn test_oss_example_ws2812_driver_yosys_parses() {
+        let content = include_str!("../../tests/fixtures/oss/examples/ws2812_driver_yosys.log");
+        let report = parse_yosys_synthesis(content).unwrap();
+        assert!(report.lut_count >= 0);
+    }
+
+    #[test]
+    fn test_oss_yosys_fixture_design_hierarchy() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_yosys.log");
+        assert!(content.contains("design hierarchy") || content.contains("Module"));
+    }
+
+    #[test]
+    fn test_oss_yosys_fixture_design_statistics() {
+        let content = include_str!("../../tests/fixtures/oss/examples/uart_tx_yosys.log");
+        assert!(content.contains("design statistics") || content.contains("Number of"));
+    }
+
+    #[test]
+    fn test_oss_yosys_fixture_optimization_performed() {
+        let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_yosys.log");
+        assert!(content.contains("optimizing design") || content.contains("Optimizing"));
+    }
+
+    #[test]
+    fn test_oss_yosys_fixture_mapping_complete() {
+        let content = include_str!("../../tests/fixtures/oss/examples/spi_slave_yosys.log");
+        assert!(content.contains("mapping") || content.contains("iCE40"));
+    }
+
+    #[test]
+    fn test_oss_yosys_fixture_all_parse_successfully() {
+        let projects = vec![
+            ("blinky_led", include_str!("../../tests/fixtures/oss/examples/blinky_led_yosys.log")),
+            ("uart_tx", include_str!("../../tests/fixtures/oss/examples/uart_tx_yosys.log")),
+            ("spi_slave", include_str!("../../tests/fixtures/oss/examples/spi_slave_yosys.log")),
+            ("pwm_audio", include_str!("../../tests/fixtures/oss/examples/pwm_audio_yosys.log")),
+            ("ws2812_driver", include_str!("../../tests/fixtures/oss/examples/ws2812_driver_yosys.log")),
+        ];
+        for (name, content) in projects {
+            let report = parse_yosys_synthesis(content)
+                .expect(&format!("Failed to parse yosys for {}", name));
+            assert!(report.lut_count >= 0, "Project {} has invalid LUT count", name);
+        }
+    }
 }

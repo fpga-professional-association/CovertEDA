@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CovertEDA - Start Screen</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #0a0a0f;
+    }
+
+    .header {
+      padding: 24px 40px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #2a2a3e;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip-icon {
+      color: #00d4ff;
+      font-size: 22px;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .left-panel {
+      width: 340px;
+      background: #12121a;
+      border-right: 1px solid #2a2a3e;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .right-panel {
+      flex: 1;
+      padding: 24px 40px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 0.5px;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 8px;
+      padding: 20px 24px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .card:hover {
+      background: #20203a;
+      border-color: #3a3a4e;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .tool-item {
+      background: #12121a;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .tool-item.detected {
+      border-color: #00ff88;
+      background: #0a2a1a;
+    }
+
+    .tool-item.detected .status {
+      color: #00ff88;
+    }
+
+    .tool-name {
+      font-size: 10px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+
+    .tool-version {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-bottom: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .status {
+      font-size: 9px;
+      color: #ff4444;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .projects-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .project-item {
+      background: #12121a;
+      border: 1px solid #2a2a3e;
+      border-radius: 6px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .project-item:hover {
+      background: #20203a;
+      border-color: #00d4ff;
+    }
+
+    .project-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-bottom: 4px;
+    }
+
+    .project-path {
+      font-size: 9px;
+      color: #888;
+      font-family: 'IBM Plex Mono', monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .project-time {
+      font-size: 9px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: auto;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Outfit', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: #00d4ff;
+      color: #0a0a0f;
+    }
+
+    .btn-primary:hover {
+      background: #00e5ff;
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+
+    .btn-secondary {
+      background: #2a2a3e;
+      color: #e0e0e0;
+      border: 1px solid #3a3a4e;
+    }
+
+    .btn-secondary:hover {
+      background: #3a3a4e;
+      border-color: #00d4ff;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .dashboard-item {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .dashboard-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .dashboard-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #00ff88;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .detection-status {
+      font-size: 10px;
+      color: #00ff88;
+      margin-top: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #2a2a3e;
+      color: #e0e0e0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 9px;
+      margin: 4px 0;
+    }
+
+    .badge.success {
+      background: #0a2a1a;
+      color: #00ff88;
+      border: 1px solid #00ff88;
+    }
+
+    .empty-state {
+      color: #888;
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a3e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="chip-icon">⚡</span>
+      <span class="header-title">CovertEDA</span>
+    </div>
+
+    <div class="content">
+      <!-- Left Panel -->
+      <div class="left-panel">
+        <div>
+          <div class="section-title">Backend Toolchain</div>
+          <div class="tool-grid">
+            <div class="tool-item detected">
+              <div class="tool-name">Lattice</div>
+              <div class="tool-version">Radiant 2024.1</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Intel</div>
+              <div class="tool-version">Quartus 23.1</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Xilinx</div>
+              <div class="tool-version">Vivado 2024.1</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Lattice</div>
+              <div class="tool-version">Diamond 3.13</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Microchip</div>
+              <div class="tool-version">Libero 2024.1</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Efinix</div>
+              <div class="tool-version">ACE 9.2</div>
+              <div class="status">✓ detected</div>
+            </div>
+            <div class="tool-item detected">
+              <div class="tool-name">Open Source</div>
+              <div class="tool-version">yosys 0.42</div>
+              <div class="status">✓ detected</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Recent Projects</div>
+          <div class="projects-list">
+            <div class="project-item">
+              <div class="project-name">pqc-accelerator</div>
+              <div class="project-path">/home/user/projects/pqc-accelerator</div>
+              <div class="project-time">2 days ago</div>
+            </div>
+            <div class="project-item">
+              <div class="project-name">usb3-controller</div>
+              <div class="project-path">/home/user/projects/usb3-controller</div>
+              <div class="project-time">5 days ago</div>
+            </div>
+            <div class="project-item">
+              <div class="project-name">custom-dsp</div>
+              <div class="project-path">/home/user/projects/custom-dsp</div>
+              <div class="project-time">2 weeks ago</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary">New Project</button>
+          <button class="btn btn-secondary">Open Project</button>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div class="right-panel">
+        <div class="section-title">System Status</div>
+
+        <div class="dashboard">
+          <div class="dashboard-item">
+            <div class="dashboard-label">Detected Toolchains</div>
+            <div class="dashboard-value">7</div>
+            <div class="detection-status">All major vendors available</div>
+          </div>
+
+          <div class="dashboard-item">
+            <div class="dashboard-label">Recent Projects</div>
+            <div class="dashboard-value">3</div>
+            <div class="detection-status">Ready to open</div>
+          </div>
+
+          <div class="dashboard-item">
+            <div class="dashboard-label">Licenses</div>
+            <div style="margin-top: 12px;">
+              <span class="badge success">Quartus Pro</span>
+              <span class="badge success">Vivado</span>
+              <span class="badge success">Radiant</span>
+              <span class="badge">Diamond (eval)</span>
+            </div>
+          </div>
+
+          <div class="dashboard-item">
+            <div class="dashboard-label">Configuration</div>
+            <div style="margin-top: 12px; font-size: 12px; color: #e0e0e0;">
+              <div style="margin: 6px 0;"><span style="color: #888;">Theme:</span> Dark</div>
+              <div style="margin: 6px 0;"><span style="color: #888;">Scale:</span> 100%</div>
+              <div style="margin: 6px 0;"><span style="color: #888;">API:</span> Ready</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: auto; padding-top: 24px; border-top: 1px solid #2a2a3e; color: #666; font-size: 10px;">
+          <p style="margin-bottom: 8px;">CovertEDA — Professional FPGA Development Environment</p>
+          <p>Support for Lattice, Intel Altera, Xilinx, Microchip, Efinix, and open-source flows</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
