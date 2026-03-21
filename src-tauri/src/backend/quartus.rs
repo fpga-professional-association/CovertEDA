@@ -1730,7 +1730,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_quartus_backend_serialization() {
         let b = make_backend();
-        let info = b.backend_info();
+        let info = b.info();
         assert_eq!(info.id, "quartus");
         assert_eq!(info.short, "Quartus");
         assert_eq!(info.constraint_ext, ".sdc");

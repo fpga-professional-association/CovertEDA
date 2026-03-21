@@ -1546,11 +1546,10 @@ set_io {reset_n} -pinname {G14} -fixed true -io_std {LVCMOS33}
         let dir = std::path::PathBuf::from("/home/user/project");
         let result = generate_libero_ip_script(&dir, "MPF300T", "PLL", "pll_1", &params);
         assert!(result.is_ok());
-        let (tcl, out_dir) = result.unwrap();
+        let tcl = result.unwrap();
         assert!(tcl.contains("create_and_configure_core"));
         assert!(tcl.contains("pll_1"));
         assert!(tcl.contains("PLL"));
-        assert_eq!(out_dir, "hdl/pll_1");
     }
 
     #[test]
@@ -1563,7 +1562,7 @@ set_io {reset_n} -pinname {G14} -fixed true -io_std {LVCMOS33}
         let dir = std::path::PathBuf::from("/home/user/project");
         let result = generate_libero_ip_script(&dir, "MPFS250T", "DDR", "ddr_main", &params);
         assert!(result.is_ok());
-        let (tcl, _) = result.unwrap();
+        let tcl = result.unwrap();
         assert!(tcl.contains("DDR"));
         assert!(tcl.contains("ddr_main"));
     }
@@ -1576,7 +1575,7 @@ set_io {reset_n} -pinname {G14} -fixed true -io_std {LVCMOS33}
         let dir = std::path::PathBuf::from("/home/user/project");
         let result = generate_libero_ip_script(&dir, "MPF300T", "SERDES", "xcvr_0", &params);
         assert!(result.is_ok());
-        let (tcl, _) = result.unwrap();
+        let tcl = result.unwrap();
         assert!(tcl.contains("SERDES"));
     }
 
