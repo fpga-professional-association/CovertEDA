@@ -629,6 +629,8 @@ pub enum BackendError {
     ConfigError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Serialization error: {0}")]
+    SerdeError(#[from] serde_json::Error),
 }
 
 pub type BackendResult<T> = Result<T, BackendError>;

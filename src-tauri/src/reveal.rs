@@ -222,7 +222,7 @@ pub fn parse_reveal_capture(waveform_data: &str) -> BackendResult<Vec<CapturedSi
         }
 
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 3 {
+        if parts.len() >= 4 {
             if let (Ok(width), Ok(start), Ok(end)) = (
                 parts[1].parse::<u32>(),
                 parts[2].parse::<u32>(),

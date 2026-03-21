@@ -62,7 +62,7 @@ impl Default for SdfHeader {
             vendor: "CovertEDA".to_string(),
             program: "CovertEDA".to_string(),
             version: "1.0".to_string(),
-            divider: '/'.to_string(),
+            divider: '/',
             time_unit: "1ns".to_string(),
             voltage: vec!["1.0".to_string()],
             temperature: vec!["25.0".to_string()],
