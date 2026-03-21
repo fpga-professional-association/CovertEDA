@@ -1977,7 +1977,7 @@ SET_IO {data} -pinname {A1} -fixed false -io_std {LVCMOS18}
     #[test]
     fn test_libero_example_multiple_projects_timing() {
         // Test that we can parse timing reports from all 5 example projects
-        let projects = vec![
+        let projects: Vec<(&str, &str)> = vec![
             ("blinky_led", include_str!("../../tests/fixtures/libero/examples/blinky_led_timing.rpt")),
             ("risc_v_core", include_str!("../../tests/fixtures/libero/examples/risc_v_core_timing.rpt")),
             ("adc_interface", include_str!("../../tests/fixtures/libero/examples/adc_interface_timing.rpt")),
@@ -1994,7 +1994,7 @@ SET_IO {data} -pinname {A1} -fixed false -io_std {LVCMOS18}
     #[test]
     fn test_libero_example_multiple_projects_utilization() {
         // Test that we can parse utilization reports from all 5 example projects
-        let projects = vec![
+        let projects: Vec<(&str, &str, &str)> = vec![
             ("blinky_led", "MPF300T", include_str!("../../tests/fixtures/libero/examples/blinky_led_utilization.rpt")),
             ("risc_v_core", "MPFS250T", include_str!("../../tests/fixtures/libero/examples/risc_v_core_utilization.rpt")),
             ("adc_interface", "MPF300T", include_str!("../../tests/fixtures/libero/examples/adc_interface_utilization.rpt")),

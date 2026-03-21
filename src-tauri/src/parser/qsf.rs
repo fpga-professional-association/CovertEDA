@@ -399,44 +399,43 @@ PROJECT_REVISION = blinky
     fn test_quartus_example_blinky_led_qsf_parses() {
         let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok(), "QSF should parse successfully");
+        assert!(!result.device.is_empty(), "QSF should parse successfully");
     }
 
     #[test]
     fn test_quartus_example_blinky_led_qsf_extracts_device() {
         let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok());
         // Device should be extracted (EP4CE6E22C8)
-        let _parsed = result.expect("Should parse QSF");
+        assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_nios_hello_qsf_parses() {
         let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok());
+        assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_ethernet_mac_qsf_parses() {
         let content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok());
+        assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_pcie_endpoint_qsf_parses() {
         let content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok());
+        assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_signal_proc_qsf_parses() {
         let content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf");
         let result = parse_qsf(content);
-        assert!(result.is_ok());
+        assert!(!result.device.is_empty());
     }
 
     #[test]
@@ -444,7 +443,7 @@ PROJECT_REVISION = blinky
         let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
         let result = parse_qsf(content);
         // Should handle set_global_assignment directives
-        assert!(result.is_ok(), "Should parse QSF with global assignments");
+        assert!(!result.device.is_empty(), "Should parse QSF with global assignments");
     }
 
     #[test]
@@ -452,7 +451,7 @@ PROJECT_REVISION = blinky
         let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
         let result = parse_qsf(content);
         // Should handle set_location_assignment directives
-        assert!(result.is_ok(), "Should parse QSF with location assignments");
+        assert!(!result.pin_assignments.is_empty(), "Should parse QSF with location assignments");
     }
 
     #[test]
@@ -460,7 +459,7 @@ PROJECT_REVISION = blinky
         let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
         let result = parse_qsf(content);
         // Should handle set_instance_assignment directives
-        assert!(result.is_ok(), "Should parse QSF with instance assignments");
+        assert!(!result.device.is_empty(), "Should parse QSF with instance assignments");
     }
 
     #[test]
@@ -475,7 +474,7 @@ PROJECT_REVISION = blinky
 
         for (name, content) in designs {
             let result = parse_qsf(content);
-            assert!(result.is_ok(), "{} QSF should parse successfully", name);
+            assert!(!result.device.is_empty(), "{} QSF should parse successfully", name);
         }
     }
 }

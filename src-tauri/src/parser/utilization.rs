@@ -1344,7 +1344,7 @@ Number of PLL sites: 1 out of 4
 
     #[test]
     fn test_ace_utilization_fixture_all_parse_successfully() {
-        let projects = vec![
+        let projects: Vec<(&str, &str, &str)> = vec![
             ("blinky_led", "AC7t1500ES0", include_str!("../../tests/fixtures/ace/examples/blinky_led_utilization.rpt")),
             ("noc_endpoint", "AC7t1500ES0", include_str!("../../tests/fixtures/ace/examples/noc_endpoint_utilization.rpt")),
             ("ml_accelerator", "AC7t1500ES0", include_str!("../../tests/fixtures/ace/examples/ml_accelerator_utilization.rpt")),

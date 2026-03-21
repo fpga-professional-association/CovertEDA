@@ -419,7 +419,7 @@ Printing statistics.
 
     #[test]
     fn test_oss_yosys_fixture_all_parse_successfully() {
-        let projects = vec![
+        let projects: Vec<(&str, &str)> = vec![
             ("blinky_led", include_str!("../../tests/fixtures/oss/examples/blinky_led_yosys.log")),
             ("uart_tx", include_str!("../../tests/fixtures/oss/examples/uart_tx_yosys.log")),
             ("spi_slave", include_str!("../../tests/fixtures/oss/examples/spi_slave_yosys.log")),

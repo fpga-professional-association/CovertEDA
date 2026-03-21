@@ -1372,7 +1372,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_oss_constraint_fixture_multiple_pcf_parse() {
-        let projects = vec![
+        let projects: Vec<(&str, &str)> = vec![
             ("blinky_led", include_str!("../../../examples/oss/blinky_led/constraints/blinky.pcf")),
             ("uart_tx", include_str!("../../../examples/oss/uart_tx/constraints/uart.pcf")),
             ("pwm_audio", include_str!("../../../examples/oss/pwm_audio/constraints/audio.pcf")),

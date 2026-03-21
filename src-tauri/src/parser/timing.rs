@@ -1441,7 +1441,7 @@ Target Period : 10.0
 
     #[test]
     fn test_ace_timing_fixture_all_parse_successfully() {
-        let projects = vec![
+        let projects: Vec<(&str, &str)> = vec![
             ("blinky_led", include_str!("../../tests/fixtures/ace/examples/blinky_led_timing.rpt")),
             ("noc_endpoint", include_str!("../../tests/fixtures/ace/examples/noc_endpoint_timing.rpt")),
             ("ml_accelerator", include_str!("../../tests/fixtures/ace/examples/ml_accelerator_timing.rpt")),
@@ -1526,7 +1526,7 @@ Target Period : 10.0
 
     #[test]
     fn test_oss_nextpnr_fixture_multiple_projects_parse() {
-        let projects = vec![
+        let projects: Vec<(&str, &str)> = vec![
             ("blinky_led", include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log")),
             ("uart_tx", include_str!("../../tests/fixtures/oss/examples/uart_tx_nextpnr.log")),
             ("spi_slave", include_str!("../../tests/fixtures/oss/examples/spi_slave_nextpnr.log")),
