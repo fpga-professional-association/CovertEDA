@@ -853,4 +853,136 @@ mod tests {
         assert!(report.categories.is_empty());
     }
 
+    // ── Edge case tests for utilization parsers ──
+
+    #[test]
+    fn test_parse_lattice_mrp_with_zero_total_resources() {
+        let content = "Number of registers: 0 out of 0\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        // Should skip entries with total=0
+        assert!(report.categories.is_empty() || report.categories.iter().all(|c| c.items.is_empty()));
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_with_full_utilization() {
+        let content = "Number of registers: 100 out of 100\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some());
+        let item = &logic.unwrap().items[0];
+        assert_eq!(item.used, 100);
+        assert_eq!(item.total, 100);
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_multiple_resource_types() {
+        let content = r#"
+Number of registers: 50 out of 100
+Number of PIO sites: 18 out of 204
+Number of block RAM: 2 out of 108
+Number of PLL sites: 1 out of 4
+"#;
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        assert_eq!(report.categories.len(), 4); // Logic, I/O, Memory, Clocking
+    }
+
+    #[test]
+    fn test_parse_diamond_utilization_empty() {
+        let content = "";
+        let report = parse_diamond_utilization(content, "test").unwrap();
+        assert!(report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_with_alms() {
+        let content = r#"; Logic utilization (ALMs needed / total)   ; 45     ; 32070  ; < 1 %    ;"#;
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some());
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_empty() {
+        let content = "";
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        assert!(report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_skips_summary_rows() {
+        let content = r#"; Resource ; Used   ; Total  ; % Used   ;
+; Logic utilization (ALMs needed / total)   ; 45     ; 32070  ; < 1 %    ;"#;
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        // Should only have parsed the actual data row, not the header
+        assert!(!report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ace_utilization_empty() {
+        let content = "";
+        let report = parse_ace_utilization(content, "test").unwrap();
+        assert!(report.categories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ace_utilization_with_large_values() {
+        let content = "ALMs                      999999  1000000         99.99%\n";
+        let report = parse_ace_utilization(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some());
+        let item = &logic.unwrap().items[0];
+        assert_eq!(item.used, 999999);
+        assert_eq!(item.total, 1000000);
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_with_io_table() {
+        let content = "| I/O                       |   20 |     0 |          0 |       480 |  4.17 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let io = report.categories.iter().find(|c| c.name == "I/O");
+        assert!(io.is_some());
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_with_memory_table() {
+        let content = "| BRAM36                    |    5 |     0 |          0 |       405 |  1.23 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let mem = report.categories.iter().find(|c| c.name == "Memory");
+        assert!(mem.is_some());
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_with_dsp_table() {
+        let content = "| DSP48E2                   |    1 |     0 |          0 |       220 |  0.45 |\n";
+        let report = parse_vivado_utilization(content, "test").unwrap();
+        let dsp = report.categories.iter().find(|c| c.name == "DSP");
+        assert!(dsp.is_some());
+    }
+
+    #[test]
+    fn test_parse_vivado_utilization_preserves_device_name() {
+        let content = "| Slice LUTs                |  384 |     0 |          0 |     63400 |  0.61 |\n";
+        let device = "xc7a35tcpg236-1";
+        let report = parse_vivado_utilization(content, device).unwrap();
+        assert_eq!(report.device, device);
+    }
+
+    #[test]
+    fn test_parse_lattice_mrp_slice_utilization_precedence() {
+        let content = "SLICE 50/100\nNumber of slices: 45 out of 100\n";
+        let report = parse_lattice_mrp(content, "test").unwrap();
+        let logic = report.categories.iter().find(|c| c.name == "Logic");
+        assert!(logic.is_some());
+        // SLICE regex should be found first
+        assert!(logic.unwrap().items.iter().any(|i| i.resource == "SLICEs"));
+    }
+
+    #[test]
+    fn test_parse_quartus_utilization_with_zero_resources() {
+        let content = r#"; Unused Logic            ; 0      ; 0     ; 0 %      ;"#;
+        let report = parse_quartus_utilization(content, "test").unwrap();
+        // Should skip zero-total entries
+        assert!(report.categories.is_empty() || report.categories.iter().all(|c| c.items.is_empty()));
+    }
+
 }

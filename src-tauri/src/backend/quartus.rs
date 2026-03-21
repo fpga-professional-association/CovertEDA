@@ -776,12 +776,263 @@ puts "CovertEDA: No .sdc files found - using auto-derived 100 MHz clock constrai
         crate::parser::utilization::parse_quartus_utilization(&content, self.default_device())
     }
 
-    fn parse_power_report(&self, _impl_dir: &Path) -> BackendResult<Option<PowerReport>> {
-        Ok(None)
+    fn parse_power_report(&self, impl_dir: &Path) -> BackendResult<Option<PowerReport>> {
+        // Look for *.pow.rpt files in impl_dir or output_files subdirectory
+        let out_dir = impl_dir.join("output_files");
+        let search_dir = if out_dir.exists() { &out_dir } else { impl_dir };
+
+        let pow_file = std::fs::read_dir(search_dir)
+            .map_err(|e| BackendError::IoError(e))?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path().to_str().map(|s| s.ends_with(".pow.rpt")).unwrap_or(false)
+            })
+            .map(|e| e.path());
+
+        // Return Ok(None) if no power report found
+        let pow_file = match pow_file {
+            Some(f) => f,
+            None => return Ok(None),
+        };
+
+        let content = std::fs::read_to_string(&pow_file)?;
+        let report = self.parse_quartus_power_report(&content)?;
+        Ok(Some(report))
     }
 
-    fn parse_drc_report(&self, _impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
-        Ok(None)
+    fn parse_drc_report(&self, impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
+        // Look for *.drc.rpt files in impl_dir or output_files subdirectory
+        let out_dir = impl_dir.join("output_files");
+        let search_dir = if out_dir.exists() { &out_dir } else { impl_dir };
+
+        let drc_file = std::fs::read_dir(search_dir)
+            .map_err(|e| BackendError::IoError(e))?
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.path().to_str().map(|s| s.ends_with(".drc.rpt")).unwrap_or(false)
+            })
+            .map(|e| e.path());
+
+        // Return Ok(None) if no DRC report found
+        let drc_file = match drc_file {
+            Some(f) => f,
+            None => return Ok(None),
+        };
+
+        let content = std::fs::read_to_string(&drc_file)?;
+        let report = self.parse_quartus_drc_report(&content)?;
+        Ok(Some(report))
+    }
+
+    /// Parse Quartus PowerPlay report (*.pow.rpt)
+    /// Extracts total power, thermal info, and power breakdown by category
+    fn parse_quartus_power_report(&self, content: &str) -> BackendResult<PowerReport> {
+        use regex::Regex;
+
+        let mut total_mw = 0.0;
+        let mut junction_temp_c = 25.0;
+        let mut ambient_temp_c = 25.0;
+        let mut theta_ja = 0.0;
+        let mut breakdown = vec![];
+        let mut by_rail = vec![];
+        let mut confidence = "Medium".to_string();
+
+        // Parse "Total Thermal Power Dissipation" (usually in watts)
+        if let Ok(re) = Regex::new(r"Total Thermal Power Dissipation\s*:\s*([\d.]+)\s*W") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    total_mw = val * 1000.0;
+                }
+            }
+        }
+
+        // Parse "Core Dynamic Power"
+        if let Ok(re) = Regex::new(r"Core Dynamic\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "Core Dynamic".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "Core Static Power"
+        if let Ok(re) = Regex::new(r"Core Static\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "Core Static".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "I/O Power"
+        if let Ok(re) = Regex::new(r"I/O\s*:\s*([\d.]+)\s*mW") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    breakdown.push(PowerBreakdown {
+                        category: "I/O".to_string(),
+                        mw: val,
+                        percentage: 0.0,
+                    });
+                }
+            }
+        }
+
+        // Parse "Junction Temperature"
+        if let Ok(re) = Regex::new(r"Junction Temperature\s*:\s*([\d.]+)\s*C") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    junction_temp_c = val;
+                }
+            }
+        }
+
+        // Parse "Ambient Temperature"
+        if let Ok(re) = Regex::new(r"Ambient Temperature\s*:\s*([\d.]+)\s*C") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    ambient_temp_c = val;
+                }
+            }
+        }
+
+        // Parse "Theta JA" (thermal resistance)
+        if let Ok(re) = Regex::new(r"Theta JA\s*:\s*([\d.]+)\s*C/W") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<f64>() {
+                    theta_ja = val;
+                }
+            }
+        }
+
+        // Parse confidence level (if present)
+        if let Ok(re) = Regex::new(r"Confidence\s*:\s*(\w+)") {
+            if let Some(caps) = re.captures(content) {
+                confidence = caps[1].to_string();
+            }
+        }
+
+        // Parse power by rail if available (e.g., "VCCINT: 150.2 mW")
+        if let Ok(re) = Regex::new(r"(VCC\w+)\s*:\s*([\d.]+)\s*mW") {
+            for caps in re.captures_iter(content) {
+                if let Ok(mw) = caps[2].parse::<f64>() {
+                    by_rail.push(PowerRail {
+                        rail: caps[1].to_string(),
+                        mw,
+                    });
+                }
+            }
+        }
+
+        // Calculate percentages
+        if total_mw > 0.0 {
+            for entry in &mut breakdown {
+                entry.percentage = (entry.mw / total_mw) * 100.0;
+            }
+        }
+
+        Ok(PowerReport {
+            total_mw,
+            junction_temp_c,
+            ambient_temp_c,
+            theta_ja,
+            confidence,
+            breakdown,
+            by_rail,
+        })
+    }
+
+    /// Parse Quartus DRC report (*.drc.rpt)
+    /// Extracts error/warning counts and individual DRC items
+    fn parse_quartus_drc_report(&self, content: &str) -> BackendResult<DrcReport> {
+        use regex::Regex;
+
+        let mut errors = 0u32;
+        let mut critical_warnings = 0u32;
+        let mut warnings = 0u32;
+        let mut info = 0u32;
+        let mut waived = 0u32;
+        let mut items = vec![];
+
+        // Parse summary counts
+        if let Ok(re) = Regex::new(r"(\d+)\s+Error") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    errors = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Critical Warning") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    critical_warnings = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Warning") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    warnings = val;
+                }
+            }
+        }
+
+        if let Ok(re) = Regex::new(r"(\d+)\s+Info") {
+            if let Some(caps) = re.captures(content) {
+                if let Ok(val) = caps[1].parse::<u32>() {
+                    info = val;
+                }
+            }
+        }
+
+        // Parse individual DRC items (format: Severity | Code | Message | Location | Action)
+        // Error example: "Error | PRJ0001 | Device not specified | N/A | Set device in settings"
+        if let Ok(re) = Regex::new(
+            r"(\w+)\s*\|\s*([A-Z0-9]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|\s*([^\n]+)"
+        ) {
+            for caps in re.captures_iter(content) {
+                let severity_str = caps[1].trim();
+                let code = caps[2].trim().to_string();
+                let message = caps[3].trim().to_string();
+                let location = caps[4].trim().to_string();
+                let action = caps[5].trim().to_string();
+
+                let severity = match severity_str {
+                    "Error" => DrcSeverity::Error,
+                    "CriticalWarning" | "Critical Warning" => DrcSeverity::CriticalWarning,
+                    "Warning" => DrcSeverity::Warning,
+                    "Info" => DrcSeverity::Info,
+                    "Waived" => DrcSeverity::Waived,
+                    _ => DrcSeverity::Info,
+                };
+
+                items.push(DrcItem {
+                    severity,
+                    code,
+                    message,
+                    location,
+                    action,
+                });
+            }
+        }
+
+        Ok(DrcReport {
+            errors,
+            critical_warnings,
+            warnings,
+            info,
+            waived,
+            items,
+        })
     }
 
     fn read_constraints(&self, constraint_file: &Path) -> BackendResult<Vec<PinConstraint>> {
@@ -1054,5 +1305,536 @@ mod tests {
     fn test_quartus_to_tcl_path_wsl() {
         let result = super::super::to_tcl_path(Path::new("/mnt/c/intelFPGA/project"));
         assert_eq!(result, "C:/intelFPGA/project");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Power Report Parsing Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_quartus_power_report_basic() {
+        let b = make_backend();
+        let content = r#"
+Total Thermal Power Dissipation : 0.456 W
+Core Dynamic                    : 250.1 mW
+Core Static                     : 150.2 mW
+I/O                             : 55.7 mW
+Junction Temperature            : 45.3 C
+Ambient Temperature             : 25.0 C
+Theta JA                        : 22.5 C/W
+Confidence                      : High
+"#;
+        let report = b.parse_quartus_power_report(content).unwrap();
+        assert!(report.total_mw > 450.0 && report.total_mw < 460.0);
+        assert!(report.junction_temp_c > 45.0);
+        assert!(report.ambient_temp_c > 24.0);
+        assert_eq!(report.confidence, "High");
+        assert!(report.breakdown.len() >= 3);
+    }
+
+    #[test]
+    fn test_parse_quartus_power_report_empty() {
+        let b = make_backend();
+        let content = "";
+        let report = b.parse_quartus_power_report(content).unwrap();
+        assert_eq!(report.total_mw, 0.0);
+        assert_eq!(report.junction_temp_c, 25.0);
+        assert_eq!(report.ambient_temp_c, 25.0);
+    }
+
+    #[test]
+    fn test_parse_quartus_power_report_breakdown_calculation() {
+        let b = make_backend();
+        let content = r#"
+Total Thermal Power Dissipation : 1.0 W
+Core Dynamic                    : 500.0 mW
+Core Static                     : 300.0 mW
+I/O                             : 200.0 mW
+"#;
+        let report = b.parse_quartus_power_report(content).unwrap();
+        assert_eq!(report.breakdown.len(), 3);
+        assert!(report.breakdown[0].percentage > 49.0 && report.breakdown[0].percentage < 51.0);
+    }
+
+    #[test]
+    fn test_parse_quartus_power_report_with_rails() {
+        let b = make_backend();
+        let content = r#"
+Total Thermal Power Dissipation : 0.5 W
+VCCINT: 250.0 mW
+VCCIO: 150.0 mW
+VCCPD: 100.0 mW
+Junction Temperature            : 50.0 C
+"#;
+        let report = b.parse_quartus_power_report(content).unwrap();
+        assert!(report.by_rail.len() >= 3);
+        let vccint = report.by_rail.iter().find(|r| r.rail == "VCCINT");
+        assert!(vccint.is_some());
+        assert!(vccint.unwrap().mw > 249.0);
+    }
+
+    #[test]
+    fn test_parse_quartus_power_report_missing_fields() {
+        let b = make_backend();
+        let content = "Total Thermal Power Dissipation : 0.2 W\nJunction Temperature : 35.0 C";
+        let report = b.parse_quartus_power_report(content).unwrap();
+        assert!(report.total_mw > 190.0 && report.total_mw < 210.0);
+        assert_eq!(report.junction_temp_c, 35.0);
+        assert_eq!(report.confidence, "Medium");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DRC Report Parsing Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_quartus_drc_report_basic() {
+        let b = make_backend();
+        let content = r#"
+Summary:
+  3 Error
+  2 Critical Warning
+  5 Warning
+  1 Info
+
+Error | PRJ0001 | Device not specified | N/A | Set device in Device settings
+CriticalWarning | PRJ1002 | Partition not found | N/A | Check partition definitions
+Warning | PRJ2001 | File not found | top.v | Add missing file
+"#;
+        let report = b.parse_quartus_drc_report(content).unwrap();
+        assert_eq!(report.errors, 3);
+        assert_eq!(report.critical_warnings, 2);
+        assert_eq!(report.warnings, 5);
+        assert_eq!(report.info, 1);
+    }
+
+    #[test]
+    fn test_parse_quartus_drc_report_empty() {
+        let b = make_backend();
+        let content = "";
+        let report = b.parse_quartus_drc_report(content).unwrap();
+        assert_eq!(report.errors, 0);
+        assert_eq!(report.warnings, 0);
+    }
+
+    #[test]
+    fn test_parse_quartus_drc_report_items() {
+        let b = make_backend();
+        let content = r#"
+Error | PRJ0001 | Device not specified | N/A | Set device in Device settings
+Warning | PRJ2001 | Unused pins | Bank A | Add location assignments
+"#;
+        let report = b.parse_quartus_drc_report(content).unwrap();
+        assert!(report.items.len() >= 2);
+        let error_item = report.items.iter().find(|i| i.code == "PRJ0001");
+        assert!(error_item.is_some());
+        assert_eq!(error_item.unwrap().message, "Device not specified");
+    }
+
+    #[test]
+    fn test_parse_quartus_drc_report_severity_parsing() {
+        let b = make_backend();
+        let content = r#"
+Error | E001 | Test error | loc1 | Fix it
+Warning | W001 | Test warning | loc2 | Check it
+Info | I001 | Test info | loc3 | Note it
+"#;
+        let report = b.parse_quartus_drc_report(content).unwrap();
+        let has_error = report.items.iter().any(|i| matches!(i.severity, DrcSeverity::Error));
+        let has_warning = report.items.iter().any(|i| matches!(i.severity, DrcSeverity::Warning));
+        let has_info = report.items.iter().any(|i| matches!(i.severity, DrcSeverity::Info));
+        assert!(has_error);
+        assert!(has_warning);
+        assert!(has_info);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Build Script Generation Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_build_script_standard_edition() {
+        let b = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "23.1".into(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "top",
+            &[],
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Quartus Prime Standard"));
+        assert!(script.contains("5CGXFC7C7F23C8"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_pro_edition() {
+        let b = QuartusBackend {
+            edition: QuartusEdition::Pro,
+            version: "23.1".into(),
+            install_dir: None,
+            deferred: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(),
+            "1SG280LU3F50E2VG",
+            "top",
+            &[],
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Quartus Prime Pro"));
+        assert!(script.contains("1SG280LU3F50E2VG"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_with_fit_effort() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = HashMap::new();
+        opts.insert("fit_effort".into(), "AGGRESSIVE".into());
+        let script = b.generate_build_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "top",
+            &[],
+            &opts,
+        ).unwrap();
+        assert!(script.contains("AGGRESSIVE") || script.contains("FIT"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // IP Script Generation Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_ip_script_ram() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut params = HashMap::new();
+        params.insert("WIDTH".into(), "32".into());
+        params.insert("DEPTH".into(), "1024".into());
+        let (script, _path) = b.generate_ip_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "RAM: 1-PORT",
+            "my_ram",
+            &params,
+        ).unwrap();
+        assert!(script.contains("altsyncram"));
+        assert!(script.contains("my_ram"));
+    }
+
+    #[test]
+    fn test_quartus_ip_script_fifo() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let (script, _path) = b.generate_ip_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "FIFO",
+            "my_fifo",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("scfifo"));
+        assert!(script.contains("my_fifo"));
+        assert!(script.contains("Cyclone V"));
+    }
+
+    #[test]
+    fn test_quartus_ip_script_device_family_detection() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Cyclone V
+        let (script, _) = b.generate_ip_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "FIFO",
+            "fifo_cv",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Cyclone V"));
+
+        // Cyclone 10 GX
+        let (script, _) = b.generate_ip_script(
+            tmp.path(),
+            "10CX220YF780I5G",
+            "FIFO",
+            "fifo_c10",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Cyclone 10 GX"));
+
+        // Arria 10
+        let (script, _) = b.generate_ip_script(
+            tmp.path(),
+            "10AX115S2F45I1SG",
+            "FIFO",
+            "fifo_a10",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Arria 10"));
+
+        // Stratix 10
+        let (script, _) = b.generate_ip_script(
+            tmp.path(),
+            "1SG280LU3F50E2VG",
+            "FIFO",
+            "fifo_s10",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("Stratix 10"));
+    }
+
+    #[test]
+    fn test_quartus_ip_script_parameters() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut params = HashMap::new();
+        params.insert("WIDTH".into(), "64".into());
+        params.insert("DEPTH".into(), "2048".into());
+        params.insert("CLOCK_TYPE".into(), "SHARED".into());
+        let (script, _path) = b.generate_ip_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "DCFIFO",
+            "dual_clk_fifo",
+            &params,
+        ).unwrap();
+        assert!(script.contains("WIDTH"));
+        assert!(script.contains("DEPTH"));
+        assert!(script.contains("CLOCK_TYPE"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Device Verification Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_device_detection_standard_vs_pro() {
+        let std = make_backend();
+        let pro = make_pro_backend();
+
+        assert_eq!(std.default_device(), "5CGXFC7C7F23C8");
+        assert_eq!(pro.default_device(), "1SG280LU3F50E2VG");
+    }
+
+    #[test]
+    fn test_quartus_detect_tool_deferred() {
+        let b = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "test".into(),
+            install_dir: None,
+            deferred: true,
+        };
+        assert!(!b.detect_tool());
+    }
+
+    #[test]
+    fn test_quartus_detect_tool_no_install() {
+        let b = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "test".into(),
+            install_dir: None,
+            deferred: false,
+        };
+        // quartus_sh_path will be None
+        assert!(!b.detect_tool());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constraint Handling Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_sdc_constraint_extension() {
+        let b = make_backend();
+        assert_eq!(b.constraint_ext(), ".sdc");
+    }
+
+    #[test]
+    fn test_quartus_constraint_file_not_found() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let nonexistent = tmp.path().join("nonexistent.sdc");
+        let result = b.read_constraints(&nonexistent);
+        assert!(result.is_err());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pipeline Configuration Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_pipeline_stages_complete() {
+        let b = make_backend();
+        let stages = b.pipeline_stages();
+        assert_eq!(stages.len(), 4);
+
+        let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["synth", "fit", "sta", "asm"]);
+
+        // Each stage should have meaningful commands
+        for stage in &stages {
+            assert!(!stage.cmd.is_empty());
+            assert!(!stage.label.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_quartus_pipeline_stage_details() {
+        let b = make_backend();
+        let stages = b.pipeline_stages();
+
+        let synth = &stages[0];
+        assert_eq!(synth.id, "synth");
+        assert!(synth.cmd.contains("execute_module"));
+
+        let fit = &stages[1];
+        assert_eq!(fit.id, "fit");
+
+        let sta = &stages[2];
+        assert_eq!(sta.id, "sta");
+
+        let asm = &stages[3];
+        assert_eq!(asm.id, "asm");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Timing Report Edge Cases
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_version_string() {
+        let b = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "23.1.0.123".into(),
+            install_dir: None,
+            deferred: false,
+        };
+        assert_eq!(b.version(), "23.1.0.123");
+    }
+
+    #[test]
+    fn test_quartus_cli_tool_name() {
+        let b = make_backend();
+        assert_eq!(b.cli_tool(), "quartus_sh");
+    }
+
+    #[test]
+    fn test_quartus_backend_serialization() {
+        let b = make_backend();
+        let info = b.backend_info();
+        assert_eq!(info.id, "quartus");
+        assert_eq!(info.short, "Quartus");
+        assert_eq!(info.constraint_ext, ".sdc");
+        assert_eq!(info.pipeline.len(), 4);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tool Detection and Path Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_is_deferred_flag() {
+        let deferred = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "test".into(),
+            install_dir: None,
+            deferred: true,
+        };
+        let not_deferred = make_backend();
+
+        assert!(deferred.is_deferred());
+        assert!(!not_deferred.is_deferred());
+    }
+
+    #[test]
+    fn test_quartus_install_path_string() {
+        let b_none = make_backend();
+        assert!(b_none.install_path_str().is_none());
+
+        let b_with_path = QuartusBackend {
+            edition: QuartusEdition::Standard,
+            version: "test".into(),
+            install_dir: Some(PathBuf::from("/opt/quartus")),
+            deferred: false,
+        };
+        let path_str = b_with_path.install_path_str();
+        assert!(path_str.is_some());
+        assert!(path_str.unwrap().contains("quartus"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Advanced QSF Configuration Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_quartus_build_script_project_setup() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "top",
+            &[],
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("project_new"));
+        assert!(script.contains("top"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_all_stages_by_default() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "top",
+            &[],
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("syn"));
+        assert!(script.contains("fit"));
+        assert!(script.contains("sta"));
+        assert!(script.contains("asm"));
+    }
+
+    #[test]
+    fn test_quartus_build_script_empty_stages_includes_all() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let empty_stages: Vec<String> = vec![];
+        let script = b.generate_build_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "top",
+            &empty_stages,
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("execute_module"));
+    }
+
+    #[test]
+    fn test_quartus_ip_script_creates_directory_structure() {
+        let b = make_backend();
+        let tmp = tempfile::tempdir().unwrap();
+        let (script, ip_path) = b.generate_ip_script(
+            tmp.path(),
+            "5CGXFC7C7F23C8",
+            "FIFO",
+            "test_ip",
+            &HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("file mkdir"));
+        assert!(ip_path.contains("ip"));
+        assert!(ip_path.contains("test_ip"));
     }
 }

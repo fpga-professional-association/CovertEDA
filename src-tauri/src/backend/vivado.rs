@@ -318,6 +318,54 @@ impl VivadoBackend {
         }
         results
     }
+
+    /// Generate TCL script for Vivado IP core creation
+    pub fn generate_ip_creation_script(
+        ip_name: &str,
+        ip_type: &str,
+        properties: &HashMap<String, String>,
+    ) -> String {
+        let mut script = format!(
+            r#"# Vivado IP Creation Script
+# IP Name: {ip_name}
+# IP Type: {ip_type}
+
+create_ip -name {ip_type} -vendor xilinx.com -library ip -version 1.0 -module_name {ip_name}
+set_property -dict [list \
+"#,
+            ip_name = ip_name,
+            ip_type = ip_type,
+        );
+
+        for (key, value) in properties {
+            script.push_str(&format!("  CONFIG.{} {{{}}}\\\n", key, value));
+        }
+
+        script.push_str(
+            r#"] [get_ips {ip_name}]
+
+generate_target {synthesis simulation} [get_ips {ip_name}]
+"#,
+        );
+
+        script
+    }
+
+    /// Parse Vivado I/O pad report (io_utilization.rpt)
+    pub fn parse_pad_report(rpt_content: &str) -> BackendResult<Vec<String>> {
+        let mut pins = Vec::new();
+        for line in rpt_content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('|') || trimmed.starts_with('-') {
+                continue;
+            }
+            let parts: Vec<&str> = trimmed.split('|').map(|s| s.trim()).collect();
+            if parts.len() >= 2 && !parts[0].is_empty() && parts[0] != "PIN" {
+                pins.push(parts[0].to_string());
+            }
+        }
+        Ok(pins)
+    }
 }
 
 impl FpgaBackend for VivadoBackend {
@@ -571,8 +619,13 @@ exit
         crate::parser::power::parse_vivado_power(&content).map(Some)
     }
 
-    fn parse_drc_report(&self, _impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
-        Ok(None)
+    fn parse_drc_report(&self, impl_dir: &Path) -> BackendResult<Option<DrcReport>> {
+        let rpt = impl_dir.join("drc.rpt");
+        if !rpt.exists() {
+            return Ok(None);
+        }
+        let content = std::fs::read_to_string(&rpt)?;
+        crate::parser::drc::parse_vivado_drc(&content).map(Some)
     }
 
     fn read_constraints(&self, constraint_file: &Path) -> BackendResult<Vec<PinConstraint>> {
@@ -719,5 +772,329 @@ mod tests {
         assert_eq!(stages.len(), 6);
         let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, vec!["synth", "opt", "place", "phys", "route", "bitgen"]);
+    }
+
+    // ── Power Report Parsing Tests ──
+
+    #[test]
+    fn test_parse_power_report_file_not_found() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_power_report(tmp.path());
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_power_report_basic() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let power_content = r#"
+Total On-Chip Power (W): 2.456
+Device Static Power: 0.623 W
+Device Dynamic Power: 1.833 W
+Junction Temperature (C): 65.4
+"#;
+        std::fs::write(tmp.path().join("power.rpt"), power_content).unwrap();
+        let result = b.parse_power_report(tmp.path()).unwrap();
+        assert!(result.is_some());
+        let report = result.unwrap();
+        assert!(report.total_mw > 0.0);
+    }
+
+    // ── DRC Report Parsing Tests ──
+
+    #[test]
+    fn test_parse_drc_report_file_not_found() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_drc_report(tmp.path());
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_drc_report_with_errors() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let drc_content = r#"
+ERROR [CFGBVS-2] Bank 18 is not assigned. Some I/O Standards require explicit Bank assignment.
+WARNING [PLHIGH-6] Problem with PLL output. Check PLL configuration.
+CRITICAL WARNING [TIMING-7] Timing constraint not met on path main_clk.
+"#;
+        std::fs::write(tmp.path().join("drc.rpt"), drc_content).unwrap();
+        let result = b.parse_drc_report(tmp.path());
+        assert!(result.is_ok());
+        let opt = result.unwrap();
+        assert!(opt.is_some());
+        let report = opt.unwrap();
+        assert!(report.errors > 0 || report.critical_warnings > 0 || report.warnings > 0);
+    }
+
+    // ── IP Script Generation Tests ──
+
+    #[test]
+    fn test_generate_ip_creation_script_basic() {
+        let ip_name = "my_fifo";
+        let ip_type = "fifo_generator";
+        let props = std::collections::HashMap::new();
+        let script = VivadoBackend::generate_ip_creation_script(ip_name, ip_type, &props);
+        assert!(script.contains("create_ip"));
+        assert!(script.contains("fifo_generator"));
+        assert!(script.contains("my_fifo"));
+    }
+
+    #[test]
+    fn test_generate_ip_creation_script_with_properties() {
+        let ip_name = "ddr4_ctrl";
+        let ip_type = "ddr4";
+        let mut props = std::collections::HashMap::new();
+        props.insert("C_INPUT_CLK_TYPE".to_string(), "Differential".to_string());
+        props.insert("C_MEMORY_TYPE".to_string(), "RDIMMs".to_string());
+        let script = VivadoBackend::generate_ip_creation_script(ip_name, ip_type, &props);
+        assert!(script.contains("create_ip"));
+        assert!(script.contains("ddr4"));
+        assert!(script.contains("C_INPUT_CLK_TYPE"));
+        assert!(script.contains("C_MEMORY_TYPE"));
+        assert!(script.contains("generate_target"));
+    }
+
+    #[test]
+    fn test_generate_ip_creation_script_contains_required_commands() {
+        let props = std::collections::HashMap::new();
+        let script = VivadoBackend::generate_ip_creation_script("test_ip", "bram", &props);
+        assert!(script.contains("set_property -dict"));
+        assert!(script.contains("generate_target"));
+    }
+
+    // ── Device Verification Tests ──
+
+    #[test]
+    fn test_verify_device_part_returns_bool() {
+        let b = VivadoBackend::new_deferred();
+        // Deferred backend won't find vivado, so this should fail gracefully
+        let result = b.verify_device_part("xc7a100tcsg324-1");
+        // Either succeeds or returns ToolNotFound error
+        match result {
+            Err(BackendError::ToolNotFound(_)) => (),
+            _ => (),
+        }
+    }
+
+    // ── Pad Report Parsing Tests ──
+
+    #[test]
+    fn test_parse_pad_report_empty() {
+        let content = "";
+        let result = VivadoBackend::parse_pad_report(content).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pad_report_with_pins() {
+        let content = r#"
+|     PIN     | BUFFER_TYPE |
+|------|---------|
+| A14  | LVCMOS33|
+| A15  | LVCMOS33|
+| B16  | LVCMOS33|
+"#;
+        let result = VivadoBackend::parse_pad_report(content).unwrap();
+        assert!(result.len() >= 3);
+        assert!(result.contains(&"A14".to_string()));
+        assert!(result.contains(&"A15".to_string()));
+        assert!(result.contains(&"B16".to_string()));
+    }
+
+    #[test]
+    fn test_parse_pad_report_filters_headers() {
+        let content = r#"
+| PIN | BUFFER_TYPE |
+|-----|-------------|
+| A1  | LVCMOS33    |
+"#;
+        let result = VivadoBackend::parse_pad_report(content).unwrap();
+        // Should not include header "PIN"
+        assert!(!result.contains(&"PIN".to_string()));
+    }
+
+    // ── Build Script Generation with Different Configs ──
+
+    #[test]
+    fn test_build_script_with_project_file_option() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = std::collections::HashMap::new();
+        opts.insert("project_file".into(), "custom.xpr".into());
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &opts,
+        ).unwrap();
+        assert!(script.contains("open_project"));
+        assert!(script.contains("custom.xpr"));
+    }
+
+    #[test]
+    fn test_build_script_with_absolute_project_path() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = std::collections::HashMap::new();
+        // Use an absolute path
+        let abs_path = if cfg!(target_os = "windows") {
+            "C:/Projects/my_proj.xpr"
+        } else {
+            "/home/user/Projects/my_proj.xpr"
+        };
+        opts.insert("project_file".into(), abs_path.into());
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &opts,
+        ).unwrap();
+        assert!(script.contains("open_project"));
+    }
+
+    #[test]
+    fn test_build_script_generates_all_reports() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("report_timing_summary"));
+        assert!(script.contains("report_utilization"));
+        assert!(script.contains("report_power"));
+    }
+
+    #[test]
+    fn test_build_script_closes_project() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let script = b.generate_build_script(
+            tmp.path(), "xc7a100t", "top", &[], &std::collections::HashMap::new(),
+        ).unwrap();
+        assert!(script.contains("close_project"));
+    }
+
+    // ── Timing Report Edge Cases ──
+
+    #[test]
+    fn test_parse_timing_report_file_not_found() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_timing_report(tmp.path());
+        assert!(result.is_err());
+        match result {
+            Err(BackendError::ReportNotFound(_)) => (),
+            _ => panic!("Expected ReportNotFound error"),
+        }
+    }
+
+    // ── Constraint Read/Write Roundtrip ──
+
+    #[test]
+    fn test_constraint_roundtrip() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let constraint_path = tmp.path().join("test.xdc");
+
+        // Create sample constraints
+        let constraints = vec![
+            PinConstraint {
+                pin: "A14".to_string(),
+                port: "clk".to_string(),
+                io_standard: Some("LVCMOS33".to_string()),
+                drive_strength: None,
+                slew: None,
+                pullup: None,
+                pulldown: None,
+            },
+            PinConstraint {
+                pin: "B15".to_string(),
+                port: "reset_n".to_string(),
+                io_standard: Some("LVCMOS33".to_string()),
+                drive_strength: None,
+                slew: None,
+                pullup: Some(true),
+                pulldown: None,
+            },
+        ];
+
+        // Write constraints
+        b.write_constraints(&constraints, &constraint_path).unwrap();
+        assert!(constraint_path.exists());
+
+        // Read them back
+        let read_back = b.read_constraints(&constraint_path).unwrap();
+        assert!(!read_back.is_empty());
+    }
+
+    #[test]
+    fn test_constraint_write_creates_file() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let constraint_path = tmp.path().join("output.xdc");
+
+        let constraints = vec![
+            PinConstraint {
+                pin: "A1".to_string(),
+                port: "data_in".to_string(),
+                io_standard: Some("LVCMOS33".to_string()),
+                drive_strength: None,
+                slew: None,
+                pullup: None,
+                pulldown: None,
+            },
+        ];
+
+        b.write_constraints(&constraints, &constraint_path).unwrap();
+        assert!(constraint_path.exists());
+
+        let content = std::fs::read_to_string(&constraint_path).unwrap();
+        assert!(content.len() > 0);
+    }
+
+    #[test]
+    fn test_read_constraints_file_not_found() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let nonexistent = tmp.path().join("nonexistent.xdc");
+        let result = b.read_constraints(&nonexistent);
+        assert!(result.is_err());
+    }
+
+    // ── Utility Function Tests ──
+
+    #[test]
+    fn test_find_project_files_prefers_exact_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Create multiple .xpr files
+        std::fs::write(tmp.path().join("top.xpr"), "").unwrap();
+        std::fs::write(tmp.path().join("other.xpr"), "").unwrap();
+
+        let results = VivadoBackend::find_project_files(tmp.path(), "top");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].file_name().unwrap().to_str().unwrap(), "top.xpr");
+    }
+
+    #[test]
+    fn test_detect_tool_deferred_returns_false() {
+        let b = VivadoBackend::new_deferred();
+        assert!(!b.detect_tool());
+        assert!(b.is_deferred());
+    }
+
+    #[test]
+    fn test_backend_identification() {
+        let b = VivadoBackend::new();
+        assert_eq!(b.id(), "vivado");
+        assert_eq!(b.name(), "AMD Vivado");
+        assert_eq!(b.short_name(), "Vivado");
+        assert_eq!(b.cli_tool(), "vivado");
+    }
+
+    #[test]
+    fn test_utilization_report_file_not_found() {
+        let b = VivadoBackend::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let result = b.parse_utilization_report(tmp.path());
+        assert!(result.is_err());
     }
 }

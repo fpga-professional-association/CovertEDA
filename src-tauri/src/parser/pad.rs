@@ -1,3 +1,4 @@
+use crate::backend::BackendResult;
 use crate::types::{PadBankVccio, PadPinEntry, PadReport};
 
 /// Parse a Lattice Radiant/Diamond `.pad` file.
@@ -5,7 +6,7 @@ use crate::types::{PadBankVccio, PadPinEntry, PadReport};
 /// Extracts two tables:
 /// 1. **Pinout by Port Name** — per-signal pin assignments with buffer type, site, properties
 /// 2. **Vccio by Bank** — VCCIO voltage per I/O bank
-pub fn parse_radiant_pad(content: &str) -> Option<PadReport> {
+pub fn parse_radiant_pad(content: &str) -> BackendResult<PadReport> {
     let mut assigned_pins = Vec::new();
     let mut vccio_banks = Vec::new();
 
@@ -126,10 +127,211 @@ pub fn parse_radiant_pad(content: &str) -> Option<PadReport> {
     }
 
     if assigned_pins.is_empty() {
-        return None;
+        return Err(crate::backend::BackendError::ParseError(
+            "No assigned pins found in pad report".to_string(),
+        ));
     }
 
-    Some(PadReport {
+    Ok(PadReport {
+        assigned_pins,
+        vccio_banks,
+    })
+}
+
+/// Parse Vivado pad report (IO utilization)
+///
+/// Vivado generates IO reports in various formats. This parser extracts
+/// pin assignments with bank, direction, and IO standard information.
+pub fn parse_vivado_pad(content: &str) -> BackendResult<PadReport> {
+    let mut assigned_pins = Vec::new();
+    let mut vccio_banks = Vec::new();
+
+    // Try to parse table format from Vivado pinout reports
+    // Format: | Port_Name | Pin | Bank | IO_Standard | Drive | Direction |
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Skip empty lines and separators
+        if trimmed.is_empty() || trimmed.starts_with('+') || trimmed.starts_with('-') {
+            continue;
+        }
+
+        // Parse data rows (starting with |)
+        if trimmed.starts_with('|') {
+            let cols: Vec<&str> = trimmed.split('|').map(|s| s.trim()).collect();
+            if cols.len() < 5 {
+                continue;
+            }
+
+            let port_name = cols.get(1).unwrap_or(&"").to_string();
+            let pin = cols.get(2).unwrap_or(&"").to_string();
+            let bank = cols.get(3).unwrap_or(&"").to_string();
+            let io_standard = cols.get(4).unwrap_or(&"").to_string();
+            let drive = cols.get(5).unwrap_or(&"").to_string();
+            let direction = cols.get(6).unwrap_or(&"").to_string();
+
+            // Skip header row
+            if port_name == "Port_Name" || port_name == "Port Name" || port_name.is_empty() {
+                continue;
+            }
+
+            assigned_pins.push(PadPinEntry {
+                port_name,
+                pin,
+                bank,
+                buffer_type: "LVCMOS33".to_string(),
+                site: String::new(),
+                io_standard,
+                drive,
+                direction,
+            });
+        }
+    }
+
+    if assigned_pins.is_empty() {
+        return Err(crate::backend::BackendError::ParseError(
+            "No pins found in Vivado pad report".to_string(),
+        ));
+    }
+
+    Ok(PadReport {
+        assigned_pins,
+        vccio_banks,
+    })
+}
+
+/// Parse Diamond pin report
+///
+/// Diamond generates .pin or .pad reports with pin assignments.
+/// This parser extracts pin-to-bank mappings and IO standards.
+pub fn parse_diamond_pad(content: &str) -> BackendResult<PadReport> {
+    let mut assigned_pins = Vec::new();
+    let mut vccio_banks = Vec::new();
+
+    let mut in_pin_section = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Detect section headers
+        if trimmed.contains("Pin Number") || trimmed.contains("Pin List") || trimmed.contains("Pin Assignment") {
+            in_pin_section = true;
+            continue;
+        }
+
+        // Skip empty lines and separators
+        if trimmed.is_empty() || trimmed.starts_with('+') || trimmed.starts_with('-') {
+            continue;
+        }
+
+        // Parse pin assignment lines (format: PIN_NAME | PIN_NUM | BANK | IO_TYPE)
+        if in_pin_section && trimmed.contains('|') {
+            let cols: Vec<&str> = trimmed.split('|').map(|s| s.trim()).collect();
+            if cols.len() < 3 {
+                continue;
+            }
+
+            let port_name = cols[0].to_string();
+            let pin = cols[1].to_string();
+            let bank = cols[2].to_string();
+            let io_standard = cols.get(3).unwrap_or(&"LVCMOS33").to_string();
+
+            // Skip header/empty entries
+            if port_name == "Pin Name" || port_name.is_empty() {
+                continue;
+            }
+
+            assigned_pins.push(PadPinEntry {
+                port_name,
+                pin,
+                bank,
+                buffer_type: String::new(),
+                site: String::new(),
+                io_standard,
+                drive: String::new(),
+                direction: "UNKNOWN".to_string(),
+            });
+        }
+    }
+
+    if assigned_pins.is_empty() {
+        return Err(crate::backend::BackendError::ParseError(
+            "No pins found in Diamond pad report".to_string(),
+        ));
+    }
+
+    Ok(PadReport {
+        assigned_pins,
+        vccio_banks,
+    })
+}
+
+/// Parse Libero (SmartFusion/PolarFire) pin report
+///
+/// Libero generates pin reports with pin assignments and bank information.
+/// This parser extracts pin-to-bank mappings from Libero reports.
+pub fn parse_libero_pad(content: &str) -> BackendResult<PadReport> {
+    let mut assigned_pins = Vec::new();
+    let mut vccio_banks = Vec::new();
+
+    let mut in_pin_table = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Detect pin table start
+        if trimmed.contains("Pin Name") || trimmed.contains("Net Name") || trimmed.contains("Function") {
+            in_pin_table = true;
+            continue;
+        }
+
+        // Stop when we hit another section
+        if in_pin_table && (trimmed.is_empty() || trimmed.starts_with("---") || trimmed.starts_with("===")) {
+            in_pin_table = false;
+        }
+
+        // Skip empty lines
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Parse pin assignment rows from Libero format
+        if in_pin_table && trimmed.contains('|') {
+            let cols: Vec<&str> = trimmed.split('|').map(|s| s.trim()).collect();
+            if cols.len() < 3 {
+                continue;
+            }
+
+            let pin = cols[0].to_string();
+            let net_name = cols[1].to_string();
+            let bank = cols.get(2).unwrap_or(&"").to_string();
+            let direction = cols.get(3).unwrap_or(&"UNKNOWN").to_string();
+
+            // Skip header row
+            if pin == "Pin" || pin == "Pin Name" || pin.is_empty() {
+                continue;
+            }
+
+            assigned_pins.push(PadPinEntry {
+                port_name: net_name,
+                pin,
+                bank,
+                buffer_type: String::new(),
+                site: String::new(),
+                io_standard: "LVCMOS33".to_string(),
+                drive: String::new(),
+                direction,
+            });
+        }
+    }
+
+    if assigned_pins.is_empty() {
+        return Err(crate::backend::BackendError::ParseError(
+            "No pins found in Libero pad report".to_string(),
+        ));
+    }
+
+    Ok(PadReport {
         assigned_pins,
         vccio_banks,
     })
@@ -171,5 +373,91 @@ mod tests {
         assert_eq!(report.vccio_banks[0].bank, "0");
         assert_eq!(report.vccio_banks[0].vccio, "3.3V");
         assert_eq!(report.vccio_banks[2].bank, "2");
+    }
+
+    #[test]
+    fn test_parse_vivado_pad_basic() {
+        let content = r#"
+| Port_Name | Pin | Bank | IO_Standard | Drive | Direction |
+| clk       | A1  | 14   | LVCMOS33    | 12mA  | IN        |
+| data[0]   | B2  | 14   | LVCMOS33    | 12mA  | OUT       |
+| reset     | C3  | 13   | LVCMOS33    | 12mA  | IN        |
+"#;
+        let report = parse_vivado_pad(content).unwrap();
+        assert_eq!(report.assigned_pins.len(), 3);
+        assert_eq!(report.assigned_pins[0].port_name, "clk");
+        assert_eq!(report.assigned_pins[0].pin, "A1");
+        assert_eq!(report.assigned_pins[0].bank, "14");
+    }
+
+    #[test]
+    fn test_parse_vivado_pad_empty_content() {
+        let content = "";
+        let result = parse_vivado_pad(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_vivado_pad_no_data_rows() {
+        let content = "Some header text without proper pin data";
+        let result = parse_vivado_pad(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_diamond_pad_basic() {
+        let content = r#"
+Pin Number Assignment:
+sig1 | A1 | 0 | LVCMOS33
+sig2 | B2 | 1 | LVCMOS33
+sig3 | C3 | 1 | LVCMOS33
+"#;
+        let report = parse_diamond_pad(content).unwrap();
+        assert_eq!(report.assigned_pins.len(), 3);
+        assert_eq!(report.assigned_pins[0].port_name, "sig1");
+        assert_eq!(report.assigned_pins[0].pin, "A1");
+    }
+
+    #[test]
+    fn test_parse_diamond_pad_empty() {
+        let result = parse_diamond_pad("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_diamond_pad_no_matching_pins() {
+        let content = "Some header text\nNo actual pin data here";
+        let result = parse_diamond_pad(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_libero_pad_basic() {
+        let content = r#"
+| Pin | Net Name | Bank | Direction |
+| A1  | clk      | 0    | IN        |
+| B2  | data[0]  | 0    | OUT       |
+| C3  | reset    | 1    | IN        |
+"#;
+        let report = parse_libero_pad(content).unwrap();
+        assert_eq!(report.assigned_pins.len(), 3);
+        assert_eq!(report.assigned_pins[0].pin, "A1");
+        assert_eq!(report.assigned_pins[0].port_name, "clk");
+    }
+
+    #[test]
+    fn test_parse_libero_pad_empty() {
+        let result = parse_libero_pad("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_libero_pad_direction_preservation() {
+        let content = r#"
+| Pin | Net Name | Bank | Direction |
+| A1  | sig1     | 0    | INOUT     |
+"#;
+        let report = parse_libero_pad(content).unwrap();
+        assert_eq!(report.assigned_pins[0].direction, "INOUT");
     }
 }
