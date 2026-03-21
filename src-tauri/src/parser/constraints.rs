@@ -247,18 +247,12 @@ pub fn parse_sdc_timing(content: &str) -> BackendResult<SdcFile> {
 
     // Parse set_false_path
     let false_path_re = Regex::new(
-        r"set_false_path\s+(?:-from\s+\[?(\S+)\]?\s+)?(?:-to\s+\[?(\S+)\]?)?"
+        r"set_false_path\s+(?:-from\s+\[get_\w+\s+\{?([^}\]]+)\}?\]\s+)?(?:-to\s+\[get_\w+\s+\{?([^}\]]+)\}?\])?"
     ).unwrap();
 
     for cap in false_path_re.captures_iter(&content_no_comments) {
-        let from = cap.get(1).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
-        let to = cap.get(2).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
+        let from = cap.get(1).map(|m| m.as_str().trim().to_string());
+        let to = cap.get(2).map(|m| m.as_str().trim().to_string());
 
         sdc.false_paths.push(TimingConstraint {
             constraint_type: "set_false_path".to_string(),
@@ -275,19 +269,13 @@ pub fn parse_sdc_timing(content: &str) -> BackendResult<SdcFile> {
 
     // Parse set_multicycle_path
     let multicycle_re = Regex::new(
-        r"set_multicycle_path\s+(\d+)\s+(?:-from\s+\[?(\S+)\]?\s+)?(?:-to\s+\[?(\S+)\]?)?"
+        r"set_multicycle_path\s+(\d+)\s+(?:-from\s+\[get_\w+\s+\{?([^}\]]+)\}?\]\s+)?(?:-to\s+\[get_\w+\s+\{?([^}\]]+)\}?\])?"
     ).unwrap();
 
     for cap in multicycle_re.captures_iter(&content_no_comments) {
         let value = cap.get(1).map(|m| m.as_str().parse::<f64>().unwrap_or(0.0));
-        let from = cap.get(2).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
-        let to = cap.get(3).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
+        let from = cap.get(2).map(|m| m.as_str().trim().to_string());
+        let to = cap.get(3).map(|m| m.as_str().trim().to_string());
 
         sdc.multicycle_paths.push(TimingConstraint {
             constraint_type: "set_multicycle_path".to_string(),
@@ -304,19 +292,13 @@ pub fn parse_sdc_timing(content: &str) -> BackendResult<SdcFile> {
 
     // Parse set_max_delay
     let max_delay_re = Regex::new(
-        r"set_max_delay\s+([\d.-]+)\s+(?:-from\s+\[?(\S+)\]?\s+)?(?:-to\s+\[?(\S+)\]?)?"
+        r"set_max_delay\s+([\d.-]+)\s+(?:-from\s+\[get_\w+\s+\{?([^}\]]+)\}?\]\s+)?(?:-to\s+\[get_\w+\s+\{?([^}\]]+)\}?\])?"
     ).unwrap();
 
     for cap in max_delay_re.captures_iter(&content_no_comments) {
         let value = cap.get(1).map(|m| m.as_str().parse::<f64>().unwrap_or(0.0));
-        let from = cap.get(2).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
-        let to = cap.get(3).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
+        let from = cap.get(2).map(|m| m.as_str().trim().to_string());
+        let to = cap.get(3).map(|m| m.as_str().trim().to_string());
 
         sdc.max_delays.push(TimingConstraint {
             constraint_type: "set_max_delay".to_string(),
@@ -333,19 +315,13 @@ pub fn parse_sdc_timing(content: &str) -> BackendResult<SdcFile> {
 
     // Parse set_min_delay
     let min_delay_re = Regex::new(
-        r"set_min_delay\s+([\d.-]+)\s+(?:-from\s+\[?(\S+)\]?\s+)?(?:-to\s+\[?(\S+)\]?)?"
+        r"set_min_delay\s+([\d.-]+)\s+(?:-from\s+\[get_\w+\s+\{?([^}\]]+)\}?\]\s+)?(?:-to\s+\[get_\w+\s+\{?([^}\]]+)\}?\])?"
     ).unwrap();
 
     for cap in min_delay_re.captures_iter(&content_no_comments) {
         let value = cap.get(1).map(|m| m.as_str().parse::<f64>().unwrap_or(0.0));
-        let from = cap.get(2).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
-        let to = cap.get(3).map(|m| {
-            let s = m.as_str();
-            s.trim_matches(|c| c == '[' || c == ']' || c == '{' || c == '}').to_string()
-        });
+        let from = cap.get(2).map(|m| m.as_str().trim().to_string());
+        let to = cap.get(3).map(|m| m.as_str().trim().to_string());
 
         sdc.min_delays.push(TimingConstraint {
             constraint_type: "set_min_delay".to_string(),
