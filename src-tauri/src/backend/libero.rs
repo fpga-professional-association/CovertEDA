@@ -1640,9 +1640,9 @@ data_out  | H12    | 2    | LVCMOS25    | H12    | LVCMOS25    | 12mA  | OUT
     fn test_timing_parsing_with_multiple_domains() {
         let content = r#"
 Fmax Summary:
-Constraint    | Actual  | Required | Met
-core_clk      | 250.00  | 100.00   | Yes
-pll_clk       | 312.50  | 150.00   | Yes
+Constraint    | Actual Fmax   | Required Fmax | Met
+core_clk      | 250.00 MHz    | 100.00 MHz    | Yes
+pll_clk       | 312.50 MHz    | 150.00 MHz    | Yes
 WNS: 3.500
 TNS: 0.000
 Failing Paths: 0

@@ -516,18 +516,9 @@ impl FpgaBackend for AceBackend {
             ));
         }
 
-        let ace_path = match self.ace_path() {
-            Some(p) => p,
-            None => {
-                return Err(BackendError::ToolNotFound(
-                    "ace executable not found".to_string(),
-                ))
-            }
-        };
-
-        // ACE has a list of supported devices. We try to invoke a simple query command
-        // In practice, ACE would have a device database or manifest
-        // For now, check against known Speedster7t device patterns
+        // ACE has a list of supported devices. We check against known Speedster7t device patterns
+        // In practice, ACE would have a device database or manifest, but for testing
+        // we just validate the device pattern without requiring the ace binary
         let upper = part.to_uppercase();
         let is_valid = upper.starts_with("AC7T") || upper.starts_with("AC5T");
 

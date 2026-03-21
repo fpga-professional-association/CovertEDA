@@ -1827,7 +1827,7 @@ mod tests {
     fn test_install_dir_accessors() {
         let b = OssBackend {
             version: "test".to_string(),
-            install_dir: None,
+            install_dir: Some(PathBuf::from("/opt/oss-cad-suite")),
             deferred: false,
         };
         assert_eq!(b.install_dir(), Some(Path::new("/opt/oss-cad-suite")));

@@ -721,24 +721,26 @@ impl DiamondBackend {
         let mut breakdown = vec![];
 
         // Try to parse total power
-        if let Ok(re) = Regex::new(r"Total\s+Power\s*:\s*([\d.]+)\s*(?:mW|W)") {
+        if let Ok(re) = Regex::new(r"Total\s+Power\s*:\s*([\d.]+)\s*(mW|W)") {
             if let Some(caps) = re.captures(content) {
                 if let Ok(val) = caps[1].parse::<f64>() {
                     // Check if unit is W or mW
-                    if content[caps[0].len()..].starts_with("W") && !content[caps[0].len()..].starts_with("mW") {
-                        total_mw = val * 1000.0;
+                    let unit = &caps[2];
+                    total_mw = if unit == "W" {
+                        val * 1000.0
                     } else {
-                        total_mw = val;
-                    }
+                        val
+                    };
                 }
             }
         }
 
         // Try to parse static power
-        if let Ok(re) = Regex::new(r"Static\s+Power\s*:\s*([\d.]+)\s*(?:mW|W)") {
+        if let Ok(re) = Regex::new(r"Static\s+Power\s*:\s*([\d.]+)\s*(mW|W)") {
             if let Some(caps) = re.captures(content) {
                 if let Ok(val) = caps[1].parse::<f64>() {
-                    let mw = if content[caps[0].len()..].starts_with("W") && !content[caps[0].len()..].starts_with("mW") {
+                    let unit = &caps[2];
+                    let mw = if unit == "W" {
                         val * 1000.0
                     } else {
                         val
@@ -753,10 +755,11 @@ impl DiamondBackend {
         }
 
         // Try to parse dynamic power
-        if let Ok(re) = Regex::new(r"Dynamic\s+Power\s*:\s*([\d.]+)\s*(?:mW|W)") {
+        if let Ok(re) = Regex::new(r"Dynamic\s+Power\s*:\s*([\d.]+)\s*(mW|W)") {
             if let Some(caps) = re.captures(content) {
                 if let Ok(val) = caps[1].parse::<f64>() {
-                    let mw = if content[caps[0].len()..].starts_with("W") && !content[caps[0].len()..].starts_with("mW") {
+                    let unit = &caps[2];
+                    let mw = if unit == "W" {
                         val * 1000.0
                     } else {
                         val
@@ -830,7 +833,7 @@ impl DiamondBackend {
             }
         }
 
-        if let Ok(re) = Regex::new(r"Warning\w*\s*:\s*(\d+)") {
+        if let Ok(re) = Regex::new(r"(?m)^Warnings?\s*:\s*(\d+)") {
             if let Some(caps) = re.captures(content) {
                 if let Ok(val) = caps[1].parse::<u32>() {
                     warnings = val;
