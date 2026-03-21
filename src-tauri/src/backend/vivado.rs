@@ -999,21 +999,21 @@ CRITICAL WARNING [TIMING-7] Timing constraint not met on path main_clk.
         let constraints = vec![
             PinConstraint {
                 pin: "A14".to_string(),
-                port: "clk".to_string(),
-                io_standard: Some("LVCMOS33".to_string()),
-                drive_strength: None,
-                slew: None,
-                pullup: None,
-                pulldown: None,
+                net: "clk".to_string(),
+                direction: "in".to_string(),
+                io_standard: "LVCMOS33".to_string(),
+                bank: String::new(),
+                locked: false,
+                extra: vec![],
             },
             PinConstraint {
                 pin: "B15".to_string(),
-                port: "reset_n".to_string(),
-                io_standard: Some("LVCMOS33".to_string()),
-                drive_strength: None,
-                slew: None,
-                pullup: Some(true),
-                pulldown: None,
+                net: "reset_n".to_string(),
+                direction: "in".to_string(),
+                io_standard: "LVCMOS33".to_string(),
+                bank: String::new(),
+                locked: false,
+                extra: vec![("PULLUP".to_string(), "TRUE".to_string())],
             },
         ];
 
@@ -1035,12 +1035,12 @@ CRITICAL WARNING [TIMING-7] Timing constraint not met on path main_clk.
         let constraints = vec![
             PinConstraint {
                 pin: "A1".to_string(),
-                port: "data_in".to_string(),
-                io_standard: Some("LVCMOS33".to_string()),
-                drive_strength: None,
-                slew: None,
-                pullup: None,
-                pulldown: None,
+                net: "data_in".to_string(),
+                direction: "in".to_string(),
+                io_standard: "LVCMOS33".to_string(),
+                bank: String::new(),
+                locked: false,
+                extra: vec![],
             },
         ];
 
