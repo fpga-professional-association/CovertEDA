@@ -2199,10 +2199,10 @@ mod tests {
 
         let constraints = b.read_constraints(&pcf_file).unwrap();
         assert!(!constraints.is_empty());
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.contains(&"clk"));
-        assert!(pin_names.contains(&"rst_n"));
-        assert!(pin_names.contains(&"led"));
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.contains(&"clk"));
+        assert!(net_names.contains(&"rst_n"));
+        assert!(net_names.contains(&"led"));
     }
 
     #[test]
@@ -2285,8 +2285,8 @@ mod tests {
 
         let constraints = b.read_constraints(&lpf_file).unwrap();
         assert!(!constraints.is_empty());
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.len() > 0);
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.len() > 0);
     }
 
     #[test]

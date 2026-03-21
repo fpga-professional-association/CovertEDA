@@ -1850,10 +1850,10 @@ Info | I001 | Test info | loc3 | Note it
 
         let constraints = b.read_constraints(&qsf_file).unwrap();
         assert!(!constraints.is_empty());
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.contains(&"clk_50m"));
-        assert!(pin_names.contains(&"rst_n"));
-        assert!(pin_names.iter().any(|p| p.contains("led")));
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.contains(&"clk_50m"));
+        assert!(net_names.contains(&"rst_n"));
+        assert!(net_names.iter().any(|p| p.contains("led")));
     }
 
     #[test]

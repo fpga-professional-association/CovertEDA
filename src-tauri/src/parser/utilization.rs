@@ -1304,43 +1304,42 @@ Number of PLL sites: 1 out of 4
     fn test_ace_example_blinky_led_utilization_parses() {
         let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.lut_used >= 0);
+        assert_eq!(report.device, "AC7t1500ES0");
     }
 
     #[test]
     fn test_ace_example_noc_endpoint_utilization_parses() {
         let content = include_str!("../../tests/fixtures/ace/examples/noc_endpoint_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.device.is_empty());
     }
 
     #[test]
     fn test_ace_example_ml_accelerator_utilization_parses() {
         let content = include_str!("../../tests/fixtures/ace/examples/ml_accelerator_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_ace_example_gddr6_test_utilization_parses() {
         let content = include_str!("../../tests/fixtures/ace/examples/gddr6_test_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.device.is_empty());
     }
 
     #[test]
     fn test_ace_example_ethernet_400g_utilization_parses() {
         let content = include_str!("../../tests/fixtures/ace/examples/ethernet_400g_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_ace_utilization_fixture_has_io_info() {
         let content = include_str!("../../tests/fixtures/ace/examples/blinky_led_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.io_available >= 0);
-        assert!(report.io_used >= 0);
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
@@ -1355,7 +1354,7 @@ Number of PLL sites: 1 out of 4
         for (name, device, content) in projects {
             let report = parse_ace_utilization(content, device)
                 .expect(&format!("Failed to parse utilization for ACE {}", name));
-            assert!(report.lut_available >= 0, "Project {} has invalid LUT available", name);
+            assert!(!report.device.is_empty(), "Project {} has invalid device", name);
         }
     }
 
@@ -1371,16 +1370,15 @@ Number of PLL sites: 1 out of 4
     fn test_ace_utilization_fixture_has_resources() {
         let content = include_str!("../../tests/fixtures/ace/examples/noc_endpoint_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        // Should have either LUTs or registers or both
-        assert!(report.lut_used >= 0 || report.ff_used >= 0);
+        // Should have categories
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_ace_utilization_fixture_bram_counts() {
         let content = include_str!("../../tests/fixtures/ace/examples/ml_accelerator_utilization.rpt");
         let report = parse_ace_utilization(content, "AC7t1500ES0").unwrap();
-        assert!(report.bram_used >= 0);
-        assert!(report.bram_available >= 0);
+        assert!(!report.categories.is_empty());
     }
 
     // ── Additional Radiant/Diamond utilization validation tests ──
@@ -1464,28 +1462,28 @@ Number of PLL sites: 1 out of 4
     fn test_oss_example_blinky_led_nextpnr_utilization_parses() {
         let content = include_str!("../../tests/fixtures/oss/examples/blinky_led_nextpnr.log");
         let report = parse_nextpnr_utilization(content, "iCE40UP5K").unwrap();
-        assert!(report.lut_used >= 0);
+        assert_eq!(report.device, "iCE40UP5K");
     }
 
     #[test]
     fn test_oss_example_uart_tx_nextpnr_utilization_parses() {
         let content = include_str!("../../tests/fixtures/oss/examples/uart_tx_nextpnr.log");
         let report = parse_nextpnr_utilization(content, "iCE40UP5K").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.device.is_empty());
     }
 
     #[test]
     fn test_oss_example_spi_slave_nextpnr_utilization_parses() {
         let content = include_str!("../../tests/fixtures/oss/examples/spi_slave_nextpnr.log");
         let report = parse_nextpnr_utilization(content, "iCE40UP5K").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_oss_example_pwm_audio_nextpnr_utilization_parses() {
         let content = include_str!("../../tests/fixtures/oss/examples/pwm_audio_nextpnr.log");
         let report = parse_nextpnr_utilization(content, "iCE40UP5K").unwrap();
-        assert!(report.lut_used >= 0);
+        assert!(!report.device.is_empty());
     }
 
     #[test]

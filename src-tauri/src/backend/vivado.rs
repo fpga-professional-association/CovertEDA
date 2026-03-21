@@ -1110,10 +1110,10 @@ B16 | LVCMOS33
         let constraints = b.read_constraints(&xdc_file).unwrap();
         assert!(!constraints.is_empty());
         // Verify specific pins from blinky.xdc
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.contains(&"clk_in"));
-        assert!(pin_names.contains(&"rst_n"));
-        assert!(pin_names.iter().any(|p| p.contains("led_out")));
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.contains(&"clk_in"));
+        assert!(net_names.contains(&"rst_n"));
+        assert!(net_names.iter().any(|p| p.contains("led_out")));
     }
 
     #[test]
@@ -1126,10 +1126,10 @@ B16 | LVCMOS33
 
         let constraints = b.read_constraints(&xdc_file).unwrap();
         assert!(!constraints.is_empty());
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.contains(&"clk"));
-        assert!(pin_names.contains(&"uart_rx"));
-        assert!(pin_names.contains(&"uart_tx"));
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.contains(&"clk"));
+        assert!(net_names.contains(&"uart_rx"));
+        assert!(net_names.contains(&"uart_tx"));
     }
 
     #[test]

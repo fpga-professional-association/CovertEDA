@@ -1798,10 +1798,10 @@ WARNING W456: Unused net clk at module top
 
         let constraints = b.read_constraints(&lpf_file).unwrap();
         assert!(!constraints.is_empty());
-        let pin_names: Vec<&str> = constraints.iter().map(|c| c.port.as_str()).collect();
-        assert!(pin_names.contains(&"clk"));
-        assert!(pin_names.contains(&"reset_n"));
-        assert!(pin_names.iter().any(|p| p.contains("led_out")));
+        let net_names: Vec<&str> = constraints.iter().map(|c| c.net.as_str()).collect();
+        assert!(net_names.contains(&"clk"));
+        assert!(net_names.contains(&"reset_n"));
+        assert!(net_names.iter().any(|p| p.contains("led_out")));
     }
 
     #[test]
