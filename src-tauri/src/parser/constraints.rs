@@ -706,7 +706,7 @@ IOBUF PORT "led" IO_TYPE=LVCMOS25;"#;
     fn test_parse_pdc_port_iobuf() {
         let input = "ldc_set_port -iobuf {IO_TYPE=LVCMOS33} [get_ports {led[0]}]";
         let result = parse_pdc(input).unwrap();
-        assert_eq!(result.is_empty()); // No location, so not added
+        assert!(result.is_empty()); // No location, so not added
     }
 
     #[test]
