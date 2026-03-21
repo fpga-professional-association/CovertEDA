@@ -965,35 +965,35 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
     // Libero PDC fixture tests
     #[test]
     fn test_libero_example_blinky_led_pdc_parses() {
-        let content = include_str!("../../examples/libero/blinky_led/constraints/blinky.pdc");
+        let content = include_str!("../../../examples/libero/blinky_led/constraints/blinky.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() > 0);
     }
 
     #[test]
     fn test_libero_example_adc_pdc_parses() {
-        let content = include_str!("../../examples/libero/adc_interface/constraints/adc.pdc");
+        let content = include_str!("../../../examples/libero/adc_interface/constraints/adc.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_libero_example_can_pdc_parses() {
-        let content = include_str!("../../examples/libero/can_controller/constraints/can.pdc");
+        let content = include_str!("../../../examples/libero/can_controller/constraints/can.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_libero_example_motor_pdc_parses() {
-        let content = include_str!("../../examples/libero/motor_pwm/constraints/motor.pdc");
+        let content = include_str!("../../../examples/libero/motor_pwm/constraints/motor.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_libero_example_risc_v_pdc_parses() {
-        let content = include_str!("../../examples/libero/risc_v_core/constraints/rv.pdc");
+        let content = include_str!("../../../examples/libero/risc_v_core/constraints/risc_v.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
@@ -1001,35 +1001,35 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
     // ACE PDC and SDC fixture tests
     #[test]
     fn test_ace_example_blinky_led_pdc_parses() {
-        let content = include_str!("../../examples/ace/blinky_led/constraints/blinky.pdc");
+        let content = include_str!("../../../examples/ace/blinky_led/constraints/blinky.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() > 0);
     }
 
     #[test]
     fn test_ace_example_ml_accelerator_pdc_parses() {
-        let content = include_str!("../../examples/ace/ml_accelerator/constraints/ml.pdc");
+        let content = include_str!("../../../examples/ace/ml_accelerator/constraints/ml.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_ace_example_gddr6_test_pdc_parses() {
-        let content = include_str!("../../examples/ace/gddr6_test/constraints/gddr6.pdc");
+        let content = include_str!("../../../examples/ace/gddr6_test/constraints/gddr6.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_ace_example_noc_endpoint_pdc_parses() {
-        let content = include_str!("../../examples/ace/noc_endpoint/constraints/noc.pdc");
+        let content = include_str!("../../../examples/ace/noc_endpoint/constraints/noc.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_ace_example_ethernet_400g_pdc_parses() {
-        let content = include_str!("../../examples/ace/ethernet_400g/constraints/eth400g.pdc");
+        let content = include_str!("../../../examples/ace/ethernet_400g/constraints/eth400g.pdc");
         let constraints = parse_pdc(content).expect("Failed to parse PDC");
         assert!(constraints.len() >= 0);
     }
@@ -1038,14 +1038,14 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_blinky_led_lpf_parses() {
-        let content = include_str!("../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_blinky_led_lpf_has_constraints() {
-        let content = include_str!("../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         // Should have at least some constraints or be empty without error
         assert!(constraints.len() >= 0);
@@ -1053,63 +1053,63 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_uart_bridge_lpf_parses() {
-        let content = include_str!("../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_uart_bridge_lpf_succeeds() {
-        let content = include_str!("../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_serdes_loopback_lpf_parses() {
-        let content = include_str!("../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
+        let content = include_str!("../../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_serdes_loopback_lpf_succeeds() {
-        let content = include_str!("../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
+        let content = include_str!("../../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_video_scaler_lpf_parses() {
-        let content = include_str!("../../examples/diamond/video_scaler/constraints/scaler.lpf");
+        let content = include_str!("../../../examples/diamond/video_scaler/constraints/scaler.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_video_scaler_lpf_succeeds() {
-        let content = include_str!("../../examples/diamond/video_scaler/constraints/scaler.lpf");
+        let content = include_str!("../../../examples/diamond/video_scaler/constraints/scaler.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_wishbone_soc_lpf_parses() {
-        let content = include_str!("../../examples/diamond/wishbone_soc/constraints/soc.lpf");
+        let content = include_str!("../../../examples/diamond/wishbone_soc/constraints/soc.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_wishbone_soc_lpf_succeeds() {
-        let content = include_str!("../../examples/diamond/wishbone_soc/constraints/soc.lpf");
+        let content = include_str!("../../../examples/diamond/wishbone_soc/constraints/soc.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_diamond_example_blinky_led_lpf_valid_format() {
-        let content = include_str!("../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
         // Just verify it doesn't panic and returns something
         let result = parse_lpf(content);
         assert!(result.is_ok());
@@ -1117,21 +1117,21 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_uart_bridge_lpf_valid_format() {
-        let content = include_str!("../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
         let result = parse_lpf(content);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_diamond_example_blinky_led_lpf_has_content() {
-        let content = include_str!("../../examples/diamond/blinky_led/constraints/blinky.lpf");
+        let content = include_str!("../../../examples/diamond/blinky_led/constraints/blinky.lpf");
         // Verify fixture has actual content
         assert!(!content.is_empty());
     }
 
     #[test]
     fn test_diamond_example_uart_bridge_lpf_constraints_parsed() {
-        let content = include_str!("../../examples/diamond/uart_bridge/constraints/uart.lpf");
+        let content = include_str!("../../../examples/diamond/uart_bridge/constraints/uart.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         // Should parse successfully
         assert!(constraints.len() >= 0);
@@ -1139,7 +1139,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_serdes_loopback_lpf_io_constraints() {
-        let content = include_str!("../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
+        let content = include_str!("../../../examples/diamond/serdes_loopback/constraints/serdes.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         // High-speed I/O design should have constraints
         assert!(constraints.len() >= 0);
@@ -1147,7 +1147,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_video_scaler_lpf_timing_constraints() {
-        let content = include_str!("../../examples/diamond/video_scaler/constraints/scaler.lpf");
+        let content = include_str!("../../../examples/diamond/video_scaler/constraints/scaler.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         // Video scaler has timing constraints
         assert!(constraints.len() >= 0);
@@ -1155,7 +1155,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_diamond_example_wishbone_soc_lpf_system_constraints() {
-        let content = include_str!("../../examples/diamond/wishbone_soc/constraints/soc.lpf");
+        let content = include_str!("../../../examples/diamond/wishbone_soc/constraints/soc.lpf");
         let constraints = parse_lpf(content).expect("Failed to parse LPF");
         // System-on-chip has various constraints
         assert!(constraints.len() >= 0);
