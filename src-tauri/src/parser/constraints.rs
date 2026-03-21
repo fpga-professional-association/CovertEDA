@@ -1204,7 +1204,7 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
     fn test_vivado_xdc_contains_pin_constraints() {
         let content = include_str!("../../../examples/vivado/blinky_led/constraints/blinky.xdc");
         let constraints = parse_xdc(content).expect("Failed to parse XDC");
-        let has_pins = constraints.iter().any(|c| !c.signal_name.is_empty());
+        let has_pins = constraints.iter().any(|c| !c.net.is_empty());
         assert!(has_pins || constraints.is_empty(), "Should extract pin constraints");
     }
 

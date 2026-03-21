@@ -1111,7 +1111,7 @@ Junction Temperature: 62.0 C
         let content = include_str!("../../tests/fixtures/vivado/examples/blinky_led_drc.rpt");
         let report = parse_vivado_drc(content).unwrap();
         // DRC report should parse successfully
-        assert!(report.total_violations >= 0);
+        assert!(report.errors + report.warnings >= 0);
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
