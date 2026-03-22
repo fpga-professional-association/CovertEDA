@@ -1257,6 +1257,7 @@ B16 | LVCMOS33
     fn test_generate_build_script_artix7_blinky() {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule\n").unwrap();
         let script = b.generate_build_script(
             tmp.path(), "xc7a35tcpg236-1", "blinky_top", &[], &std::collections::HashMap::new(),
         ).unwrap();
@@ -1268,6 +1269,7 @@ B16 | LVCMOS33
     fn test_generate_build_script_kintex7_project() {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule\n").unwrap();
         let script = b.generate_build_script(
             tmp.path(), "xc7k325tffg676-2", "uart_top", &[], &std::collections::HashMap::new(),
         ).unwrap();
@@ -1279,6 +1281,7 @@ B16 | LVCMOS33
     fn test_generate_build_script_virtex7_high_performance() {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule\n").unwrap();
         let script = b.generate_build_script(
             tmp.path(), "xc7v585tffg1157-1", "ddr3_controller", &[], &std::collections::HashMap::new(),
         ).unwrap();
@@ -1290,6 +1293,7 @@ B16 | LVCMOS33
     fn test_generate_build_script_zynq7_system() {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule\n").unwrap();
         let script = b.generate_build_script(
             tmp.path(), "xc7z020clg484-1", "zynq_top", &[], &std::collections::HashMap::new(),
         ).unwrap();
@@ -1301,6 +1305,7 @@ B16 | LVCMOS33
     fn test_generate_build_script_with_device_placeholder() {
         let b = VivadoBackend::new();
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("top.v"), "module top(); endmodule\n").unwrap();
         let script = b.generate_build_script(
             tmp.path(), "xc7a100tcsg324-1", "axi_top", &[], &std::collections::HashMap::new(),
         ).unwrap();
