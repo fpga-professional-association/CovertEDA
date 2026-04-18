@@ -36,12 +36,14 @@ import {
   sshSaveConfig,
   sshTestConnection,
   sshDetectTools,
+  sshGetSystemInfo,
   type WhichResult,
   type DetectedVersion,
 } from "../hooks/useTauri";
-import type { SshConfig, VendorImportResult } from "../types";
+import type { SshConfig, VendorImportResult, RemoteSystemInfo } from "../types";
 import NewProjectWizard from "./NewProjectWizard";
 import RemoteDirBrowser from "./RemoteDirBrowser";
+import SshTerminal from "./SshTerminal";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -90,6 +92,10 @@ export default function StartScreen({
   const [sshKeyPath, setSshKeyPath] = useState("");
   const [remoteTools, setRemoteTools] = useState<RemoteToolInfo[]>([]);
   const [remoteBrowseOpen, setRemoteBrowseOpen] = useState(false);
+  const [sshTerminalOpen, setSshTerminalOpen] = useState(false);
+  const [detectingTools, setDetectingTools] = useState(false);
+  const [remoteSysInfo, setRemoteSysInfo] = useState<RemoteSystemInfo | null>(null);
+  const [remoteSysLoading, setRemoteSysLoading] = useState(false);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -228,6 +234,12 @@ export default function StartScreen({
         await sshSaveConfig(cfg);
         // Detect remote tools
         sshDetectTools().then(setRemoteTools).catch(() => {});
+        // Probe system info
+        setRemoteSysLoading(true);
+        sshGetSystemInfo()
+          .then((info) => setRemoteSysInfo(info))
+          .catch(() => setRemoteSysInfo(null))
+          .finally(() => setRemoteSysLoading(false));
       }
     } catch (e) {
       setSshInfo({ ok: false, error: String(e) });
@@ -240,6 +252,16 @@ export default function StartScreen({
     setSshConnected(false);
     setSshInfo(null);
     setRemoteTools([]);
+    setRemoteSysInfo(null);
+  };
+
+  const refreshRemoteSysInfo = () => {
+    if (remoteSysLoading) return;
+    setRemoteSysLoading(true);
+    sshGetSystemInfo()
+      .then((info) => setRemoteSysInfo(info))
+      .catch(() => {})
+      .finally(() => setRemoteSysLoading(false));
   };
 
   const handleRemoteDirSelect = async (dir: string, config: ProjectConfig | null) => {
@@ -298,7 +320,7 @@ export default function StartScreen({
         <span style={{ fontSize: 18, fontWeight: 700, color: C.t1, fontFamily: SANS }}>
           CovertEDA
         </span>
-        <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.2.5</span>
+        <span style={{ fontSize: 10, color: C.t3, fontFamily: MONO }}>v0.4.0</span>
         <div style={{ flex: 1 }} />
         <span
           onClick={() => openUrl("https://github.com/fpga-professional-association/CovertEDA")}
@@ -589,13 +611,172 @@ export default function StartScreen({
                 )}
               </div>
             )}
+
+            {/* Terminal Toggle (when connected) */}
+            {sshConnected && (
+              <div style={{ marginTop: 6 }}>
+                <div
+                  onClick={() => setSshTerminalOpen(!sshTerminalOpen)}
+                  onMouseEnter={() => setHover("ssh-term-toggle")}
+                  onMouseLeave={() => setHover(null)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 8px",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontSize: 10,
+                    fontFamily: MONO,
+                    color: sshTerminalOpen ? C.cyan : C.t3,
+                    background: hover === "ssh-term-toggle" ? C.s2 : "transparent",
+                  }}
+                >
+                  <span style={{ fontSize: 8 }}>{sshTerminalOpen ? "\u25BC" : "\u25B6"}</span>
+                  <span style={{ fontSize: 12 }}>{">_"}</span>
+                  Terminal
+                </div>
+                {sshTerminalOpen && (
+                  <div style={{ marginTop: 4 }}>
+                    <SshTerminal onClose={() => setSshTerminalOpen(false)} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Remote System Info (when SSH connected) */}
+          {sshConnected && (
+            <div>
+              <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                REMOTE SYSTEM
+                <span
+                  onClick={refreshRemoteSysInfo}
+                  onMouseEnter={() => setHover("refresh-sysinfo")}
+                  onMouseLeave={() => setHover(null)}
+                  title="Re-probe remote host"
+                  style={{
+                    cursor: remoteSysLoading ? "default" : "pointer",
+                    color: hover === "refresh-sysinfo" && !remoteSysLoading ? C.accent : C.t3,
+                    fontSize: 10,
+                  }}
+                >
+                  {remoteSysLoading ? "\u23F3" : "\u21BB"}
+                </span>
+              </div>
+              {remoteSysInfo ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "2px 12px",
+                    fontSize: 10,
+                    fontFamily: MONO,
+                    padding: "6px 10px",
+                    background: C.s2,
+                    border: `1px solid ${C.b1}`,
+                    borderRadius: 4,
+                  }}
+                >
+                  {remoteSysInfo.distro && (
+                    <div style={{ gridColumn: "1 / -1", color: C.t2 }}>
+                      <span style={{ color: C.t3 }}>os </span>
+                      {remoteSysInfo.distro}
+                    </div>
+                  )}
+                  {remoteSysInfo.cpuModel && (
+                    <div style={{ gridColumn: "1 / -1", color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={remoteSysInfo.cpuModel}>
+                      <span style={{ color: C.t3 }}>cpu </span>
+                      {remoteSysInfo.cpuModel}
+                      {remoteSysInfo.cpuCount ? ` (${remoteSysInfo.cpuCount} cores)` : ""}
+                    </div>
+                  )}
+                  {remoteSysInfo.memTotalKb != null && (
+                    <div style={{ color: C.t2 }}>
+                      <span style={{ color: C.t3 }}>ram </span>
+                      {(remoteSysInfo.memAvailableKb ?? 0) > 0
+                        ? `${(remoteSysInfo.memAvailableKb! / 1024 / 1024).toFixed(1)}/${(remoteSysInfo.memTotalKb / 1024 / 1024).toFixed(1)} GB`
+                        : `${(remoteSysInfo.memTotalKb / 1024 / 1024).toFixed(1)} GB`}
+                    </div>
+                  )}
+                  {remoteSysInfo.diskAvailKb != null && remoteSysInfo.diskTotalKb != null && (
+                    <div style={{ color: C.t2 }} title={remoteSysInfo.diskMount ?? ""}>
+                      <span style={{ color: C.t3 }}>disk </span>
+                      {(remoteSysInfo.diskAvailKb / 1024 / 1024).toFixed(1)}/{(remoteSysInfo.diskTotalKb / 1024 / 1024).toFixed(1)} GB free
+                    </div>
+                  )}
+                  {remoteSysInfo.loadAvg && (
+                    <div style={{ color: C.t2 }}>
+                      <span style={{ color: C.t3 }}>load </span>
+                      {remoteSysInfo.loadAvg}
+                    </div>
+                  )}
+                  {remoteSysInfo.uptime && (
+                    <div style={{ color: C.t2 }}>
+                      <span style={{ color: C.t3 }}>up </span>
+                      {remoteSysInfo.uptime.replace(/^up\s+/, "")}
+                    </div>
+                  )}
+                  {remoteSysInfo.licenseEnv.length > 0 && (
+                    <div style={{ gridColumn: "1 / -1", marginTop: 4, paddingTop: 4, borderTop: `1px solid ${C.b1}`, display: "flex", flexDirection: "column", gap: 2 }}>
+                      {remoteSysInfo.licenseEnv.map((l) => {
+                        const isServer = l.value.includes("@");
+                        const ok = l.reachable || isServer;
+                        return (
+                          <div key={l.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 9 }}>
+                            <span
+                              style={{
+                                color: ok ? C.ok : C.warn,
+                                fontSize: 8,
+                                width: 6,
+                                textAlign: "center",
+                              }}
+                              title={ok ? (isServer ? "FlexLM server" : "file readable") : "path not readable"}
+                            >
+                              {ok ? "\u25CF" : "\u25CB"}
+                            </span>
+                            <span style={{ color: C.t3, minWidth: 130 }}>{l.name}</span>
+                            <span style={{ color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.value}>
+                              {l.value}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: C.t3, fontStyle: "italic", padding: "4px 10px" }}>
+                  {remoteSysLoading ? "probing..." : "unavailable"}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Remote Tools (when SSH connected) */}
           {sshConnected && remoteTools.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ fontSize: 9, color: C.t3, fontFamily: MONO, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
                 REMOTE TOOLS ({sshInfo?.hostname ?? sshHost})
+                <span
+                  onClick={() => {
+                    if (detectingTools) return;
+                    setDetectingTools(true);
+                    sshDetectTools()
+                      .then((t) => { setRemoteTools(t); setDetectingTools(false); })
+                      .catch(() => setDetectingTools(false));
+                  }}
+                  onMouseEnter={() => setHover("redetect-remote")}
+                  onMouseLeave={() => setHover(null)}
+                  title="Re-detect remote tools"
+                  style={{
+                    cursor: detectingTools ? "default" : "pointer",
+                    color: hover === "redetect-remote" && !detectingTools ? C.accent : C.t3,
+                    fontSize: 10,
+                  }}
+                >
+                  {detectingTools ? "\u23F3" : "\u21BB"}
+                </span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {remoteTools.map((t) => {
@@ -615,9 +796,14 @@ export default function StartScreen({
                       }}
                     >
                       <span style={{ color: bm.color, fontSize: 11 }}>{bm.icon}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: t.available ? C.t1 : C.t3 }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: t.available ? C.t1 : C.t3, minWidth: 90 }}>
                         {t.name}
                       </span>
+                      {t.available && t.version && (
+                        <span style={{ fontSize: 9, fontFamily: MONO, color: C.accent, fontWeight: 600, flexShrink: 0 }}>
+                          {t.version}
+                        </span>
+                      )}
                       {t.available && (
                         <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                           {t.path}
@@ -1106,6 +1292,7 @@ export default function StartScreen({
       {remoteBrowseOpen && (
         <RemoteDirBrowser
           initialDir={sshConfig?.remoteProjectDir || `/home/${sshUser}`}
+          user={sshUser}
           onSelect={handleRemoteDirSelect}
           onClose={() => setRemoteBrowseOpen(false)}
         />

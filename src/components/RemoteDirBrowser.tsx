@@ -6,11 +6,34 @@ import type { RemoteDirEntry, ProjectConfig } from "../types";
 
 interface Props {
   initialDir: string;
+  user?: string;
   onSelect: (dir: string, config: ProjectConfig | null) => void;
   onClose: () => void;
 }
 
-export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Props) {
+function formatSize(bytes: number | undefined): string {
+  if (bytes == null) return "";
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+function formatDate(iso: string | undefined): string {
+  if (!iso) return "";
+  // Input: "2025-01-15 14:30" -> "Jan 15"
+  const parts = iso.split(" ");
+  if (parts.length < 1) return iso;
+  const dateParts = parts[0].split("-");
+  if (dateParts.length !== 3) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[parseInt(dateParts[1], 10) - 1] || dateParts[1];
+  const day = parseInt(dateParts[2], 10);
+  const time = parts[1] || "";
+  return `${month} ${day} ${time}`;
+}
+
+export default function RemoteDirBrowser({ initialDir, user, onSelect, onClose }: Props) {
   const { C, MONO, SANS } = useTheme();
   const [currentDir, setCurrentDir] = useState(initialDir || "/home");
   const [entries, setEntries] = useState<RemoteDirEntry[]>([]);
@@ -20,6 +43,7 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
   const [checkingProject, setCheckingProject] = useState(false);
   const [pathInput, setPathInput] = useState(initialDir || "/home");
   const [hover, setHover] = useState<string | null>(null);
+  const [recentDirs, setRecentDirs] = useState<string[]>([]);
   const cache = useRef<Record<string, RemoteDirEntry[]>>({});
 
   const navigate = useCallback(async (dir: string) => {
@@ -27,6 +51,11 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
     setError(null);
     setCurrentDir(dir);
     setPathInput(dir);
+    // Track recent dirs
+    setRecentDirs((prev) => {
+      const filtered = prev.filter((d) => d !== dir);
+      return [dir, ...filtered].slice(0, 5);
+    });
     try {
       let items: RemoteDirEntry[];
       if (cache.current[dir]) {
@@ -63,6 +92,24 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
     }
   };
 
+  const homeDir = user ? `/home/${user}` : "/home";
+
+  // Quick shortcuts — built-in + recent
+  const shortcuts: { label: string; path: string }[] = [
+    { label: "~", path: homeDir },
+    { label: "/opt", path: "/opt" },
+    { label: "/tmp", path: "/tmp" },
+  ];
+
+  // Add recent dirs that aren't already in shortcuts or current
+  const recentShortcuts = recentDirs
+    .filter((d) => d !== currentDir && !shortcuts.some((s) => s.path === d))
+    .slice(0, 3)
+    .map((d) => {
+      const label = d.split("/").filter(Boolean).pop() || d;
+      return { label, path: d };
+    });
+
   return (
     <div
       style={{
@@ -83,8 +130,8 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
           background: C.s1,
           border: `1px solid ${C.b1}`,
           borderRadius: 10,
-          width: 560,
-          maxHeight: "75vh",
+          width: 620,
+          maxHeight: "80vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -117,10 +164,70 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
           )}
         </div>
 
+        {/* Quick Path Shortcuts */}
+        <div
+          style={{
+            padding: "8px 20px 0",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            flexWrap: "wrap",
+          }}
+        >
+          {shortcuts.map((s) => (
+            <span
+              key={s.path}
+              onClick={() => navigate(s.path)}
+              onMouseEnter={() => setHover(`qs-${s.path}`)}
+              onMouseLeave={() => setHover(null)}
+              style={{
+                fontSize: 9,
+                fontFamily: MONO,
+                padding: "2px 8px",
+                borderRadius: 3,
+                cursor: "pointer",
+                color: currentDir === s.path ? C.accent : hover === `qs-${s.path}` ? C.t1 : C.t3,
+                background: currentDir === s.path ? `${C.accent}15` : hover === `qs-${s.path}` ? C.s2 : "transparent",
+                border: `1px solid ${currentDir === s.path ? C.accent + "40" : C.b1}`,
+                fontWeight: currentDir === s.path ? 600 : 400,
+              }}
+              title={s.path}
+            >
+              {s.label}
+            </span>
+          ))}
+          {recentShortcuts.length > 0 && (
+            <>
+              <span style={{ fontSize: 9, color: C.t3, margin: "0 2px" }}>|</span>
+              {recentShortcuts.map((s) => (
+                <span
+                  key={s.path}
+                  onClick={() => navigate(s.path)}
+                  onMouseEnter={() => setHover(`qs-${s.path}`)}
+                  onMouseLeave={() => setHover(null)}
+                  style={{
+                    fontSize: 9,
+                    fontFamily: MONO,
+                    padding: "2px 8px",
+                    borderRadius: 3,
+                    cursor: "pointer",
+                    color: hover === `qs-${s.path}` ? C.t1 : C.t3,
+                    background: hover === `qs-${s.path}` ? C.s2 : "transparent",
+                    border: `1px solid ${C.b1}`,
+                  }}
+                  title={s.path}
+                >
+                  {s.label}
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+
         {/* Breadcrumb */}
         <div
           style={{
-            padding: "10px 20px",
+            padding: "8px 20px",
             display: "flex",
             alignItems: "center",
             gap: 2,
@@ -171,7 +278,7 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
         </div>
 
         {/* Path input */}
-        <div style={{ padding: "0 20px 10px" }}>
+        <div style={{ padding: "0 20px 8px" }}>
           <input
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
@@ -242,7 +349,7 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    padding: "4px 8px",
+                    padding: "3px 8px",
                     borderRadius: 4,
                     cursor: entry.isDir ? "pointer" : "default",
                     background: hover === hk && entry.isDir ? C.s2 : "transparent",
@@ -255,11 +362,13 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
                     style={{
                       fontSize: 10,
                       fontFamily: MONO,
-                      color: entry.isDir ? C.t1 : C.t3,
-                      fontWeight: entry.isDir ? 500 : 400,
+                      color: entry.isDir ? C.t1 : C.t2,
+                      fontWeight: entry.isDir ? 600 : 400,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      flex: 1,
+                      minWidth: 0,
                     }}
                   >
                     {entry.name}
@@ -269,6 +378,46 @@ export default function RemoteDirBrowser({ initialDir, onSelect, onClose }: Prop
                       </span>
                     )}
                   </span>
+                  {/* Permissions */}
+                  {entry.permissions && (
+                    <span style={{ fontSize: 8, fontFamily: MONO, color: C.t3, flexShrink: 0, opacity: 0.6 }}>
+                      {entry.permissions}
+                    </span>
+                  )}
+                  {/* Size */}
+                  {entry.size != null && !entry.isDir && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontFamily: MONO,
+                        color: C.t3,
+                        minWidth: 52,
+                        textAlign: "right",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {formatSize(entry.size)}
+                    </span>
+                  )}
+                  {entry.isDir && entry.size != null && (
+                    <span style={{ minWidth: 52, flexShrink: 0 }} />
+                  )}
+                  {/* Modified date */}
+                  {entry.modified && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontFamily: MONO,
+                        color: C.t3,
+                        minWidth: 80,
+                        textAlign: "right",
+                        flexShrink: 0,
+                        opacity: 0.7,
+                      }}
+                    >
+                      {formatDate(entry.modified)}
+                    </span>
+                  )}
                 </div>
               );
             })

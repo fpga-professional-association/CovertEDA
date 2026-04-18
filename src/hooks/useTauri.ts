@@ -1302,7 +1302,7 @@ export async function getSystemStats(): Promise<SystemStats | null> {
 
 // ── SSH Remote Build ──
 
-import type { SshConfig, SshConnectionInfo, RemoteToolInfo } from "../types";
+import type { SshConfig, SshConnectionInfo, RemoteToolInfo, SshExecResult, RemoteSystemInfo } from "../types";
 
 export async function sshTestConnection(
   host: string,
@@ -1335,6 +1335,16 @@ export async function sshLoadConfig(): Promise<SshConfig | null> {
 export async function sshDetectTools(): Promise<RemoteToolInfo[]> {
   if (!isTauri) return [];
   return invoke<RemoteToolInfo[]>("ssh_detect_tools");
+}
+
+export async function sshExecCommand(command: string): Promise<SshExecResult> {
+  if (!isTauri) return { stdout: "", stderr: "Not running in Tauri", exitCode: -1 };
+  return invoke<SshExecResult>("ssh_exec_command", { command });
+}
+
+export async function sshGetSystemInfo(): Promise<RemoteSystemInfo | null> {
+  if (!isTauri) return null;
+  return invoke<RemoteSystemInfo>("ssh_get_system_info");
 }
 
 export async function sshSetPassword(password: string): Promise<void> {

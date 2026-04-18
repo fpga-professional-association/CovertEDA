@@ -4458,6 +4458,33 @@ pub async fn ssh_browse_directory(
 }
 
 #[tauri::command]
+pub async fn ssh_exec_command(
+    state: State<'_, AppState>,
+    command: String,
+) -> Result<crate::ssh::SshExecResult, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_exec_structured(&cfg, &command))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ssh_get_system_info(
+    state: State<'_, AppState>,
+) -> Result<crate::ssh::RemoteSystemInfo, String> {
+    let cfg = {
+        let guard = state.ssh_config.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No SSH config")?
+    };
+    tokio::task::spawn_blocking(move || crate::ssh::ssh_get_system_info(&cfg))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn ssh_check_project(
     state: State<'_, AppState>,
     dir: String,

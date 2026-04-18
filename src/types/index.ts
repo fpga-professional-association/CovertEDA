@@ -314,12 +314,43 @@ export interface RemoteToolInfo {
   name: string;
   path: string;
   available: boolean;
+  version?: string;
 }
 
 export interface RemoteDirEntry {
   name: string;
   path: string;
   isDir: boolean;
+  size?: number;
+  modified?: string;
+  permissions?: string;
+}
+
+export interface SshExecResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface LicenseEnvVar {
+  name: string;
+  value: string;
+  reachable: boolean;
+}
+
+export interface RemoteSystemInfo {
+  kernel?: string;
+  distro?: string;
+  cpuModel?: string;
+  cpuCount?: number;
+  memTotalKb?: number;
+  memAvailableKb?: number;
+  diskTotalKb?: number;
+  diskAvailKb?: number;
+  diskMount?: string;
+  uptime?: string;
+  loadAvg?: string;
+  licenseEnv: LicenseEnvVar[];
 }
 
 export type ReportTab = "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "bitstream" | "files";

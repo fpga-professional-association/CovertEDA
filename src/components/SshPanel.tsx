@@ -390,6 +390,11 @@ export default function SshPanel({ onLog }: SshPanelProps) {
                     {t.available ? "OK" : "---"}
                   </Badge>
                   <span style={{ color: C.t2, minWidth: 100 }}>{t.name}</span>
+                  {t.available && t.version && (
+                    <span style={{ fontSize: 9, color: C.accent, fontWeight: 600, flexShrink: 0 }}>
+                      {t.version}
+                    </span>
+                  )}
                   {t.available ? (
                     <input
                       value={remoteToolPaths[t.backendId] || t.path}
