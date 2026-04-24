@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod bitstream_security;
+pub mod cocotb;
 pub mod commands;
 pub mod config;
 pub mod eco_editor;
@@ -131,6 +132,8 @@ pub fn run() {
             commands::ssh_get_system_info,
             commands::ssh_check_project,
             commands::ssh_create_project,
+            commands::discover_cocotb_tests,
+            commands::run_cocotb_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

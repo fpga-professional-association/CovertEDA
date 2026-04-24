@@ -4554,3 +4554,24 @@ pub async fn ssh_create_project(
         .map_err(|e| e.to_string())??;
     Ok(project_config)
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//                                COCOTB
+// ════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn discover_cocotb_tests(project_dir: String) -> Result<Vec<crate::cocotb::CocotbTest>, String> {
+    let path = PathBuf::from(&project_dir);
+    if !path.is_dir() {
+        return Err(format!("project dir does not exist: {project_dir}"));
+    }
+    Ok(crate::cocotb::discover_tests(&path))
+}
+
+#[tauri::command]
+pub async fn run_cocotb_test(test_dir: String) -> Result<crate::cocotb::CocotbResult, String> {
+    let path = PathBuf::from(&test_dir);
+    tokio::task::spawn_blocking(move || crate::cocotb::run_test(&path, 300))
+        .await
+        .map_err(|e| e.to_string())?
+}

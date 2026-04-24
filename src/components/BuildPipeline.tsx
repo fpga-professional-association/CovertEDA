@@ -563,6 +563,26 @@ interface BuildPipelineProps {
   onTopModuleChange?: (name: string) => void;
   /** Callback when Makefile is imported with device/topModule/source changes */
   onMakefileImport?: (result: import("../hooks/useTauri").MakefileImportResult) => void;
+  /**
+   * Navigate to the Reports section, optionally pre-selecting a report tab.
+   * Called from the failure banner and from each done/failed stage's
+   * "Open report" link so users can jump straight from a build error to
+   * the relevant report without hunting through the nav rail.
+   */
+  onOpenReport?: (tab?: "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "files") => void;
+}
+
+// Pick the most useful report tab for each pipeline stage so clicking on
+// (or through) a stage lands the user on a report that has context for that
+// stage. Unknown stage ids fall through to the file browser.
+function stageToReportTab(stageId: string): "timing" | "util" | "synth" | "map" | "par" | "files" {
+  const id = stageId.toLowerCase();
+  if (id.includes("synth")) return "synth";
+  if (id === "map" || id.includes("techmap")) return "map";
+  if (id.includes("par") || id.includes("place") || id.includes("route") || id === "fit") return "par";
+  if (id === "sta" || id.includes("timing")) return "timing";
+  if (id.includes("asm") || id.includes("bit")) return "files";
+  return "files";
 }
 
 function OptionRow({ opt, value, onChange }: { opt: StageOption; value: string; onChange: (v: string) => void }) {
@@ -651,6 +671,7 @@ function PStep({
   onRunTo,
   backendId,
   deviceString,
+  onOpenReport,
 }: {
   s: PipelineStage;
   i: number;
@@ -669,6 +690,7 @@ function PStep({
   onRunTo: () => void;
   backendId: string;
   deviceString?: string;
+  onOpenReport?: (stageId: string) => void;
 }) {
   const { C, MONO } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -832,6 +854,29 @@ function PStep({
                 Run to here
               </span>
             )}
+            {/* Open-report shortcut — appears on any stage that has run (done
+                or failed) so users can jump straight to the relevant report
+                without navigating through the Reports tab. */}
+            {!building && onOpenReport && (st === "done" || st === "failed") && (
+              <span
+                onClick={(e) => { e.stopPropagation(); onOpenReport(s.id); }}
+                style={{
+                  fontSize: 7,
+                  color: st === "failed" ? C.err : C.cyan,
+                  cursor: "pointer",
+                  fontFamily: MONO,
+                  padding: "1px 4px",
+                  borderRadius: 2,
+                  border: `1px solid ${st === "failed" ? `${C.err}60` : `${C.cyan}40`}`,
+                  background: st === "failed" ? `${C.err}10` : `${C.cyan}10`,
+                }}
+                title={st === "failed"
+                  ? `View the failed ${s.label} stage's report`
+                  : `View ${s.label} report`}
+              >
+                Report \u2192
+              </span>
+            )}
           </div>
           {st !== "pending" && (
             <div
@@ -918,6 +963,7 @@ export default memo(function BuildPipeline({
   topModule,
   onTopModuleChange,
   onMakefileImport,
+  onOpenReport,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
   const B = backend;
@@ -1317,6 +1363,7 @@ export default memo(function BuildPipeline({
             onRunTo={() => runToStage(i)}
             backendId={B.id}
             deviceString={deviceString}
+            onOpenReport={onOpenReport ? (stageId) => onOpenReport(stageToReportTab(stageId)) : undefined}
           />
         ))}
         {allDone && (
@@ -1349,6 +1396,12 @@ export default memo(function BuildPipeline({
         )}
         {!building && buildFailed && (
           <div
+            onClick={onOpenReport ? () => {
+              const failedStage = buildStep >= 0 && buildStep < B.pipeline.length
+                ? B.pipeline[buildStep].id
+                : undefined;
+              onOpenReport(failedStage ? stageToReportTab(failedStage) : "files");
+            } : undefined}
             style={{
               marginTop: 10,
               padding: "10px 12px",
@@ -1356,7 +1409,18 @@ export default memo(function BuildPipeline({
               borderRadius: 6,
               border: `1px solid ${C.err}40`,
               fontFamily: MONO,
+              cursor: onOpenReport ? "pointer" : "default",
+              transition: "background 120ms",
             }}
+            onMouseEnter={(e) => {
+              if (onOpenReport) e.currentTarget.style.background = `${C.err}25`;
+            }}
+            onMouseLeave={(e) => {
+              if (onOpenReport) e.currentTarget.style.background = C.errDim;
+            }}
+            title={onOpenReport
+              ? "Click to open the report for the failed stage"
+              : undefined}
           >
             <div style={{ fontSize: 11, color: C.err, fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
               {"\u2717"} BUILD FAILED
@@ -1366,6 +1430,16 @@ export default memo(function BuildPipeline({
                 </span>
               )}
               <div style={{ flex: 1 }} />
+              {onOpenReport && (
+                <span style={{
+                  fontSize: 9, color: C.err, fontWeight: 700,
+                  border: `1px solid ${C.err}60`,
+                  background: `${C.err}15`,
+                  padding: "2px 6px", borderRadius: 3,
+                }}>
+                  Open report \u2192
+                </span>
+              )}
               {buildElapsedSec != null && (
                 <span style={{ fontSize: 9, color: C.t3, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                   {fmtTime(buildElapsedSec)}

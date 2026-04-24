@@ -170,6 +170,8 @@ interface ReportViewerProps {
   building?: boolean;
   onSendToAi?: (content: string) => void;
   backendId?: string;
+  /** Re-read the report files from disk (used by the refresh button). */
+  onRefresh?: () => void | Promise<void>;
 }
 
 /** Map backend IDs to their vendor-specific output directory names */
@@ -846,10 +848,22 @@ export default function ReportViewer({
   building,
   onSendToAi,
   backendId,
+  onRefresh,
 }: ReportViewerProps) {
   const { C, MONO } = useTheme();
   const REPORTS = reports;
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh, refreshing]);
 
   const exportReport = useCallback((format: "csv" | "json") => {
     let content = "";
@@ -1049,6 +1063,23 @@ export default function ReportViewer({
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {exportMsg && (
                 <span style={{ fontSize: 7, fontFamily: MONO, color: C.ok, fontWeight: 600 }}>{exportMsg}</span>
+              )}
+              {onRefresh && (
+                <Btn
+                  small
+                  onClick={handleRefresh}
+                  disabled={refreshing || building}
+                  title="Reload the current report from disk"
+                >
+                  <span style={{
+                    display: "inline-block",
+                    animation: refreshing ? "spin 0.8s linear infinite" : undefined,
+                  }}>
+                    {"\u21BB"}
+                  </span>
+                  {" "}
+                  {refreshing ? "Reloading" : "Refresh"}
+                </Btn>
               )}
               <Btn small onClick={() => exportReport("csv")} disabled={!canExport}><Download /> CSV</Btn>
               <Btn small onClick={() => exportReport("json")} disabled={!canExport}><Download /> JSON</Btn>

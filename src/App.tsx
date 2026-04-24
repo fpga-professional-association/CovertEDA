@@ -1707,6 +1707,10 @@ export default function App() {
                       setProject(updated);
                     }
                   }}
+                  onOpenReport={(tab) => {
+                    navClick("reports");
+                    if (tab) setRptTab(tab as typeof rptTab);
+                  }}
                 />
               </div>
             )}
@@ -1729,6 +1733,9 @@ export default function App() {
                   building={building}
                   onSendToAi={(content) => { setPendingAiMessage(content); navClick("ai"); }}
                   backendId={bid}
+                  onRefresh={() => {
+                    if (projectDir) loadReportsFromDisk(projectDir, B.name);
+                  }}
                 />
               </div>
             )}
@@ -1805,7 +1812,7 @@ export default function App() {
             {/* Simulation Wizard Section */}
             {visitedSecs.has("simulation") && (
               <div style={{ display: sec === "simulation" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
-                <SimWizard />
+                <SimWizard projectDir={projectDir} />
               </div>
             )}
 

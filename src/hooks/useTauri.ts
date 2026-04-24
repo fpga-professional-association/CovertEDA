@@ -1396,3 +1396,30 @@ export async function sshCreateProject(
     constraintFiles: constraintFiles ?? null,
   });
 }
+
+// ─── Cocotb ─────────────────────────────────────────────────────────
+export interface CocotbTest {
+  vendor: string;
+  project: string;
+  dir: string;
+  makefile: string;
+  testFiles: string[];
+}
+
+export interface CocotbResult {
+  vendor: string;
+  project: string;
+  dir: string;
+  passed: boolean;
+  durationSec: number;
+  output: string;
+  testCount: number;
+}
+
+export async function discoverCocotbTests(projectDir: string): Promise<CocotbTest[]> {
+  return invoke<CocotbTest[]>("discover_cocotb_tests", { projectDir });
+}
+
+export async function runCocotbTest(testDir: string): Promise<CocotbResult> {
+  return invoke<CocotbResult>("run_cocotb_test", { testDir });
+}
