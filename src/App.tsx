@@ -90,6 +90,28 @@ function mapGitStatus(r: RustGitStatus, logEntries?: GitLogEntry[]): GitState {
   };
 }
 
+// Backend-specific name for the integrated logic analyzer. Each vendor
+// has a different product for in-system signal capture; the nav label
+// reflects what the user can actually drive on the active backend.
+const DEBUG_TOOL_LABEL: Record<string, string> = {
+  radiant: "Reveal",
+  diamond: "Reveal",
+  quartus: "SignalTap",
+  vivado:  "ILA",
+  libero:  "SmartDebug",
+  ace:     "SnapShot",
+  oss:     "Debug",
+};
+const DEBUG_TOOL_TOOLTIP: Record<string, string> = {
+  radiant: "Reveal Debug — Lattice Radiant integrated logic analyzer",
+  diamond: "Reveal — Lattice Diamond integrated logic analyzer",
+  quartus: "SignalTap II — Intel/Altera integrated logic analyzer",
+  vivado:  "Integrated Logic Analyzer (ILA) — AMD/Xilinx signal capture",
+  libero:  "SmartDebug — Microchip Libero integrated logic analyzer",
+  ace:     "SnapShot — Achronix ACE integrated logic analyzer",
+  oss:     "Debug — generic signal capture (no vendor-native ILA)",
+};
+
 // Fallback backend when none loaded yet
 const FALLBACK_BACKEND: RuntimeBackend = {
   id: "radiant",
@@ -1404,7 +1426,7 @@ export default function App() {
             <NavBtn icon={<Server />} label="SSH" active={sec === "ssh"} onClick={() => navClick("ssh")} accent={C.cyan} tooltip="SSH Build Server — run builds on remote machines" />
             <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
             <NavBtn icon={<Zap />} label="Power" active={sec === "power"} onClick={() => navClick("power")} accent={C.orange} tooltip="Power Calculator — power analysis and thermal margins" />
-            <NavBtn icon={<Brain />} label="Reveal" active={sec === "reveal"} onClick={() => navClick("reveal")} accent={C.pink} tooltip="Reveal Debug — integrated logic analyzer and signal capture" />
+            <NavBtn icon={<Brain />} label={DEBUG_TOOL_LABEL[bid] ?? "Debug"} active={sec === "reveal"} onClick={() => navClick("reveal")} accent={C.pink} tooltip={DEBUG_TOOL_TOOLTIP[bid] ?? "Backend does not provide a logic analyzer integration"} />
             <NavBtn icon={<Box />} label="Runs" active={sec === "runs"} onClick={() => navClick("runs")} accent={C.cyan} tooltip="Run Manager — multi-run management and comparison" />
             <NavBtn icon={<Chip />} label="ECO" active={sec === "eco"} onClick={() => navClick("eco")} accent={C.purple} tooltip="ECO Editor — engineering change orders for I/O, PLL, memory" />
             <NavBtn icon={<Play />} label="Sim" active={sec === "simulation"} onClick={() => navClick("simulation")} accent={C.ok} tooltip="Simulation Wizard — HDL simulation setup and configuration" />
@@ -1758,7 +1780,7 @@ export default function App() {
             {/* Reveal Debug Section */}
             {visitedSecs.has("reveal") && (
               <div style={{ display: sec === "reveal" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
-                <RevealDebug />
+                <RevealDebug backendId={bid} />
               </div>
             )}
 

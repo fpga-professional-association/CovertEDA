@@ -135,21 +135,24 @@ impl VivadoBackend {
             }
         }
 
-        // Unified installer layout: <base>/<version>/Vivado/ (2024.2+ style)
-        // Scan <base> for version dirs, then check <version>/Vivado/ inside each
+        // Unified installer layout: <base>/<version>/Vivado/ (2024.2+ style).
+        // 2025.2+ installers default to C:\AMDDesignTools on Windows.
         let unified_candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
             vec![
                 PathBuf::from(r"C:\Xilinx"),
                 PathBuf::from(r"C:\AMD"),
+                PathBuf::from(r"C:\AMDDesignTools"),
             ]
         } else {
             vec![
                 PathBuf::from("/opt/Xilinx"),
                 PathBuf::from("/opt/AMD"),
+                PathBuf::from("/opt/AMDDesignTools"),
                 PathBuf::from("/tools/Xilinx"),
                 PathBuf::from("/amd"),
                 PathBuf::from("/xilinx"),
                 PathBuf::from("/mnt/c/Xilinx"),
+                PathBuf::from("/mnt/c/AMDDesignTools"),
             ]
         };
 
@@ -216,15 +219,18 @@ impl VivadoBackend {
             vec![
                 PathBuf::from(r"C:\Xilinx"),
                 PathBuf::from(r"C:\AMD"),
+                PathBuf::from(r"C:\AMDDesignTools"),
             ]
         } else {
             vec![
                 PathBuf::from("/opt/Xilinx"),
                 PathBuf::from("/opt/AMD"),
+                PathBuf::from("/opt/AMDDesignTools"),
                 PathBuf::from("/tools/Xilinx"),
                 PathBuf::from("/amd"),
                 PathBuf::from("/xilinx"),
                 PathBuf::from("/mnt/c/Xilinx"),
+                PathBuf::from("/mnt/c/AMDDesignTools"),
             ]
         };
 

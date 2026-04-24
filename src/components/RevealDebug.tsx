@@ -3,8 +3,65 @@ import { TriggerSignal } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Select, Input, Badge, Collapsible } from "./shared";
 
-export default function RevealDebug(): React.ReactElement {
+interface DebugToolMeta {
+  header: string;       // small label above main title
+  title: string;        // main title
+  subtitle: string;     // summary shown under the title
+  commandHint: string;  // one-line hint about what CLI TCL would drive
+}
+
+const TOOL_META: Record<string, DebugToolMeta> = {
+  radiant: {
+    header: "REVEAL DEBUG CORE",
+    title:  "Reveal — Integrated Logic Analyzer",
+    subtitle: "Lattice Radiant in-system signal capture (Reveal2 core)",
+    commandHint: "radiantc + ipgen reveal_core",
+  },
+  diamond: {
+    header: "REVEAL DEBUG CORE",
+    title:  "Reveal — Integrated Logic Analyzer",
+    subtitle: "Lattice Diamond in-system signal capture",
+    commandHint: "pnmainc + Reveal insertion TCL",
+  },
+  quartus: {
+    header: "SIGNAL TAP II",
+    title:  "SignalTap — Logic Analyzer",
+    subtitle: "Intel/Altera SignalTap II embedded logic analyzer (.stp)",
+    commandHint: "quartus_stp + SignalTap auto-instance",
+  },
+  vivado: {
+    header: "INTEGRATED LOGIC ANALYZER (ILA)",
+    title:  "ILA — Integrated Logic Analyzer",
+    subtitle: "AMD/Xilinx in-system debug core (create_debug_core)",
+    commandHint: "vivado -mode batch + create_debug_core ila",
+  },
+  libero: {
+    header: "SMARTDEBUG",
+    title:  "SmartDebug — Logic Analyzer",
+    subtitle: "Microchip Libero in-system debug",
+    commandHint: "libero + smart_debug_core",
+  },
+  ace: {
+    header: "SNAPSHOT",
+    title:  "SnapShot — Logic Analyzer",
+    subtitle: "Achronix ACE integrated signal capture",
+    commandHint: "ace + snapshot IP",
+  },
+  oss: {
+    header: "DEBUG",
+    title:  "Generic Signal Debug",
+    subtitle: "No vendor-native ILA — use RTL probe + external capture",
+    commandHint: "yosys probe insertion",
+  },
+};
+
+interface RevealDebugProps {
+  backendId?: string;
+}
+
+export default function RevealDebug({ backendId }: RevealDebugProps = {}): React.ReactElement {
   const { C, MONO } = useTheme();
+  const meta = TOOL_META[backendId ?? "radiant"] ?? TOOL_META.radiant;
   const [tab, setTab] = useState<"inserter" | "analyzer">("inserter");
   const [signals, setSignals] = useState<TriggerSignal[]>([
     { name: "clk", operator: "rising", value: "1" },
@@ -65,10 +122,13 @@ export default function RevealDebug(): React.ReactElement {
       >
         <div>
           <div style={{ fontSize: 11, fontFamily: MONO, color: C.t3, marginBottom: 2 }}>
-            REVEAL DEBUG CORE
+            {meta.header}
           </div>
           <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 600, color: C.t1 }}>
-            Integrated Logic Analyzer
+            {meta.title}
+          </div>
+          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginTop: 2 }}>
+            {meta.subtitle}  •  {meta.commandHint}
           </div>
         </div>
         <Badge color={connected ? C.ok : C.err}>
