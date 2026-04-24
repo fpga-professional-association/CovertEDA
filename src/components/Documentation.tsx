@@ -1152,9 +1152,9 @@ const DocSidebar = memo(function DocSidebar({
         padding: "8px 16px", borderTop: `1px solid ${C.b1}`,
         fontSize: 7, fontFamily: MONO, color: C.t3, lineHeight: 1.6,
       }}>
-        CovertEDA v0.5.0 Beta<br />
+        CovertEDA v0.5.1 Beta<br />
         FPGA Professional Association<br />
-        Last updated: 2026-04-23
+        Last updated: 2026-04-24
       </div>
     </div>
   );

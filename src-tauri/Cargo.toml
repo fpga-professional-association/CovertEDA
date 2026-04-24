@@ -1,6 +1,6 @@
 [package]
 name = "coverteda"
-version = "0.5.0"
+version = "0.5.1"
 description = "Unified FPGA Development Frontend"
 authors = ["Travis Covert"]
 edition = "2021"
