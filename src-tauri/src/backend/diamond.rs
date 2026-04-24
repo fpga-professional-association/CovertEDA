@@ -383,6 +383,27 @@ impl FpgaBackend for DiamondBackend {
     fn constraint_ext(&self) -> &str {
         ".lpf"
     }
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_uppercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // Diamond targets ECP5, ECP3, XP2, MachXO/MachXO2/MachXO3.
+        // Nexus (LIFCL/LFD2NX/LAV-AT) and pure iCE40 are not Diamond targets.
+        let not_in_diamond: &[(&str, &str)] = &[
+            ("LIFCL",  "Nexus CrossLink-NX — use Lattice Radiant"),
+            ("LFD2NX", "Nexus Certus-NX — use Lattice Radiant"),
+            ("LFCPNX", "CertusPro-NX — use Lattice Radiant"),
+            ("LAV-",   "Avant family — use Lattice Radiant"),
+            ("ICE40",  "iCE40 — use oss-cad-suite (yosys + nextpnr-ice40) or icecube2"),
+        ];
+        for (prefix, reason) in not_in_diamond {
+            if d.starts_with(prefix) {
+                return Err(format!(
+                    "Device '{device}' is not a Diamond target: {reason}."
+                ));
+            }
+        }
+        Ok(())
+    }
 
     fn pipeline_stages(&self) -> Vec<PipelineStage> {
         vec![

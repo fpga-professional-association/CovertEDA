@@ -397,14 +397,14 @@ PROJECT_REVISION = blinky
 
     #[test]
     fn test_quartus_example_blinky_led_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let result = parse_qsf(content);
         assert!(!result.device.is_empty(), "QSF should parse successfully");
     }
 
     #[test]
     fn test_quartus_example_blinky_led_qsf_extracts_device() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let result = parse_qsf(content);
         // Device should be extracted (EP4CE6E22C8)
         assert!(!result.device.is_empty());
@@ -412,35 +412,35 @@ PROJECT_REVISION = blinky
 
     #[test]
     fn test_quartus_example_nios_hello_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let content = include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf");
         let result = parse_qsf(content);
         assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_ethernet_mac_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf");
+        let content = include_str!("../../../examples/quartus/ethernet_mac/ethernet_mac.qsf");
         let result = parse_qsf(content);
         assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_pcie_endpoint_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf");
+        let content = include_str!("../../../examples/quartus/pcie_endpoint/pcie_endpoint.qsf");
         let result = parse_qsf(content);
         assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_example_signal_proc_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf");
+        let content = include_str!("../../../examples/quartus/signal_proc/signal_proc.qsf");
         let result = parse_qsf(content);
         assert!(!result.device.is_empty());
     }
 
     #[test]
     fn test_quartus_qsf_handles_global_assignments() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let result = parse_qsf(content);
         // Should handle set_global_assignment directives
         assert!(!result.device.is_empty(), "Should parse QSF with global assignments");
@@ -468,7 +468,7 @@ set_location_assignment PIN_A13 -to led[1]
 
     #[test]
     fn test_quartus_qsf_handles_instance_assignments() {
-        let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let content = include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf");
         let result = parse_qsf(content);
         // Should handle set_instance_assignment directives
         assert!(!result.device.is_empty(), "Should parse QSF with instance assignments");
@@ -477,11 +477,11 @@ set_location_assignment PIN_A13 -to led[1]
     #[test]
     fn test_quartus_qsf_multiple_designs_parse() {
         let designs = vec![
-            ("blinky_led", include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf")),
-            ("nios_hello", include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf")),
-            ("ethernet_mac", include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf")),
-            ("pcie_endpoint", include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf")),
-            ("signal_proc", include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf")),
+            ("blinky_led", include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf")),
+            ("nios_hello", include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf")),
+            ("ethernet_mac", include_str!("../../../examples/quartus/ethernet_mac/ethernet_mac.qsf")),
+            ("pcie_endpoint", include_str!("../../../examples/quartus/pcie_endpoint/pcie_endpoint.qsf")),
+            ("signal_proc", include_str!("../../../examples/quartus/signal_proc/signal_proc.qsf")),
         ];
 
         for (name, content) in designs {

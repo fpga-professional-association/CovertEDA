@@ -265,6 +265,23 @@ impl FpgaBackend for LiberoBackend {
         ".pdc"
     }
 
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_uppercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // Libero SoC targets Microchip (formerly Microsemi / Actel) FPGAs:
+        // PolarFire (MPF300T etc.), PolarFire SoC (MPFS), RTG4, IGLOO2,
+        // SmartFusion2 (M2S). Anything else is not a Libero target.
+        let libero_prefixes = ["MPF", "MPFS", "RT", "M2S", "M2GL", "M1AGLE", "AGL", "A3P", "APA"];
+        if libero_prefixes.iter().any(|p| d.starts_with(p)) {
+            return Ok(());
+        }
+        Err(format!(
+            "Device '{device}' does not match any Microchip/Microsemi FPGA family \
+             (PolarFire MPF*/MPFS*, RTG4 RT*, IGLOO2 M2GL*, SmartFusion2 M2S*). \
+             Libero SoC cannot target this device — verify you selected the right backend."
+        ))
+    }
+
     fn pipeline_stages(&self) -> Vec<PipelineStage> {
         vec![
             PipelineStage {

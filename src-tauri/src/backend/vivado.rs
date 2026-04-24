@@ -393,6 +393,32 @@ impl FpgaBackend for VivadoBackend {
     fn default_device(&self) -> &str {
         "xc7a100tcsg324-1"
     }
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_lowercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // Vivado 2025.2 supports 7-series, UltraScale, UltraScale+, Zynq,
+        // Zynq MPSoC, Versal. Reject legacy Spartan-3/6 and Virtex-4/5/6
+        // which are Xilinx ISE-only.
+        let ise_only: &[(&str, &str)] = &[
+            ("xc3s",  "Spartan-3"),
+            ("xc6s",  "Spartan-6"),
+            ("xc4v",  "Virtex-4"),
+            ("xc5v",  "Virtex-5"),
+            ("xc6v",  "Virtex-6"),
+            ("xcv",   "legacy Virtex (pre-7)"),
+        ];
+        for (prefix, family) in ise_only {
+            if d.starts_with(prefix) {
+                return Err(format!(
+                    "Device '{device}' is {family}, which is supported only by \
+                     Xilinx ISE (now discontinued), not Vivado. Use ISE or retarget \
+                     the project to a 7-series / UltraScale / Zynq / Versal part."
+                ));
+            }
+        }
+        // Any recognized Vivado prefix is fine; unknown prefixes pass.
+        Ok(())
+    }
     fn constraint_ext(&self) -> &str {
         ".xdc"
     }

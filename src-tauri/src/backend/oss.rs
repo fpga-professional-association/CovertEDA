@@ -584,6 +584,29 @@ impl FpgaBackend for OssBackend {
     fn constraint_ext(&self) -> &str {
         ".lpf"
     }
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_uppercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // oss-cad-suite via yosys + nextpnr supports:
+        //   iCE40 family (ICE40*)       via nextpnr-ice40
+        //   ECP5 family (LFE5*)         via nextpnr-ecp5
+        //   MachXO2 (LCMXO2*)           via nextpnr-machxo2
+        //   Nexus (LIFCL / LFD2NX / LFCPNX) via nextpnr-nexus
+        //   Gowin GW1N* / GW2A*         via nextpnr-himbaechel
+        let supported = [
+            "ICE40", "LFE5", "LCMXO2", "LIFCL", "LFD2NX", "LFCPNX",
+            "GW1N", "GW2A", "GW5A",
+        ];
+        if supported.iter().any(|p| d.starts_with(p)) {
+            return Ok(());
+        }
+        Err(format!(
+            "Device '{device}' is not a supported oss-cad-suite target. \
+             Supported families: iCE40 (ICE40UP5K etc.), ECP5 (LFE5U/LFE5UM*), \
+             MachXO2 (LCMXO2*), Nexus (LIFCL/LFD2NX/LFCPNX), Gowin (GW1N/GW2A). \
+             Use the corresponding vendor backend for other parts."
+        ))
+    }
 
     fn pipeline_stages(&self) -> Vec<PipelineStage> {
         vec![

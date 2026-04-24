@@ -381,6 +381,33 @@ pub fn start_build(
         .ok_or("No project is open")?;
     drop(current);
 
+    // Pre-build sanity: top module must be set. Every vendor tool requires a
+    // top-level entity and they all emit cryptic errors when it's missing —
+    // catch it here with a human-readable message.
+    if config.top_module.trim().is_empty() {
+        return Err(
+            "Top-level module is not set for this project. Open the project's \
+             .coverteda config and set `topModule` to the name of the top entity \
+             (usually the module with input/output ports at the design's root), \
+             then click Build again."
+                .into(),
+        );
+    }
+
+    // Pre-build sanity: device must be compatible with the selected backend.
+    // We run a fast local pattern match (validate_device_compat on the backend
+    // trait) so obvious mismatches like Cyclone V → Quartus Pro fail here with
+    // a clear explanation instead of 30s later deep inside quartus_syn.
+    {
+        let registry = state.registry.lock().map_err(|e| e.to_string())?;
+        let backend = registry
+            .get(&backend_id)
+            .ok_or_else(|| format!("Unknown backend: {}", backend_id))?;
+        if let Err(msg) = backend.validate_device_compat(&config.device) {
+            return Err(msg);
+        }
+    }
+
     // Resolve constraint file from project config if not already in options
     let mut options = options;
     if !options.contains_key("constraint_file") && !config.constraint_files.is_empty() {

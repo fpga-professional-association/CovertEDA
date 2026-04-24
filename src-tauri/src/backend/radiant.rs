@@ -393,6 +393,29 @@ impl FpgaBackend for RadiantBackend {
     fn constraint_ext(&self) -> &str {
         ".pdc"
     }
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_uppercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // Radiant supports the Nexus family: LIFCL (CrossLink-NX), LFD2NX
+        // (Certus-NX), LFCPNX (CertusPro-NX), LAV-AT (Avant). Older Lattice
+        // families (ECP5, MachXO, iCE40) belong in Diamond/icecube2.
+        let diamond_family: &[(&str, &str)] = &[
+            ("LFE5",  "ECP5 — use Lattice Diamond or oss-cad-suite"),
+            ("LFE3",  "ECP3 — use Lattice Diamond"),
+            ("LFXP",  "XP2 — use Lattice Diamond"),
+            ("LCMXO", "MachXO / MachXO2 / MachXO3 — use Lattice Diamond"),
+            ("ICE40", "iCE40 — use oss-cad-suite (yosys + nextpnr-ice40) or icecube2"),
+            ("LCMX",  "MachXO variants — use Lattice Diamond"),
+        ];
+        for (prefix, reason) in diamond_family {
+            if d.starts_with(prefix) {
+                return Err(format!(
+                    "Device '{device}' is not a Radiant target: {reason}."
+                ));
+            }
+        }
+        Ok(())
+    }
 
     fn pipeline_stages(&self) -> Vec<PipelineStage> {
         vec![

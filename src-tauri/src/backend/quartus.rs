@@ -719,6 +719,84 @@ impl QuartusBackend {
     }
 }
 
+/// Known unsupported-in-Pro device family prefixes (all legacy Cyclone/Arria/
+/// Stratix/MAX parts that Quartus Prime Pro Edition refuses to elaborate).
+/// Prefixes are case-insensitive; we uppercase the device string before match.
+const QUARTUS_PRO_UNSUPPORTED: &[(&str, &str)] = &[
+    ("EP1C",  "Cyclone"),
+    ("EP2C",  "Cyclone II"),
+    ("EP3C",  "Cyclone III"),
+    ("EP4C",  "Cyclone IV"),
+    ("5CE",   "Cyclone V E"),
+    ("5CS",   "Cyclone V SoC"),
+    ("5CG",   "Cyclone V GX/GT"),
+    ("EP1S",  "Stratix"),
+    ("EP2S",  "Stratix II"),
+    ("EP3S",  "Stratix III"),
+    ("EP4S",  "Stratix IV"),
+    ("5S",    "Stratix V"),
+    ("EP2A",  "Arria II GX"),
+    ("5A",    "Arria V"),
+    ("10M",   "MAX 10"),
+    ("EPM",   "MAX II / MAX V"),
+];
+
+impl QuartusBackend {
+    /// Local validation used by validate_device_compat. Split out so it can be
+    /// unit-tested without a live backend instance.
+    fn validate_device_against_edition(edition: QuartusEdition, device: &str) -> Result<(), String> {
+        let dev = device.trim().to_uppercase();
+        if dev.is_empty() {
+            return Err("No device specified".into());
+        }
+        match edition {
+            QuartusEdition::Pro => {
+                for (prefix, family) in QUARTUS_PRO_UNSUPPORTED {
+                    if dev.starts_with(prefix) {
+                        return Err(format!(
+                            "Device '{device}' is {family}, which is not supported by \
+                             Quartus Prime Pro Edition. Use Quartus Prime Standard \
+                             or Quartus Prime Lite Edition for this device family, \
+                             or retarget the project to a Cyclone 10 GX / Arria 10 / \
+                             Stratix 10 / Agilex part."
+                        ));
+                    }
+                }
+                // If we recognize it as a Pro family, accept; otherwise allow
+                // (unknown / future parts shouldn't block the user).
+                Ok(())
+            }
+            QuartusEdition::Standard => {
+                // Standard/Lite can't target Agilex or Stratix 10 / Arria 10.
+                let not_in_standard: &[(&str, &str)] = &[
+                    ("10CX", "Cyclone 10 GX"),
+                    ("10AX", "Arria 10"),
+                    ("10AS", "Arria 10"),
+                    ("1SG",  "Stratix 10"),
+                    ("1SX",  "Stratix 10"),
+                    ("1SM",  "Stratix 10"),
+                    ("1ST",  "Stratix 10"),
+                    ("AGF",  "Agilex"),
+                    ("AGB",  "Agilex"),
+                    ("AGI",  "Agilex"),
+                    ("AGM",  "Agilex"),
+                ];
+                for (prefix, family) in not_in_standard {
+                    if dev.starts_with(prefix) {
+                        return Err(format!(
+                            "Device '{device}' is {family}, which is only supported by \
+                             Quartus Prime Pro Edition, not Standard or Lite. Install \
+                             Quartus Prime Pro to target this device, or choose a \
+                             Cyclone IV/V, Arria II/V, or MAX 10 part for Standard/Lite."
+                        ));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 impl FpgaBackend for QuartusBackend {
     fn id(&self) -> &str {
         match self.edition {
@@ -743,6 +821,9 @@ impl FpgaBackend for QuartusBackend {
     }
     fn cli_tool(&self) -> &str {
         "quartus_sh"
+    }
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        Self::validate_device_against_edition(self.edition, device)
     }
     fn default_device(&self) -> &str {
         match self.edition {
@@ -1843,7 +1924,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_parse_qsf_blinky_led_constraints() {
         let b = make_backend();
-        let qsf_content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let qsf_content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let tmp = tempfile::tempdir().unwrap();
         let qsf_file = tmp.path().join("blinky.qsf");
         std::fs::write(&qsf_file, qsf_content).unwrap();
@@ -1859,7 +1940,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_parse_qsf_ethernet_mac_constraints() {
         let b = make_backend();
-        let qsf_content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf");
+        let qsf_content = include_str!("../../../examples/quartus/ethernet_mac/ethernet_mac.qsf");
         let tmp = tempfile::tempdir().unwrap();
         let qsf_file = tmp.path().join("eth.qsf");
         std::fs::write(&qsf_file, qsf_content).unwrap();
@@ -1871,7 +1952,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_parse_qsf_nios_hello_constraints() {
         let b = make_backend();
-        let qsf_content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let qsf_content = include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf");
         let tmp = tempfile::tempdir().unwrap();
         let qsf_file = tmp.path().join("nios.qsf");
         std::fs::write(&qsf_file, qsf_content).unwrap();
@@ -1883,7 +1964,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_parse_qsf_pcie_endpoint_constraints() {
         let b = make_backend();
-        let qsf_content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf");
+        let qsf_content = include_str!("../../../examples/quartus/pcie_endpoint/pcie_endpoint.qsf");
         let tmp = tempfile::tempdir().unwrap();
         let qsf_file = tmp.path().join("pcie.qsf");
         std::fs::write(&qsf_file, qsf_content).unwrap();
@@ -1895,7 +1976,7 @@ Info | I001 | Test info | loc3 | Note it
     #[test]
     fn test_parse_qsf_signal_proc_constraints() {
         let b = make_backend();
-        let qsf_content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf");
+        let qsf_content = include_str!("../../../examples/quartus/signal_proc/signal_proc.qsf");
         let tmp = tempfile::tempdir().unwrap();
         let qsf_file = tmp.path().join("ddc.qsf");
         std::fs::write(&qsf_file, qsf_content).unwrap();

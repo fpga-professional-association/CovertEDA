@@ -719,6 +719,21 @@ pub trait FpgaBackend: Send + Sync {
         ))
     }
 
+    /// Fast, local compatibility check: does this backend's CLI support the
+    /// given device string? Pattern-matches known device prefixes against the
+    /// families each vendor edition actually accepts so we catch obvious
+    /// mismatches (e.g. Cyclone V passed to Quartus Prime Pro) before ever
+    /// spawning the tool.
+    ///
+    /// Returns:
+    /// - `Ok(())` when the device is recognized as supported OR when the
+    ///   family is unknown (we'd rather under-block than false-positive).
+    /// - `Err(message)` when the device is known to belong to a family this
+    ///   backend edition does not accept. Message is human-readable.
+    fn validate_device_compat(&self, _device: &str) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Parse post-build pad/pinout report from the implementation directory.
     /// Returns None if no pad report is found.
     fn parse_pad_report(&self, _impl_dir: &Path) -> BackendResult<Option<PadReport>> {

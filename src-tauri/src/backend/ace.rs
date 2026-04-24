@@ -257,6 +257,21 @@ impl FpgaBackend for AceBackend {
         ".pdc"
     }
 
+    fn validate_device_compat(&self, device: &str) -> Result<(), String> {
+        let d = device.trim().to_uppercase();
+        if d.is_empty() { return Err("No device specified".into()); }
+        // Achronix ACE targets Speedster7t (AC7t*) and legacy Speedcore.
+        if d.starts_with("AC7T") || d.starts_with("AC22") || d.starts_with("SPEEDCORE") {
+            return Ok(());
+        }
+        Err(format!(
+            "Device '{device}' does not match the Achronix Speedster7t family \
+             (AC7t*). ACE cannot target this device — pick the right backend \
+             for your vendor (Quartus for Intel, Vivado for AMD/Xilinx, \
+             Radiant/Diamond for Lattice, Libero for Microchip)."
+        ))
+    }
+
     fn pipeline_stages(&self) -> Vec<PipelineStage> {
         vec![
             PipelineStage {

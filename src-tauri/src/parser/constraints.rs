@@ -1247,56 +1247,56 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
 
     #[test]
     fn test_quartus_example_blinky_led_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_quartus_example_nios_hello_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let content = include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_quartus_example_ethernet_mac_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf");
+        let content = include_str!("../../../examples/quartus/ethernet_mac/ethernet_mac.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_quartus_example_pcie_endpoint_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/pcie_endpoint/constraints/pcie.qsf");
+        let content = include_str!("../../../examples/quartus/pcie_endpoint/pcie_endpoint.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_quartus_example_signal_proc_qsf_parses() {
-        let content = include_str!("../../../examples/quartus/signal_proc/constraints/ddc.qsf");
+        let content = include_str!("../../../examples/quartus/signal_proc/signal_proc.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(constraints.len() >= 0);
     }
 
     #[test]
     fn test_quartus_qsf_handles_set_global_assignment() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(true, "QSF global assignments should be handled");
     }
 
     #[test]
     fn test_quartus_qsf_handles_set_location_assignment() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        let content = include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(true, "Location assignments should be parseable");
     }
 
     #[test]
     fn test_quartus_qsf_handles_set_instance_assignment() {
-        let content = include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf");
+        let content = include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf");
         let constraints = parse_sdc(content).unwrap_or_default();
         assert!(true, "Instance assignments should be parseable");
     }
@@ -1304,9 +1304,9 @@ set_false_path -from [get_pins {reset_async}] -to [get_pins {sync_ff}]
     #[test]
     fn test_quartus_qsf_multiple_designs_parse() {
         let designs = vec![
-            ("blinky_led", include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf")),
-            ("nios_hello", include_str!("../../../examples/quartus/nios_hello/constraints/nios.qsf")),
-            ("ethernet_mac", include_str!("../../../examples/quartus/ethernet_mac/constraints/eth.qsf")),
+            ("blinky_led", include_str!("../../../examples/quartus/blinky_led/blinky_led.qsf")),
+            ("nios_hello", include_str!("../../../examples/quartus/nios_hello/nios_hello.qsf")),
+            ("ethernet_mac", include_str!("../../../examples/quartus/ethernet_mac/ethernet_mac.qsf")),
         ];
 
         for (_name, content) in designs {
