@@ -99,10 +99,10 @@ export default function EcoEditor({ changes = [] }: EcoEditorProps): React.React
       >
         <div>
           <div style={{ fontSize: 11, fontFamily: MONO, color: C.t3, marginBottom: 2 }}>
-            ENGINEERING CHANGE ORDER
+            DEVICE ATTRIBUTES
           </div>
           <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 600, color: C.t1 }}>
-            ECO Editor
+            Attributes
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -110,7 +110,7 @@ export default function EcoEditor({ changes = [] }: EcoEditorProps): React.React
             Undo
           </Btn>
           <Btn small primary onClick={handleApplyChanges}>
-            Apply ECO
+            Apply
           </Btn>
         </div>
       </div>

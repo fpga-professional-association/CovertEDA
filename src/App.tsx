@@ -1428,7 +1428,7 @@ export default function App() {
             <NavBtn icon={<Zap />} label="Power" active={sec === "power"} onClick={() => navClick("power")} accent={C.orange} tooltip="Power Calculator — power analysis and thermal margins" />
             <NavBtn icon={<Brain />} label={DEBUG_TOOL_LABEL[bid] ?? "Debug"} active={sec === "reveal"} onClick={() => navClick("reveal")} accent={C.pink} tooltip={DEBUG_TOOL_TOOLTIP[bid] ?? "Backend does not provide a logic analyzer integration"} />
             <NavBtn icon={<Box />} label="Runs" active={sec === "runs"} onClick={() => navClick("runs")} accent={C.cyan} tooltip="Run Manager — multi-run management and comparison" />
-            <NavBtn icon={<Chip />} label="ECO" active={sec === "eco"} onClick={() => navClick("eco")} accent={C.purple} tooltip="ECO Editor — engineering change orders for I/O, PLL, memory" />
+            <NavBtn icon={<Chip />} label="Attrs" active={sec === "eco"} onClick={() => navClick("eco")} accent={C.purple} tooltip="Attributes — edit I/O drive/pull/slew, PLL parameters, memory blocks, and device config without re-running synthesis" />
             <NavBtn icon={<Play />} label="Sim" active={sec === "simulation"} onClick={() => navClick("simulation")} accent={C.ok} tooltip="Simulation Wizard — HDL simulation setup and configuration" />
             <NavBtn icon={<Doc />} label="Tmpl" active={sec === "templates"} onClick={() => navClick("templates")} accent={C.cyan} tooltip="Source Templates — HDL code generator and examples" />
           </div>
@@ -1800,7 +1800,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ECO Editor Section */}
+            {/* Attributes Editor Section */}
             {visitedSecs.has("eco") && (
               <div style={{ display: sec === "eco" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
                 <EcoEditor

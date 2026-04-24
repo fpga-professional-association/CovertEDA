@@ -35,13 +35,13 @@ describe("EcoEditor", () => {
 
   it("displays change list when changes are applied", () => {
     renderWithTheme(<EcoEditor changes={mockChanges} />);
-    expect(screen.getByText("ENGINEERING CHANGE ORDER")).toBeInTheDocument();
+    expect(screen.getByText("DEVICE ATTRIBUTES")).toBeInTheDocument();
   });
 
-  it("renders Apply ECO button", () => {
+  it("renders Apply button", () => {
     renderWithTheme(<EcoEditor changes={mockChanges} />);
     const buttons = screen.getAllByRole("button");
-    const applyBtn = buttons.find((b) => b.textContent?.includes("Apply ECO"));
+    const applyBtn = buttons.find((b) => b.textContent?.trim() === "Apply");
     expect(applyBtn).toBeInTheDocument();
   });
 });
