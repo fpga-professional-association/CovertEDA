@@ -448,10 +448,22 @@ PROJECT_REVISION = blinky
 
     #[test]
     fn test_quartus_qsf_handles_location_assignments() {
-        let content = include_str!("../../../examples/quartus/blinky_led/constraints/blinky.qsf");
+        // Use an inline fixture because the examples/ QSFs intentionally
+        // leave set_location_assignment lines commented (device-agnostic so
+        // Quartus synthesis-only flows work across multiple target parts).
+        let content = r#"
+set_global_assignment -name FAMILY "Cyclone 10 GX"
+set_global_assignment -name DEVICE 10CX085YU484E5G
+set_global_assignment -name TOP_LEVEL_ENTITY blinky_top
+set_location_assignment PIN_E1 -to clk_50m
+set_location_assignment PIN_J15 -to rst_n
+set_location_assignment PIN_A15 -to led[0]
+set_location_assignment PIN_A13 -to led[1]
+"#;
         let result = parse_qsf(content);
-        // Should handle set_location_assignment directives
-        assert!(!result.pin_assignments.is_empty(), "Should parse QSF with location assignments");
+        assert!(!result.pin_assignments.is_empty(),
+                "Should parse QSF with location assignments");
+        assert_eq!(result.pin_assignments.len(), 4);
     }
 
     #[test]
