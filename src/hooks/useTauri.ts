@@ -1423,3 +1423,44 @@ export async function discoverCocotbTests(projectDir: string): Promise<CocotbTes
 export async function runCocotbTest(testDir: string): Promise<CocotbResult> {
   return invoke<CocotbResult>("run_cocotb_test", { testDir });
 }
+
+// ─── Testbench / Sim generator ──────────────────────────────────────
+export interface TopPort {
+  name: string;
+  direction: string;
+  width: number;
+  range: string;
+}
+
+export async function simParseTopPorts(source: string, topModule: string): Promise<TopPort[]> {
+  return invoke<TopPort[]>("sim_parse_top_ports", { source, topModule });
+}
+
+export async function simGenerateVerilogTestbench(topModule: string, ports: TopPort[]): Promise<string> {
+  return invoke<string>("sim_generate_verilog_testbench", { topModule, ports });
+}
+
+export async function simGenerateCocotbTestbench(
+  topModule: string, ports: TopPort[],
+): Promise<{ testPy: string; makefile: string }> {
+  return invoke<{ testPy: string; makefile: string }>(
+    "sim_generate_cocotb_testbench", { topModule, ports },
+  );
+}
+
+export async function simGenerateScript(
+  simulator: string,
+  sources: string[],
+  testbench: string,
+  topModule: string,
+  simTime: string,
+  timescale: string,
+): Promise<string> {
+  return invoke<string>("sim_generate_script", {
+    simulator, sources, testbench, topModule, simTime, timescale,
+  });
+}
+
+export async function simProjectSources(projectDir: string): Promise<string[]> {
+  return invoke<string[]>("sim_project_sources", { projectDir });
+}

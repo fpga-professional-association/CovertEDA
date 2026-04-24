@@ -1812,7 +1812,7 @@ export default function App() {
             {/* Simulation Wizard Section */}
             {visitedSecs.has("simulation") && (
               <div style={{ display: sec === "simulation" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
-                <SimWizard projectDir={projectDir} />
+                <SimWizard projectDir={projectDir} topModuleName={project?.topModule} />
               </div>
             )}
 

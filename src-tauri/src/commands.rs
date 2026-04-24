@@ -4575,3 +4575,53 @@ pub async fn run_cocotb_test(test_dir: String) -> Result<crate::cocotb::CocotbRe
         .await
         .map_err(|e| e.to_string())?
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//                         SIMULATION / TESTBENCH
+// ════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn sim_parse_top_ports(
+    source: String,
+    top_module: String,
+) -> Vec<crate::sim_generator::TopPort> {
+    crate::sim_generator::parse_top_ports(&source, &top_module)
+}
+
+#[tauri::command]
+pub fn sim_generate_verilog_testbench(
+    top_module: String,
+    ports: Vec<crate::sim_generator::TopPort>,
+) -> String {
+    crate::sim_generator::generate_verilog_testbench(&top_module, &ports)
+}
+
+/// Returns { testPy, makefile } — the Python cocotb test and its Makefile.
+#[tauri::command]
+pub fn sim_generate_cocotb_testbench(
+    top_module: String,
+    ports: Vec<crate::sim_generator::TopPort>,
+) -> serde_json::Value {
+    let (py, mf) = crate::sim_generator::generate_cocotb_testbench(&top_module, &ports);
+    serde_json::json!({ "testPy": py, "makefile": mf })
+}
+
+#[tauri::command]
+pub fn sim_generate_script(
+    simulator: String,
+    sources: Vec<String>,
+    testbench: String,
+    top_module: String,
+    sim_time: String,
+    timescale: String,
+) -> String {
+    crate::sim_generator::generate_sim_script(
+        &simulator, &sources, &testbench, &top_module, &sim_time, &timescale,
+    )
+}
+
+#[tauri::command]
+pub fn sim_project_sources(project_dir: String) -> Vec<String> {
+    let p = PathBuf::from(&project_dir);
+    crate::sim_generator::project_sources(&p)
+}

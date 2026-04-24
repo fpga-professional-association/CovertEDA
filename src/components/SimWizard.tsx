@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SimConfig } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { Btn, Input, Select, Badge } from "./shared";
-import type { CocotbTest, CocotbResult } from "../hooks/useTauri";
+import type { CocotbTest, CocotbResult, TopPort } from "../hooks/useTauri";
 
 interface SimWizardProps {
   projectDir?: string;
+  topModuleName?: string;
 }
 
-export default function SimWizard({ projectDir }: SimWizardProps = {}): React.ReactElement {
+export default function SimWizard({ projectDir, topModuleName }: SimWizardProps = {}): React.ReactElement {
   const { C, MONO } = useTheme();
   const [tab, setTab] = useState<"script" | "cocotb">("cocotb");
   const [simulator, setSimulator] = useState<SimConfig["simulator"]>("modelsim");
@@ -22,6 +23,149 @@ export default function SimWizard({ projectDir }: SimWizardProps = {}): React.Re
   const [timescale, setTimescale] = useState("1ns/1ps");
   const [useSdf, setUseSdf] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // ── Script-tab project-aware state ──
+  const [detectedPorts, setDetectedPorts] = useState<TopPort[] | null>(null);
+  const [generatedScript, setGeneratedScript] = useState<string>("");
+  const [tbDialog, setTbDialog] = useState<null | "create" | "none">(null);
+  const [tbKind, setTbKind] = useState<"verilog" | "cocotb">("verilog");
+  const [tbPreview, setTbPreview] = useState<string>("");
+  const [tbMakefilePreview, setTbMakefilePreview] = useState<string>("");
+  const [tbStatus, setTbStatus] = useState<string | null>(null);
+  const [projectSources, setProjectSourcesState] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!projectDir) return;
+    (async () => {
+      try {
+        const { simProjectSources } = await import("../hooks/useTauri");
+        setProjectSourcesState(await simProjectSources(projectDir));
+      } catch { /* ignore */ }
+    })();
+  }, [projectDir]);
+
+  // Use the project's actual top module when the host provides one,
+  // overriding the hard-coded "counter" default.
+  useEffect(() => {
+    if (topModuleName && topModuleName.trim()) setTopModule(topModuleName);
+  }, [topModuleName]);
+
+  const parseTopPortsFromSources = useCallback(async (): Promise<TopPort[]> => {
+    if (!projectDir || !topModule) return [];
+    try {
+      const { readFile, simParseTopPorts } = await import("../hooks/useTauri");
+      for (const relPath of projectSources) {
+        const abs = `${projectDir}/${relPath}`.replace(/\\/g, "/");
+        const fc = await readFile(abs).catch(() => null);
+        const src = fc?.content ?? "";
+        if (!src) continue;
+        if (src.includes(`module ${topModule}`)) {
+          const ports = await simParseTopPorts(src, topModule);
+          if (ports.length > 0) return ports;
+        }
+      }
+    } catch { /* ignore */ }
+    return [];
+  }, [projectDir, topModule, projectSources]);
+
+  const openCreateTestbench = useCallback(async () => {
+    setTbDialog("create");
+    setTbStatus(null);
+    const ports = await parseTopPortsFromSources();
+    setDetectedPorts(ports);
+    try {
+      const { simGenerateVerilogTestbench, simGenerateCocotbTestbench } = await import("../hooks/useTauri");
+      if (tbKind === "cocotb") {
+        const r = await simGenerateCocotbTestbench(topModule, ports);
+        setTbPreview(r.testPy);
+        setTbMakefilePreview(r.makefile);
+      } else {
+        const v = await simGenerateVerilogTestbench(topModule, ports);
+        setTbPreview(v);
+        setTbMakefilePreview("");
+      }
+    } catch (e) { setTbStatus(`preview failed: ${e}`); }
+  }, [parseTopPortsFromSources, tbKind, topModule]);
+
+  useEffect(() => {
+    if (tbDialog !== "create") return;
+    // Re-render preview when the user flips between Verilog and cocotb.
+    (async () => {
+      try {
+        const { simGenerateVerilogTestbench, simGenerateCocotbTestbench } = await import("../hooks/useTauri");
+        const ports = detectedPorts ?? await parseTopPortsFromSources();
+        if (tbKind === "cocotb") {
+          const r = await simGenerateCocotbTestbench(topModule, ports);
+          setTbPreview(r.testPy); setTbMakefilePreview(r.makefile);
+        } else {
+          setTbPreview(await simGenerateVerilogTestbench(topModule, ports));
+          setTbMakefilePreview("");
+        }
+      } catch { /* ignore */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tbKind]);
+
+  const saveTestbench = useCallback(async () => {
+    if (!projectDir) return;
+    try {
+      const { writeTextFile } = await import("../hooks/useTauri");
+      if (tbKind === "verilog") {
+        const path = `${projectDir}/tb/tb_${topModule}.v`.replace(/\\/g, "/");
+        await writeTextFile(path, tbPreview);
+        setTestbench(`tb/tb_${topModule}.v`);
+        setTbStatus(`Saved ${path}`);
+      } else {
+        const baseDir = `${projectDir}/tb/${topModule}`.replace(/\\/g, "/");
+        await writeTextFile(`${baseDir}/test_${topModule}.py`, tbPreview);
+        await writeTextFile(`${baseDir}/Makefile`, tbMakefilePreview);
+        setTestbench(`tb/${topModule}/test_${topModule}.py`);
+        setTbStatus(`Saved cocotb test + Makefile to ${baseDir}`);
+      }
+      setTbDialog(null);
+    } catch (e) { setTbStatus(`save failed: ${e}`); }
+  }, [projectDir, topModule, tbKind, tbPreview, tbMakefilePreview]);
+
+  const pickExistingTestbench = useCallback(async () => {
+    try {
+      const { pickFile } = await import("../hooks/useTauri");
+      const p = await pickFile([
+        { name: "HDL / cocotb", extensions: ["v", "sv", "py", "vhd", "vhdl"] },
+      ]);
+      if (!p) return;
+      const rel = projectDir && p.startsWith(projectDir)
+        ? p.slice(projectDir.length + 1).replace(/\\/g, "/")
+        : p;
+      setTestbench(rel);
+      setTbStatus(`Using ${rel}`);
+    } catch (e) { setTbStatus(`pick failed: ${e}`); }
+  }, [projectDir]);
+
+  const handleGenerateScript = useCallback(async () => {
+    try {
+      const { simGenerateScript } = await import("../hooks/useTauri");
+      const sources = projectSources.length > 0 ? projectSources : sourceFiles;
+      const s = await simGenerateScript(
+        simulator, sources, testbench, topModule, simTime, timescale,
+      );
+      setGeneratedScript(s);
+      setShowPreview(true);
+    } catch (e) {
+      setGeneratedScript(`// failed to generate: ${e}`);
+      setShowPreview(true);
+    }
+  }, [simulator, projectSources, sourceFiles, testbench, topModule, simTime, timescale]);
+
+  const saveGeneratedScript = useCallback(async () => {
+    if (!projectDir || !generatedScript) return;
+    try {
+      const { writeTextFile } = await import("../hooks/useTauri");
+      const ext = simulator === "icarus" || simulator === "verilator" ? "sh" : "do";
+      const filename = `sim_${topModule}.${ext}`;
+      await writeTextFile(`${projectDir}/${filename}`.replace(/\\/g, "/"), generatedScript);
+      setTbStatus(`Saved ${filename} in project root`);
+    } catch (e) { setTbStatus(`save failed: ${e}`); }
+  }, [projectDir, generatedScript, simulator, topModule]);
 
   // ── Cocotb state ──
   const [cocotbTests, setCocotbTests] = useState<CocotbTest[]>([]);
@@ -104,28 +248,11 @@ export default function SimWizard({ projectDir }: SimWizardProps = {}): React.Re
     return { ran, pass, fail, totalTests, totalDuration };
   }, [cocotbResults]);
 
-  const generatedScript = `# Simulation script for ${simulator}
-set project_name "sim_project"
-set top_module ${topModule}
-set sim_time ${simTime}
-set timescale ${timescale}
-
-# Compile sources
-${sourceFiles.map((f) => `vlog ${f}`).join("\n")}
-vlog ${testbench}
-
-# Elaborate
-vsim -top ${topModule} -t ${timescale}
-
-# Add waves
-add wave -r /*/
-
-# Run simulation
-run ${simTime}
-
-# Exit
-quit
-`;
+  // `generatedScript` state is set by the async generator. Fall back to an
+  // inline template for preview before the user clicks Generate once.
+  const previewScript = generatedScript || `# Click "Generate Script" to build the sim script from the real
+# project sources, testbench, and simulator selection above.
+# (simulator=${simulator}, top=${topModule}, testbench=${testbench})`;
 
   return (
     <div
@@ -424,11 +551,92 @@ quit
             </label>
             <div style={{ display: "flex", gap: 8 }}>
               <Input value={testbench} onChange={setTestbench} />
-              <Btn small>Browse...</Btn>
+              <Btn small onClick={pickExistingTestbench}>Browse...</Btn>
+              <Btn small onClick={openCreateTestbench}>Create\u2026</Btn>
             </div>
+            {tbStatus && (
+              <div style={{ fontSize: 8, color: C.ok, marginTop: 4, fontFamily: MONO }}>
+                {tbStatus}
+              </div>
+            )}
           </div>
         </div>
+        {/* Testbench prompt banner — shown when no testbench has been
+            selected or created yet. */}
+        {(!testbench || testbench === "tb_counter.v") && (
+          <div style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            background: `${C.accent}15`,
+            border: `1px solid ${C.accent}60`,
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color: C.accent, marginBottom: 2 }}>
+                No testbench selected
+              </div>
+              <div style={{ fontSize: 9, fontFamily: MONO, color: C.t2 }}>
+                Generate a stub from the top module's ports, or point at an
+                existing testbench file. Either one will feed the script
+                generator below.
+              </div>
+            </div>
+            <Btn small onClick={openCreateTestbench}>Create testbench</Btn>
+            <Btn small onClick={pickExistingTestbench}>Add existing</Btn>
+          </div>
+        )}
       </div>
+
+      {/* Testbench creation dialog */}
+      {tbDialog === "create" && (
+        <div style={{
+          padding: 12, background: C.s1, borderRadius: 6,
+          border: `1px solid ${C.accent}`, display: "flex",
+          flexDirection: "column", gap: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: C.t1, flex: 1 }}>
+              Create testbench for <span style={{ color: C.accent }}>{topModule}</span>
+            </div>
+            <Select
+              value={tbKind}
+              onChange={(v) => setTbKind(v as "verilog" | "cocotb")}
+              options={[
+                { value: "verilog", label: "Verilog self-checking" },
+                { value: "cocotb",  label: "Cocotb (Python)" },
+              ]}
+            />
+            <Btn small onClick={saveTestbench}>Save</Btn>
+            <Btn small onClick={() => setTbDialog(null)}>Cancel</Btn>
+          </div>
+          <div style={{ fontSize: 8, fontFamily: MONO, color: C.t3 }}>
+            {detectedPorts === null
+              ? "Parsing top module ports\u2026"
+              : detectedPorts.length === 0
+                ? `No ports detected for module ${topModule}. Check that the name matches the RTL's top module.`
+                : `Detected ${detectedPorts.length} ports: ${detectedPorts.map(p => p.name).join(", ")}`}
+          </div>
+          <pre style={{
+            margin: 0, padding: 10, background: C.bg, borderRadius: 4,
+            border: `1px solid ${C.b1}`, fontSize: 9, fontFamily: MONO,
+            color: C.t2, maxHeight: 300, overflow: "auto", whiteSpace: "pre",
+          }}>{tbPreview}</pre>
+          {tbKind === "cocotb" && tbMakefilePreview && (
+            <>
+              <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3 }}>Makefile</div>
+              <pre style={{
+                margin: 0, padding: 10, background: C.bg, borderRadius: 4,
+                border: `1px solid ${C.b1}`, fontSize: 9, fontFamily: MONO,
+                color: C.t2, maxHeight: 160, overflow: "auto", whiteSpace: "pre",
+              }}>{tbMakefilePreview}</pre>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Source Files */}
       <div
@@ -581,9 +789,14 @@ quit
         <Btn small onClick={() => setShowPreview(!showPreview)}>
           {showPreview ? "Hide Preview" : "Show Preview"}
         </Btn>
-        <Btn small primary>
+        <Btn small primary onClick={handleGenerateScript}>
           Generate Script
         </Btn>
+        {generatedScript && (
+          <Btn small onClick={saveGeneratedScript} disabled={!projectDir}>
+            Save to project
+          </Btn>
+        )}
       </div>
 
       {/* Script Preview */}
@@ -623,11 +836,18 @@ quit
               lineHeight: "1.4",
             }}
           >
-            {generatedScript}
+            {previewScript}
           </div>
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <Btn small>Copy</Btn>
-            <Btn small>Save As...</Btn>
+            <Btn
+              small
+              onClick={() => { void navigator.clipboard.writeText(previewScript); setTbStatus("Copied to clipboard"); }}
+            >
+              Copy
+            </Btn>
+            <Btn small onClick={saveGeneratedScript} disabled={!projectDir || !generatedScript}>
+              Save As...
+            </Btn>
           </div>
         </div>
       )}

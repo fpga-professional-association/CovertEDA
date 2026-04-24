@@ -14,6 +14,7 @@ pub mod programmer;
 pub mod project;
 pub mod reveal;
 pub mod run_manager;
+pub mod sim_generator;
 pub mod sei_editor;
 pub mod sim_wizard;
 pub mod source_templates;
@@ -134,6 +135,11 @@ pub fn run() {
             commands::ssh_create_project,
             commands::discover_cocotb_tests,
             commands::run_cocotb_test,
+            commands::sim_parse_top_ports,
+            commands::sim_generate_verilog_testbench,
+            commands::sim_generate_cocotb_testbench,
+            commands::sim_generate_script,
+            commands::sim_project_sources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
