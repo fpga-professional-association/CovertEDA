@@ -495,9 +495,7 @@ impl FpgaBackend for RadiantBackend {
                 let constr_tcl = super::to_tcl_path(constr);
                 let ext = constr.extension().and_then(|e| e.to_str()).unwrap_or("");
                 match ext {
-                    "pdc" => script.push_str(&format!("prj_add_source \"{}\" -exclude_from_synth\n", constr_tcl)),
-                    "sdc" => script.push_str(&format!("prj_add_source \"{}\"\n", constr_tcl)),
-                    "lpf" => script.push_str(&format!("prj_add_source \"{}\"\n", constr_tcl)),
+                    "pdc" | "sdc" | "lpf" => script.push_str(&format!("prj_add_source \"{}\"\n", constr_tcl)),
                     _ => {}
                 }
             }
