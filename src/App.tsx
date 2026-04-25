@@ -188,6 +188,62 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // ── Left nav: order + expand state, persisted in localStorage ─────────
+  // The nav rail starts simple (4 essentials) and the user can expand to see
+  // the rest. They can also drag-reorder anything visible. Choices stick
+  // across sessions so a user's customised layout shows up the same way.
+  const NAV_PINNED_DEFAULT = ["build", "reports", "constraints", "programmer"];
+  const NAV_DEFAULT_ORDER = [
+    "build", "constraints", "reports", "programmer",
+    "console", "history", "ip", "ai", "git", "ssh",
+    "power", "reveal", "runs", "eco", "simulation", "templates",
+  ];
+  const [navOrder, setNavOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("coverteda.nav.order");
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed) && parsed.every((s) => typeof s === "string")) {
+          // Append any newly-added nav items not yet in the saved order.
+          const merged = [...parsed];
+          for (const id of NAV_DEFAULT_ORDER) {
+            if (!merged.includes(id)) merged.push(id);
+          }
+          return merged;
+        }
+      }
+    } catch { /* fall through to default */ }
+    return NAV_DEFAULT_ORDER;
+  });
+  const [navExpanded, setNavExpanded] = useState<boolean>(() => {
+    try { return localStorage.getItem("coverteda.nav.expanded") === "true"; }
+    catch { return false; }
+  });
+  const [navDragging, setNavDragging] = useState<string | null>(null);
+  useEffect(() => {
+    try { localStorage.setItem("coverteda.nav.order", JSON.stringify(navOrder)); }
+    catch { /* localStorage may be disabled */ }
+  }, [navOrder]);
+  useEffect(() => {
+    try { localStorage.setItem("coverteda.nav.expanded", String(navExpanded)); }
+    catch { /* ignore */ }
+  }, [navExpanded]);
+
+  const reorderNav = useCallback((fromId: string, toId: string) => {
+    setNavOrder((order) => {
+      const next = [...order];
+      const fromIdx = next.indexOf(fromId);
+      const toIdx = next.indexOf(toId);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return next;
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const resetNavOrder = useCallback(() => setNavOrder(NAV_DEFAULT_ORDER), []);
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
@@ -1415,22 +1471,126 @@ export default function App() {
             </span>
           </div>
           <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minHeight: 0 }}>
-            <NavBtn icon={<Zap />} label="Build" active={sec === "build"} onClick={() => navClick("build")} badge={building} tooltip="Build pipeline — run synthesis, map, place & route, bitstream" />
-            <NavBtn icon={<Pin />} label="Constr" active={sec === "constraints"} onClick={() => navClick("constraints")} tooltip="Constraint Editor — pin assignments and timing constraints" />
-            <NavBtn icon={<Doc />} label="Reports" active={sec === "reports"} onClick={() => navClick("reports")} accent={C.cyan} tooltip="Reports — timing, utilization, power, DRC, I/O analysis" />
-            <NavBtn icon={<Term />} label="Log" active={sec === "console"} onClick={() => navClick("console")} tooltip="Console — build output log with search" />
-            <NavBtn icon={<Clock />} label="History" active={sec === "history"} onClick={() => navClick("history")} accent={C.orange} tooltip="Build history — track Fmax trends and past builds" />
-            <NavBtn icon={<Box />} label="IP" active={sec === "ip"} onClick={() => navClick("ip")} accent={C.purple} tooltip="IP Catalog — browse, configure, and generate IP cores" />
-            <NavBtn icon={<Brain />} label="AI" active={sec === "ai"} onClick={() => navClick("ai")} accent={C.pink} tooltip="AI Assistant — get FPGA design help and code analysis" />
-            <NavBtn icon={<Git />} label="Git" active={sec === "git"} onClick={() => navClick("git")} accent={C.ok} tooltip="Git — branches, tags, commit log, push/pull" badge={gitState?.behind ? true : undefined} />
-            <NavBtn icon={<Server />} label="SSH" active={sec === "ssh"} onClick={() => navClick("ssh")} accent={C.cyan} tooltip="SSH Build Server — run builds on remote machines" />
-            <NavBtn icon={<Download />} label="Prog" active={sec === "programmer"} onClick={() => navClick("programmer")} accent={C.ok} tooltip="Device Programmer — program FPGA via USB cable" />
-            <NavBtn icon={<Zap />} label="Power" active={sec === "power"} onClick={() => navClick("power")} accent={C.orange} tooltip="Power Calculator — power analysis and thermal margins" />
-            <NavBtn icon={<Brain />} label={DEBUG_TOOL_LABEL[bid] ?? "Debug"} active={sec === "reveal"} onClick={() => navClick("reveal")} accent={C.pink} tooltip={DEBUG_TOOL_TOOLTIP[bid] ?? "Backend does not provide a logic analyzer integration"} />
-            <NavBtn icon={<Box />} label="Runs" active={sec === "runs"} onClick={() => navClick("runs")} accent={C.cyan} tooltip="Run Manager — multi-run management and comparison" />
-            <NavBtn icon={<Chip />} label="Attrs" active={sec === "eco"} onClick={() => navClick("eco")} accent={C.purple} tooltip="Attributes — edit I/O drive/pull/slew, PLL parameters, memory blocks, and device config without re-running synthesis" />
-            <NavBtn icon={<Play />} label="Sim" active={sec === "simulation"} onClick={() => navClick("simulation")} accent={C.ok} tooltip="Simulation Wizard — HDL simulation setup and configuration" />
-            <NavBtn icon={<Doc />} label="Tmpl" active={sec === "templates"} onClick={() => navClick("templates")} accent={C.cyan} tooltip="Source Templates — HDL code generator and examples" />
+            {(() => {
+              // Single source of truth for every left-rail nav entry. The
+              // pinned subset shows by default; the rest hide behind the
+              // chevron toggle. Order is user-controlled via drag-drop.
+              const NAV_REGISTRY: Record<string, {
+                label: string;
+                icon: React.ReactNode;
+                accent?: string;
+                tooltip: string;
+                sec: string;
+                badge?: boolean;
+              }> = {
+                build:       { label: "Build",     icon: <Zap />,    sec: "build",        badge: building, tooltip: "Build pipeline \u2014 run synthesis, map, place & route, bitstream" },
+                constraints: { label: "Constr",    icon: <Pin />,    sec: "constraints",                   tooltip: "Constraint Editor \u2014 pin assignments and timing constraints" },
+                reports:     { label: "Reports",   icon: <Doc />,    sec: "reports",      accent: C.cyan,  tooltip: "Reports \u2014 timing, utilization, power, DRC, I/O analysis" },
+                programmer:  { label: "Prog",      icon: <Download />, sec: "programmer", accent: C.ok,    tooltip: "Device Programmer \u2014 program FPGA via USB cable" },
+                console:     { label: "Log",       icon: <Term />,   sec: "console",                       tooltip: "Console \u2014 build output log with search" },
+                history:     { label: "History",   icon: <Clock />,  sec: "history",      accent: C.orange,tooltip: "Build history \u2014 track Fmax trends and past builds" },
+                ip:          { label: "IP",        icon: <Box />,    sec: "ip",           accent: C.purple,tooltip: "IP Catalog \u2014 browse, configure, and generate IP cores" },
+                ai:          { label: "AI",        icon: <Brain />,  sec: "ai",           accent: C.pink,  tooltip: "AI Assistant \u2014 get FPGA design help and code analysis" },
+                git:         { label: "Git",       icon: <Git />,    sec: "git",          accent: C.ok,    tooltip: "Git \u2014 branches, tags, commit log, push/pull", badge: !!gitState?.behind },
+                ssh:         { label: "SSH",       icon: <Server />, sec: "ssh",          accent: C.cyan,  tooltip: "SSH Build Server \u2014 run builds on remote machines" },
+                power:       { label: "Power",     icon: <Zap />,    sec: "power",        accent: C.orange,tooltip: "Power Calculator \u2014 power analysis and thermal margins" },
+                reveal:      { label: DEBUG_TOOL_LABEL[bid] ?? "Debug", icon: <Brain />, sec: "reveal", accent: C.pink, tooltip: DEBUG_TOOL_TOOLTIP[bid] ?? "Backend does not provide a logic analyzer integration" },
+                runs:        { label: "Runs",      icon: <Box />,    sec: "runs",         accent: C.cyan,  tooltip: "Run Manager \u2014 multi-run management and comparison" },
+                eco:         { label: "Attrs",     icon: <Chip />,   sec: "eco",          accent: C.purple,tooltip: "Attributes \u2014 edit I/O drive/pull/slew, PLL parameters, memory blocks, and device config without re-running synthesis" },
+                simulation:  { label: "Sim",       icon: <Play />,   sec: "simulation",   accent: C.ok,    tooltip: "Simulation Wizard \u2014 HDL simulation setup and configuration" },
+                templates:   { label: "Tmpl",      icon: <Doc />,    sec: "templates",    accent: C.cyan,  tooltip: "Source Templates \u2014 HDL code generator and examples" },
+              };
+
+              const visibleIds = navOrder.filter((id) => NAV_REGISTRY[id] &&
+                (navExpanded || NAV_PINNED_DEFAULT.includes(id)));
+
+              const renderItem = (id: string) => {
+                const def = NAV_REGISTRY[id];
+                if (!def) return null;
+                const isDragging = navDragging === id;
+                return (
+                  <div
+                    key={id}
+                    draggable
+                    onDragStart={(e) => {
+                      setNavDragging(id);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", id);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const fromId = e.dataTransfer.getData("text/plain");
+                      if (fromId && fromId !== id) reorderNav(fromId, id);
+                      setNavDragging(null);
+                    }}
+                    onDragEnd={() => setNavDragging(null)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "center",
+                      opacity: isDragging ? 0.4 : 1,
+                      cursor: "grab",
+                    }}
+                  >
+                    <NavBtn
+                      icon={def.icon}
+                      label={def.label}
+                      active={sec === def.sec}
+                      onClick={() => navClick(def.sec as Section)}
+                      accent={def.accent}
+                      badge={def.badge}
+                      tooltip={def.tooltip}
+                    />
+                  </div>
+                );
+              };
+
+              return (
+                <>
+                  {visibleIds.map(renderItem)}
+                  {/* Toggle chevron — pinned-only by default, expand to see all */}
+                  <div
+                    onClick={() => setNavExpanded((v) => !v)}
+                    title={navExpanded ? "Show fewer (pinned only)" : "Show all tools"}
+                    style={{
+                      cursor: "pointer",
+                      padding: "6px 4px",
+                      marginTop: 6,
+                      borderTop: `1px dashed ${C.b1}`,
+                      width: "80%",
+                      display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: 2,
+                      color: C.t3, fontFamily: MONO,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, lineHeight: 1 }}>
+                      {navExpanded ? "\u25B2" : "\u25BC"}
+                    </span>
+                    <span style={{ fontSize: 7, fontWeight: 600 }}>
+                      {navExpanded ? "Less" : "More"}
+                    </span>
+                  </div>
+                  {navExpanded && (
+                    <div
+                      onClick={resetNavOrder}
+                      title="Reset nav order to default"
+                      style={{
+                        cursor: "pointer",
+                        padding: "4px 4px",
+                        fontSize: 7, fontFamily: MONO,
+                        color: C.t3,
+                      }}
+                    >
+                      Reset order
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             <NavBtn icon={<Doc />} label="Docs" active={sec === "docs"} onClick={() => navClick("docs")} accent={C.cyan} tooltip="Documentation — detailed user guide" />
