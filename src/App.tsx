@@ -1900,9 +1900,26 @@ export default function App() {
                     }
                   }}
                   onOpenReport={(tab) => {
+                    // If the requested report wasn't produced by this build
+                    // (common after a failure), drop into the raw build log
+                    // instead — that's where the user can actually see why.
+                    const hasReport = (
+                      (tab === "timing" && !!realTimingReport)
+                      || (tab === "util" && !!realUtilReport)
+                      || (tab === "power" && !!realPowerReport)
+                      || (tab === "drc" && !!realDrcReport)
+                      || (tab === "io" && !!realIoReport)
+                      // synth/map/par/files are file browsers — always available.
+                      || ["synth", "map", "par", "files"].includes(tab ?? "")
+                    );
+                    if (!hasReport) {
+                      navClick("console");
+                      return;
+                    }
                     navClick("reports");
                     if (tab) setRptTab(tab as typeof rptTab);
                   }}
+                  onOpenBuildLog={() => navClick("console")}
                 />
               </div>
             )}

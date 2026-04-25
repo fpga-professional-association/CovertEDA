@@ -570,6 +570,10 @@ interface BuildPipelineProps {
    * the relevant report without hunting through the nav rail.
    */
   onOpenReport?: (tab?: "timing" | "util" | "power" | "drc" | "io" | "synth" | "map" | "par" | "files") => void;
+  /** Navigate to the raw build log (Console section) — used by the failure
+      banner so users always have a way to read the full tool output even
+      when the relevant report wasn't generated. */
+  onOpenBuildLog?: () => void;
 }
 
 // Pick the most useful report tab for each pipeline stage so clicking on
@@ -964,6 +968,7 @@ export default memo(function BuildPipeline({
   onTopModuleChange,
   onMakefileImport,
   onOpenReport,
+  onOpenBuildLog,
 }: BuildPipelineProps) {
   const { C, MONO } = useTheme();
   const B = backend;
@@ -985,27 +990,59 @@ export default memo(function BuildPipeline({
   };
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
 
-  // Extract key error messages from build log for the failure banner
+  // Extract key error messages from the build log for the failure banner.
+  // The previous regex was very narrow (only Error: and Error(NNNN)), which
+  // missed common Quartus/Questa patterns like "Critical Warning", "Fatal",
+  // "Failed:", "internal error", and most synthesizer-side traces. Now:
+  //   1. Capture anything starting with Error / Fatal / Critical / Failed
+  //      / Internal / Cannot / TimeoutError, plus Tcl "while executing"
+  //      stack lines.
+  //   2. Drop "Info:" / "Info (NNNN)" noise.
+  //   3. If nothing matched, fall back to the last few non-empty err/out
+  //      lines so the user always sees something instead of an empty box.
   const buildErrors = useMemo(() => {
     if (!buildFailed || !logs.length) return [];
     const errors: string[] = [];
-    for (let i = logs.length - 1; i >= 0 && errors.length < 5; i--) {
+    const isNoise = (m: string) =>
+      !m || /^Info\b/i.test(m) || /^Note\b/i.test(m) || /^\s*$/.test(m);
+    const matchesErrorish = (m: string) => (
+      /^(error|fatal|critical|failed|internal\s+error|cannot|abort|panic)\b/i.test(m)
+      || /^while\s+executing/i.test(m)
+      || /^\(file\s/.test(m)
+      || /\b(error|fatal)\s*\(\d+\)/i.test(m)
+    );
+
+    // Walk backwards so the most-recent error is first.
+    for (let i = logs.length - 1; i >= 0 && errors.length < 8; i--) {
       const l = logs[i];
       if (l.t !== "err" && l.t !== "out") continue;
       const m = l.m.trim();
-      // Skip generic/noise lines
-      if (!m || m.startsWith("Info:") || m.startsWith("Info ")) continue;
-      if (/^(while executing|Error:|Error \()/.test(m) || /^\(file /.test(m)) {
-        // Only keep substantive error lines (with error codes or meaningful text)
-        if (/Error \(\d+\)/.test(m)) {
-          errors.push(m);
-        } else if (/^Error:.*unsuccessful/i.test(m) || /^Error:.*failed/i.test(m)) {
-          errors.push(m);
-        }
+      if (isNoise(m)) continue;
+      if (matchesErrorish(m)) errors.push(m);
+    }
+
+    // Fallback: if we couldn't classify anything, show the last 6 non-noise
+    // lines so the user has *something* to work with instead of "Check the
+    // output log".
+    if (errors.length === 0) {
+      for (let i = logs.length - 1; i >= 0 && errors.length < 6; i--) {
+        const l = logs[i];
+        if (l.t !== "err" && l.t !== "out") continue;
+        const m = l.m.trim();
+        if (isNoise(m)) continue;
+        errors.push(m);
       }
     }
-    // Deduplicate
-    return [...new Set(errors)].slice(0, 3);
+
+    // Deduplicate, preserve order
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const e of errors) {
+      if (seen.has(e)) continue;
+      seen.add(e);
+      out.push(e);
+    }
+    return out.slice(0, 6);
   }, [buildFailed, logs]);
 
   const panel: React.CSSProperties = {
@@ -1396,12 +1433,6 @@ export default memo(function BuildPipeline({
         )}
         {!building && buildFailed && (
           <div
-            onClick={onOpenReport ? () => {
-              const failedStage = buildStep >= 0 && buildStep < B.pipeline.length
-                ? B.pipeline[buildStep].id
-                : undefined;
-              onOpenReport(failedStage ? stageToReportTab(failedStage) : "files");
-            } : undefined}
             style={{
               marginTop: 10,
               padding: "10px 12px",
@@ -1409,20 +1440,9 @@ export default memo(function BuildPipeline({
               borderRadius: 6,
               border: `1px solid ${C.err}40`,
               fontFamily: MONO,
-              cursor: onOpenReport ? "pointer" : "default",
-              transition: "background 120ms",
             }}
-            onMouseEnter={(e) => {
-              if (onOpenReport) e.currentTarget.style.background = `${C.err}25`;
-            }}
-            onMouseLeave={(e) => {
-              if (onOpenReport) e.currentTarget.style.background = C.errDim;
-            }}
-            title={onOpenReport
-              ? "Click to open the report for the failed stage"
-              : undefined}
           >
-            <div style={{ fontSize: 11, color: C.err, fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ fontSize: 11, color: C.err, fontWeight: 700, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {"\u2717"} BUILD FAILED
               {buildStep >= 0 && buildStep < B.pipeline.length && (
                 <span style={{ fontSize: 9, color: C.t2, fontWeight: 500 }}>
@@ -1430,13 +1450,39 @@ export default memo(function BuildPipeline({
                 </span>
               )}
               <div style={{ flex: 1 }} />
+              {onOpenBuildLog && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); onOpenBuildLog(); }}
+                  title="Open the full build log for the raw tool output"
+                  style={{
+                    fontSize: 9, color: C.t1, fontWeight: 700,
+                    border: `1px solid ${C.b1}`,
+                    background: C.s1,
+                    padding: "2px 8px", borderRadius: 3,
+                    cursor: "pointer",
+                  }}
+                >
+                  View build log
+                </span>
+              )}
               {onOpenReport && (
-                <span style={{
-                  fontSize: 9, color: C.err, fontWeight: 700,
-                  border: `1px solid ${C.err}60`,
-                  background: `${C.err}15`,
-                  padding: "2px 6px", borderRadius: 3,
-                }}>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const failedStage = buildStep >= 0 && buildStep < B.pipeline.length
+                      ? B.pipeline[buildStep].id
+                      : undefined;
+                    onOpenReport(failedStage ? stageToReportTab(failedStage) : "files");
+                  }}
+                  title="Open the report for the failed stage (falls back to the build log if no report was produced)"
+                  style={{
+                    fontSize: 9, color: C.err, fontWeight: 700,
+                    border: `1px solid ${C.err}60`,
+                    background: `${C.err}15`,
+                    padding: "2px 8px", borderRadius: 3,
+                    cursor: "pointer",
+                  }}
+                >
                   Open report \u2192
                 </span>
               )}
@@ -1460,8 +1506,12 @@ export default memo(function BuildPipeline({
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 9, color: C.t2, marginTop: 4 }}>
-                Check the output log for error details.
+              <div style={{ fontSize: 9, color: C.t2, marginTop: 6, lineHeight: 1.5 }}>
+                The build process exited with an error before printing
+                anything we could classify as an error message. Click
+                {" "}<b style={{ color: C.t1 }}>View build log</b> for the raw
+                tool output, or check that the project has valid sources
+                and a top module set.
               </div>
             )}
           </div>
