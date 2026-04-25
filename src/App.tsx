@@ -221,6 +221,7 @@ export default function App() {
     catch { return false; }
   });
   const [navDragging, setNavDragging] = useState<string | null>(null);
+  const [navDropTarget, setNavDropTarget] = useState<string | null>(null);
   useEffect(() => {
     try { localStorage.setItem("coverteda.nav.order", JSON.stringify(navOrder)); }
     catch { /* localStorage may be disabled */ }
@@ -950,7 +951,19 @@ export default function App() {
         buildCleanup.current = null;
       }
       setBuilding(false);
-      setLogs((p) => [...p, { t: "err" as const, m: `Build error: ${err}` }]);
+      // Mark the build as failed so the failure banner shows the error and
+      // the user doesn't see a silent "build complete with 0 stages". This
+      // catches pre-build validation failures (top-module empty, device/tool
+      // mismatch) where the backend rejects the start_build call before any
+      // stage event fires.
+      setBuildFailed(true);
+      setBuildElapsedSec(buildStartTime.current > 0
+        ? Math.round((Date.now() - buildStartTime.current) / 1000) : 0);
+      const errMsg = String(err).replace(/^Error:\s*/, "");
+      setLogs((p) => [
+        ...p,
+        { t: "err" as const, m: `Build cannot start: ${errMsg}` },
+      ]);
     }
   }, [B, bid, projectDir, buildStages, buildOptions, startLogFlush, stopLogFlush, runMockBuild]);
 
@@ -1432,7 +1445,7 @@ export default function App() {
         {/* ══════ LEFT NAV ══════ */}
         <div
           style={{
-            width: 50,
+            width: 76,
             flexShrink: 0,
             background: C.s1,
             borderRight: `1px solid ${C.b1}`,
@@ -1508,6 +1521,7 @@ export default function App() {
                 const def = NAV_REGISTRY[id];
                 if (!def) return null;
                 const isDragging = navDragging === id;
+                const isDropTarget = navDropTarget === id && navDragging && navDragging !== id;
                 return (
                   <div
                     key={id}
@@ -1516,24 +1530,45 @@ export default function App() {
                       setNavDragging(id);
                       e.dataTransfer.effectAllowed = "move";
                       e.dataTransfer.setData("text/plain", id);
+                      // Compact drag preview so the row visual is what moves.
+                      try { e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 30, 20); } catch {}
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      if (navDragging && navDragging !== id) setNavDropTarget(id);
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
+                      if (navDragging && navDragging !== id && navDropTarget !== id) {
+                        setNavDropTarget(id);
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      // Only clear if leaving the wrapper itself (not a child).
+                      const related = e.relatedTarget as Node | null;
+                      if (!related || !e.currentTarget.contains(related)) {
+                        if (navDropTarget === id) setNavDropTarget(null);
+                      }
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       const fromId = e.dataTransfer.getData("text/plain");
                       if (fromId && fromId !== id) reorderNav(fromId, id);
                       setNavDragging(null);
+                      setNavDropTarget(null);
                     }}
-                    onDragEnd={() => setNavDragging(null)}
+                    onDragEnd={() => { setNavDragging(null); setNavDropTarget(null); }}
                     style={{
                       width: "100%",
                       display: "flex",
                       justifyContent: "center",
-                      opacity: isDragging ? 0.4 : 1,
-                      cursor: "grab",
+                      opacity: isDragging ? 0.35 : 1,
+                      cursor: navDragging ? "grabbing" : "grab",
+                      position: "relative",
+                      // Drop indicator — a 2px accent line above the target.
+                      boxShadow: isDropTarget ? `inset 0 2px 0 0 ${C.accent}` : undefined,
+                      transition: "opacity 80ms ease-out",
                     }}
                   >
                     <NavBtn

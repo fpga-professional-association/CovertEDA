@@ -164,24 +164,28 @@ export function NavBtn({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 2,
-        padding: "6px 4px",
-        cursor: "pointer",
-        borderRadius: 5,
+        gap: 3,
+        padding: "10px 6px",
+        // Inherit cursor from parent (so drag wrappers can show "grab"
+        // without this child overriding). Falls back to pointer when used
+        // outside a draggable container.
+        cursor: "inherit",
+        borderRadius: 6,
         position: "relative",
         background: active ? C.accentDim : "transparent",
         color: active ? accent || C.accent : C.t3,
         borderLeft: active
-          ? `2px solid ${accent || C.accent}`
-          : "2px solid transparent",
-        minWidth: 48,
+          ? `3px solid ${accent || C.accent}`
+          : "3px solid transparent",
+        minWidth: 64,
+        width: "100%",
         transition: "background-color 100ms ease-out, color 100ms ease-out, border-color 100ms ease-out",
       }}
     >
-      <span style={{ display: "flex" }}>{icon}</span>
+      <span style={{ display: "flex", transform: "scale(1.35)" }}>{icon}</span>
       <span
         style={{
-          fontSize: 7,
+          fontSize: 9,
           fontFamily: MONO,
           fontWeight: 600,
           letterSpacing: 0.3,
