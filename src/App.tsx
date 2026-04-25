@@ -20,6 +20,7 @@ const Console = lazy(() => import("./components/Console"));
 const CommandPalette = lazy(() => import("./components/CommandPalette"));
 const FileViewer = lazy(() => import("./components/FileViewer"));
 const SettingsPanel = lazy(() => import("./components/SettingsPanel"));
+const NavEditor = lazy(() => import("./components/NavEditor"));
 const AiAssistant = lazy(() => import("./components/AiAssistant"));
 const ConstraintEditor = lazy(() => import("./components/ConstraintEditor"));
 const Programmer = lazy(() => import("./components/Programmer"));
@@ -220,8 +221,7 @@ export default function App() {
     try { return localStorage.getItem("coverteda.nav.expanded") === "true"; }
     catch { return false; }
   });
-  const [navDragging, setNavDragging] = useState<string | null>(null);
-  const [navDropTarget, setNavDropTarget] = useState<string | null>(null);
+  const [navEditorOpen, setNavEditorOpen] = useState(false);
   useEffect(() => {
     try { localStorage.setItem("coverteda.nav.order", JSON.stringify(navOrder)); }
     catch { /* localStorage may be disabled */ }
@@ -231,20 +231,18 @@ export default function App() {
     catch { /* ignore */ }
   }, [navExpanded]);
 
-  const reorderNav = useCallback((fromId: string, toId: string) => {
-    setNavOrder((order) => {
-      const next = [...order];
-      const fromIdx = next.indexOf(fromId);
-      const toIdx = next.indexOf(toId);
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return next;
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
-      return next;
-    });
-  }, []);
+  // Reordering moved into the NavEditor modal (which calls setNavOrder
+  // directly with the full new order). The old per-pair reorderNav is no
+  // longer needed.
 
   const resetNavOrder = useCallback(() => setNavOrder(NAV_DEFAULT_ORDER), []);
 
+  // Single source of truth for every left-rail nav entry. Defined once so
+  // both the rail itself and the Edit Menu modal render the same set in
+  // the same order. Recomputes when theme colours / backend / git state
+  // changes (badges, debug-tool name swap by backend).
+  // Note: built lazily inside the rail render below where C/MONO are in
+  // scope; the Edit Menu modal uses navItemsForEditor (just id+label+icon).
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [aFile, setAFile] = useState("");
   const [showFiles, setShowFiles] = useState(true);
@@ -1520,56 +1518,12 @@ export default function App() {
               const renderItem = (id: string) => {
                 const def = NAV_REGISTRY[id];
                 if (!def) return null;
-                const isDragging = navDragging === id;
-                const isDropTarget = navDropTarget === id && navDragging && navDragging !== id;
+                // Drag-to-reorder lives in the dedicated Edit Menu modal,
+                // not the rail itself — clicking a button always navigates.
                 return (
                   <div
                     key={id}
-                    draggable
-                    onDragStart={(e) => {
-                      setNavDragging(id);
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", id);
-                      // Compact drag preview so the row visual is what moves.
-                      try { e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 30, 20); } catch {}
-                    }}
-                    onDragEnter={(e) => {
-                      e.preventDefault();
-                      if (navDragging && navDragging !== id) setNavDropTarget(id);
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      if (navDragging && navDragging !== id && navDropTarget !== id) {
-                        setNavDropTarget(id);
-                      }
-                    }}
-                    onDragLeave={(e) => {
-                      // Only clear if leaving the wrapper itself (not a child).
-                      const related = e.relatedTarget as Node | null;
-                      if (!related || !e.currentTarget.contains(related)) {
-                        if (navDropTarget === id) setNavDropTarget(null);
-                      }
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const fromId = e.dataTransfer.getData("text/plain");
-                      if (fromId && fromId !== id) reorderNav(fromId, id);
-                      setNavDragging(null);
-                      setNavDropTarget(null);
-                    }}
-                    onDragEnd={() => { setNavDragging(null); setNavDropTarget(null); }}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "center",
-                      opacity: isDragging ? 0.35 : 1,
-                      cursor: navDragging ? "grabbing" : "grab",
-                      position: "relative",
-                      // Drop indicator — a 2px accent line above the target.
-                      boxShadow: isDropTarget ? `inset 0 2px 0 0 ${C.accent}` : undefined,
-                      transition: "opacity 80ms ease-out",
-                    }}
+                    style={{ width: "100%", display: "flex", justifyContent: "center" }}
                   >
                     <NavBtn
                       icon={def.icon}
@@ -1584,9 +1538,33 @@ export default function App() {
                 );
               };
 
+              // Build the lighter array the Edit Menu modal needs. Same
+              // data, just stripped of click-only fields like `sec`/`badge`.
+              const navItemsForEditor = Object.entries(NAV_REGISTRY).map(([id, def]) => ({
+                id,
+                label: def.label,
+                icon: def.icon,
+                accent: def.accent,
+                tooltip: def.tooltip,
+              }));
+
               return (
                 <>
                   {visibleIds.map(renderItem)}
+                  {/* Edit Menu modal — only mounted when open so hidden state
+                      doesn't add markup. Saves directly into navOrder via the
+                      existing setter so the rail re-renders with the new order. */}
+                  {navEditorOpen && (
+                    <Suspense fallback={null}>
+                      <NavEditor
+                        items={navItemsForEditor}
+                        currentOrder={navOrder}
+                        defaultOrder={NAV_DEFAULT_ORDER}
+                        onSave={(next) => setNavOrder(next)}
+                        onClose={() => setNavEditorOpen(false)}
+                      />
+                    </Suspense>
+                  )}
                   {/* Toggle chevron — pinned-only by default, expand to see all */}
                   <div
                     onClick={() => setNavExpanded((v) => !v)}
@@ -1610,18 +1588,37 @@ export default function App() {
                     </span>
                   </div>
                   {navExpanded && (
-                    <div
-                      onClick={resetNavOrder}
-                      title="Reset nav order to default"
-                      style={{
-                        cursor: "pointer",
-                        padding: "4px 4px",
-                        fontSize: 7, fontFamily: MONO,
-                        color: C.t3,
-                      }}
-                    >
-                      Reset order
-                    </div>
+                    <>
+                      <div
+                        onClick={() => setNavEditorOpen(true)}
+                        title="Open the menu editor to drag-reorder items"
+                        style={{
+                          cursor: "pointer",
+                          padding: "4px 4px",
+                          marginTop: 2,
+                          fontSize: 8, fontFamily: MONO, fontWeight: 600,
+                          color: C.accent,
+                          textAlign: "center",
+                          width: "90%",
+                          borderRadius: 3,
+                          border: `1px solid ${C.accent}40`,
+                        }}
+                      >
+                        Edit menu
+                      </div>
+                      <div
+                        onClick={resetNavOrder}
+                        title="Reset nav order to default"
+                        style={{
+                          cursor: "pointer",
+                          padding: "4px 4px",
+                          fontSize: 7, fontFamily: MONO,
+                          color: C.t3,
+                        }}
+                      >
+                        Reset order
+                      </div>
+                    </>
                   )}
                 </>
               );
