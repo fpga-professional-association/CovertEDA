@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "../context/ThemeContext";
 
 // ── Inject CSS hover rules once ──
@@ -273,17 +274,51 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [hIdx, setHIdx] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Portal positioning — recomputed every time the dropdown opens or the
+  // page scrolls/resizes so the listbox stays anchored to the trigger.
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; openUp: boolean; maxH: number } | null>(null);
 
-  const close = useCallback(() => { setOpen(false); setHIdx(-1); }, []);
+  const close = useCallback(() => { setOpen(false); setHIdx(-1); setPos(null); }, []);
+
+  // Recalculate position based on trigger's viewport rect. Flip up when
+  // there isn't enough room below.
+  const recalc = useCallback(() => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const ROW = compact ? 22 : 26;
+    const desired = Math.min(options.length * ROW + 8, 320);
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const spaceAbove = r.top - 8;
+    const openUp = spaceBelow < desired && spaceAbove > spaceBelow;
+    const maxH = Math.max(120, openUp ? Math.min(desired, spaceAbove) : Math.min(desired, spaceBelow));
+    setPos({
+      left: r.left,
+      top: openUp ? r.top - maxH - 4 : r.bottom + 2,
+      width: r.width,
+      openUp,
+      maxH,
+    });
+  }, [compact, options.length]);
 
   useEffect(() => {
     if (!open) return;
+    recalc();
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
+      const insideTrigger = ref.current && ref.current.contains(e.target as Node);
+      const insideList = listRef.current && listRef.current.contains(e.target as Node);
+      if (!insideTrigger && !insideList) close();
     };
+    const reposition = () => recalc();
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open, close]);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      document.removeEventListener("mousedown", h);
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [open, close, recalc]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -353,24 +388,24 @@ export function Select({
         </span>
         <span style={{ fontSize: 6, color: C.t3, flexShrink: 0 }}>{open ? "\u25B2" : "\u25BC"}</span>
       </div>
-      {open && (
+      {open && pos && createPortal(
         <div
+          ref={listRef}
           role="listbox"
           style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            minWidth: "100%",
+            position: "fixed",
+            left: pos.left,
+            top: pos.top,
+            minWidth: pos.width,
             width: "max-content",
-            maxHeight: 300,
+            maxWidth: Math.min(window.innerWidth - 16, Math.max(pos.width, 280)),
+            maxHeight: pos.maxH,
             overflowY: "auto",
             background: C.s1,
             border: `1px solid ${C.b1}`,
             borderRadius: 4,
-            marginTop: 2,
-            zIndex: 999,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            zIndex: 10000,
+            boxShadow: "0 6px 18px rgba(0,0,0,0.5)",
           }}
         >
           {options.map((o, i) => (
@@ -396,7 +431,8 @@ export function Select({
               {o.label}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
