@@ -247,6 +247,56 @@ function generateNetSuggestions(existingNets: string[]): string[] {
   return [...suggestions].sort();
 }
 
+// ── Virtual-pin detection ──
+// Each vendor expresses "skip physical I/O placement" differently. Rather
+// than building a full parser, we scan for the canonical line each tool
+// emits when a port is virtual / OOC / unbuffered:
+//
+//   Quartus  : set_instance_assignment -name VIRTUAL_PIN ON -to <port>
+//   Vivado   : set_property IO_BUFFER_TYPE NONE [get_ports {<port>}]
+//   Radiant  : ldc_set_port -port_name <port> -internal true
+//   Diamond  : IOBUF PORT "<port>" IO_TYPE=NONE   (no real virtual flag,
+//              but absence of LOCATE COMP is the convention; surfaced
+//              elsewhere)
+//   Libero   : set_io <port>  (with no -pinname / -fixed yes — handled
+//              separately by counting pins lacking a location)
+//   ACE      : set_pin <port>  (with no -loc — same convention)
+//
+// Returns the list of virtual ports detected so the banner can show how
+// many top-level signals are unbuffered.
+export function detectVirtualPins(
+  text: string,
+  backendId: string,
+): { count: number; ports: string[] } {
+  const ports = new Set<string>();
+  const lines = text.split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("//")) continue;
+
+    // Quartus QSF — VIRTUAL_PIN ON
+    const qm = /set_instance_assignment\s+-name\s+VIRTUAL_PIN\s+ON\s+-to\s+([^\s]+)/i.exec(line);
+    if (qm) {
+      ports.add(qm[1].replace(/[\[\]"]/g, ""));
+      continue;
+    }
+    // Vivado XDC — IO_BUFFER_TYPE NONE
+    const vm = /set_property\s+IO_BUFFER_TYPE\s+NONE\s+\[\s*get_ports\s+\{?\s*([^\}\]\s]+)/i.exec(line);
+    if (vm) {
+      ports.add(vm[1].replace(/[\[\]"]/g, ""));
+      continue;
+    }
+    // Radiant PDC — explicit -internal flag
+    const rm = /ldc_set_port\b[^\n]*-internal\s+true[^\n]*\[\s*get_ports\s+\{?\s*([^\}\]\s]+)/i.exec(line);
+    if (rm) {
+      ports.add(rm[1].replace(/[\[\]"]/g, ""));
+      continue;
+    }
+  }
+  void backendId; // reserved — Diamond/Libero/ACE use absence-of-pin convention
+  return { count: ports.size, ports: Array.from(ports).sort() };
+}
+
 // ── Constraint file extension per backend ──
 function constraintExt(backendId: string): string {
   if (backendId === "radiant" || backendId === "diamond") return "pdc";
@@ -684,6 +734,14 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
   const [pinoutFilter, setPinoutFilter] = useState<PinoutFilter>("all");
   const [buildPinout, setBuildPinout] = useState<PadReport | null>(null);
 
+  // ── Virtual-pin detection ──
+  // Each backend has its own way of skipping IO buffer placement. We scan
+  // the active constraint file (and the QSF on disk for Quartus, since the
+  // VIRTUAL_PIN assignments live there rather than in the SDC).
+  const [virtualPins, setVirtualPins] = useState<{ count: number; ports: string[] }>(
+    { count: 0, ports: [] },
+  );
+
   // ── File save/load state ──
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -718,14 +776,49 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
       setDirty(false);
       lastHash.current = quickHash(fc.content);
       setExternalChange(false);
+      // Virtual-pin scan from the file content we just loaded.
+      const detected = detectVirtualPins(fc.content, backendId);
+      setVirtualPins(detected);
     }).catch(() => {
       // File doesn't exist or can't be read — start empty
       setPins([]);
       setTiming([]);
       setDirty(false);
       lastHash.current = 0;
+      setVirtualPins({ count: 0, ports: [] });
     });
-  }, [constraintFile, backendId]);
+
+    // For Quartus, VIRTUAL_PIN lives in the .qsf at the project root, not in
+    // the .sdc the editor is showing. Check if a .qsf exists alongside the
+    // current project and merge any virtual ports it declares.
+    if ((backendId === "quartus" || backendId === "quartus_pro") && projectDir) {
+      (async () => {
+        try {
+          const { readFile: readF } = await import("../hooks/useTauri");
+          const slash = projectDir.replace(/\\/g, "/");
+          const projName = slash.split("/").pop() || "";
+          const qsfCandidates = [
+            `${slash}/${projName}.qsf`,
+            `${slash}/constraints/${projName}.qsf`,
+          ];
+          for (const path of qsfCandidates) {
+            try {
+              const fc = await readF(path);
+              if (!fc || fc.isBinary) continue;
+              const fromQsf = detectVirtualPins(fc.content, "quartus");
+              if (fromQsf.count > 0) {
+                setVirtualPins((prev) => ({
+                  count: prev.count + fromQsf.count,
+                  ports: Array.from(new Set([...prev.ports, ...fromQsf.ports])),
+                }));
+                break;
+              }
+            } catch { /* try next candidate */ }
+          }
+        } catch { /* ignore — leave as already-detected */ }
+      })();
+    }
+  }, [constraintFile, backendId, projectDir]);
 
   // ── External change detection (poll every 3s) ──
   useEffect(() => {
@@ -1432,6 +1525,11 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
             <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Pin Assignments</span>
             <Badge color={C.accent}>{pins.length} pins</Badge>
             <Badge color={C.ok}>{pins.filter((p) => p.locked).length} locked</Badge>
+            {virtualPins.count > 0 && (
+              <Badge color={C.purple}>
+                {virtualPins.count} virtual
+              </Badge>
+            )}
             <div style={{ flex: 1 }} />
             <input
               type="text"
@@ -1456,6 +1554,42 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
               }}>Delete {selectedRows.size} Selected</Btn>
             )}
           </div>
+
+          {/* Virtual-pin banner — surfaces the fact that the project is
+              using virtual pins so the user understands why physical pin
+              locations are absent / why the fitter is skipping I/O
+              placement. Lists the affected ports inline. */}
+          {virtualPins.count > 0 && (
+            <div style={{
+              padding: "8px 12px",
+              marginBottom: 10,
+              background: `${C.purple}15`,
+              border: `1px solid ${C.purple}50`,
+              borderRadius: 6,
+              fontFamily: MONO,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, marginBottom: 3 }}>
+                Virtual pins active \u2014 {virtualPins.count} top-level port{virtualPins.count === 1 ? "" : "s"}
+              </div>
+              <div style={{ fontSize: 8, color: C.t2, lineHeight: 1.5 }}>
+                {(backendId === "quartus" || backendId === "quartus_pro")
+                  && "Quartus VIRTUAL_PIN assignments \u2014 fitter skips physical placement."}
+                {backendId === "vivado"
+                  && "Vivado IO_BUFFER_TYPE NONE \u2014 IOB inference suppressed."}
+                {backendId === "radiant"
+                  && "Radiant -internal ports \u2014 not pin-mapped."}
+                {!["quartus", "quartus_pro", "vivado", "radiant"].includes(backendId)
+                  && "Unbuffered top-level ports \u2014 no physical pin placement required."}
+              </div>
+              <div style={{
+                fontSize: 8, color: C.t1, marginTop: 5, fontWeight: 500,
+                wordBreak: "break-word",
+              }}>
+                {virtualPins.ports.slice(0, 12).join(", ")}
+                {virtualPins.ports.length > 12 && ` \u2026 (+${virtualPins.ports.length - 12} more)`}
+              </div>
+            </div>
+          )}
 
           {/* Validation summary bar */}
           {(validationSummary.errors > 0 || validationSummary.warns > 0) && (
