@@ -42,8 +42,6 @@ export default function NavEditor({
     .filter((id) => itemsById.has(id))
     .concat(items.map((it) => it.id).filter((id) => !currentOrder.includes(id)));
   const [order, setOrder] = useState<string[]>(init);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,21 +51,7 @@ export default function NavEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const move = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-    setOrder((cur) => {
-      const next = [...cur];
-      const fi = next.indexOf(fromId);
-      const ti = next.indexOf(toId);
-      if (fi < 0 || ti < 0) return cur;
-      next.splice(fi, 1);
-      next.splice(ti, 0, fromId);
-      return next;
-    });
-  };
-
-  // Up/down buttons give a keyboard / no-drag alternative — useful for
-  // accessibility and for users who disable drag-and-drop.
+  // Reorder via the up/down arrow buttons on each row.
   const moveOne = (id: string, dir: -1 | 1) => {
     setOrder((cur) => {
       const idx = cur.indexOf(id);
@@ -118,8 +102,8 @@ export default function NavEditor({
               Edit Menu
             </div>
             <div style={{ fontSize: 10, color: C.t3, fontFamily: MONO, marginTop: 2 }}>
-              Drag a row, or use the arrows, to reorder the left navigation. Changes
-              apply when you click Save.
+              Use the up/down arrows on each row to reorder the left
+              navigation. Changes apply when you click Save.
             </div>
           </div>
           <Btn small onClick={reset}>Reset to default</Btn>
@@ -130,61 +114,20 @@ export default function NavEditor({
           {order.map((id, idx) => {
             const it = itemsById.get(id);
             if (!it) return null;
-            const isDragging = dragId === id;
-            const isOver = overId === id && dragId && dragId !== id;
             return (
               <div
                 key={id}
-                draggable
-                onDragStart={(e) => {
-                  setDragId(id);
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("text/plain", id);
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  if (dragId && dragId !== id) setOverId(id);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (dragId && dragId !== id && overId !== id) setOverId(id);
-                }}
-                onDragLeave={(e) => {
-                  const related = e.relatedTarget as Node | null;
-                  if (!related || !e.currentTarget.contains(related)) {
-                    if (overId === id) setOverId(null);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const from = e.dataTransfer.getData("text/plain");
-                  if (from) move(from, id);
-                  setDragId(null); setOverId(null);
-                }}
-                onDragEnd={() => { setDragId(null); setOverId(null); }}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
                   padding: "8px 12px",
                   margin: "4px 0",
-                  background: isOver ? `${C.accent}15` : C.s1,
-                  border: `1px solid ${isOver ? C.accent : C.b1}`,
+                  background: C.s1,
+                  border: `1px solid ${C.b1}`,
                   borderRadius: 6,
-                  cursor: dragId ? "grabbing" : "grab",
-                  opacity: isDragging ? 0.4 : 1,
-                  transition: "background-color 100ms, border-color 100ms",
                 }}
               >
-                {/* Drag handle */}
-                <span style={{
-                  fontSize: 14, color: C.t3, lineHeight: 1, flexShrink: 0,
-                  letterSpacing: -1, fontFamily: MONO, fontWeight: 700,
-                  cursor: "grab", userSelect: "none",
-                }}>
-                  {"\u2630"}
-                </span>
                 {/* Icon */}
                 <span style={{
                   width: 22, height: 22,
