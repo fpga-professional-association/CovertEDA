@@ -441,7 +441,7 @@ pub fn start_build(
 
     // Pre-build cleanup: remove corrupted intermediate databases that can
     // cause vendor tools (especially Quartus) to crash on startup
-    if backend_id == "quartus" {
+    if backend_id == "quartus" || backend_id == "quartus_pro" {
         for dir_name in &["dni", "db", "qdb", "incremental_db"] {
             let dir = project_path.join(dir_name);
             if dir.exists() {
@@ -767,8 +767,8 @@ pub fn start_build(
 
                             let lower = line.to_lowercase();
 
-                            // Detect Quartus stages
-                            if backend_id == "quartus" {
+                            // Detect Quartus stages (both Standard/Lite and Pro)
+                            if backend_id == "quartus" || backend_id == "quartus_pro" {
                                 // Quartus Pro uses execute_module -tool <name>
                                 if current_stage < 0
                                     && (lower.contains("quartus_syn") || lower.contains("execute_module -tool syn"))
