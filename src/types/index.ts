@@ -31,6 +31,12 @@ export interface BackendTiming {
 export interface LogEntry {
   t: "cmd" | "info" | "ok" | "warn" | "err" | "out";
   m: string;
+  /**
+   * UNIX-millisecond timestamp captured when the log line was received.
+   * Optional so existing call sites (and persisted logs without ts) keep
+   * working — the Console viewer skips the timestamp column when missing.
+   */
+  ts?: number;
 }
 
 export interface BuildHistoryEntry {

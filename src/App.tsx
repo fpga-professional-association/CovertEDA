@@ -581,7 +581,7 @@ export default function App() {
         if (logText) {
           const lines: LogEntry[] = logText.split("\n")
             .filter((l) => l.length > 0)
-            .map((l) => ({ t: "out" as const, m: l }));
+            .map((l) => ({ t: "out" as const, m: l, ts: Date.now() }));
           if (lines.length > 0) setLogs(lines);
         }
       }).catch(() => {});
@@ -628,49 +628,49 @@ export default function App() {
     const stageLines: LogEntry[][] = [
       // Synthesis
       [
-        { t: "warn", m: `\u2550\u2550\u2550 SIMULATION MODE \u2550\u2550\u2550 No Tauri backend detected` },
-        { t: "cmd", m: `radiantc .coverteda_build.tcl` },
-        { t: "info", m: `CovertEDA \u2192 ${backend.name} ${backend.version || "2025.2"}` },
-        { t: "cmd", m: "prj_run_synthesis" },
-        { t: "out", m: "LSE: reading sources..." },
-        { t: "out", m: "  count_attr.v" },
-        { t: "out", m: "LSE: synthesizing design 'count'..." },
-        { t: "out", m: "Checksum -- syn: 0x5A3B" },
-        { t: "out", m: "Total CPU Time: 4 secs" },
-        { t: "ok", m: "Synthesis complete: 0 errors, 0 warnings" },
+        { t: "warn", m: `\u2550\u2550\u2550 SIMULATION MODE \u2550\u2550\u2550 No Tauri backend detected`, ts: Date.now() },
+        { t: "cmd", m: `radiantc .coverteda_build.tcl`, ts: Date.now() },
+        { t: "info", m: `CovertEDA \u2192 ${backend.name} ${backend.version || "2025.2"}`, ts: Date.now() },
+        { t: "cmd", m: "prj_run_synthesis", ts: Date.now() },
+        { t: "out", m: "LSE: reading sources...", ts: Date.now() },
+        { t: "out", m: "  count_attr.v", ts: Date.now() },
+        { t: "out", m: "LSE: synthesizing design 'count'...", ts: Date.now() },
+        { t: "out", m: "Checksum -- syn: 0x5A3B", ts: Date.now() },
+        { t: "out", m: "Total CPU Time: 4 secs", ts: Date.now() },
+        { t: "ok", m: "Synthesis complete: 0 errors, 0 warnings", ts: Date.now() },
       ],
       // Map
       [
-        { t: "cmd", m: "prj_run_map" },
-        { t: "out", m: "Map: Loading design..." },
-        { t: "out", m: "Map: Processing constraints..." },
-        { t: "out", m: "  Device: LIFCL-40-7BG400I" },
-        { t: "out", m: "Checksum -- map: 0x7C2D" },
-        { t: "out", m: "Total CPU Time: 8 secs" },
-        { t: "ok", m: "Map complete: 0 errors, 0 warnings" },
+        { t: "cmd", m: "prj_run_map", ts: Date.now() },
+        { t: "out", m: "Map: Loading design...", ts: Date.now() },
+        { t: "out", m: "Map: Processing constraints...", ts: Date.now() },
+        { t: "out", m: "  Device: LIFCL-40-7BG400I", ts: Date.now() },
+        { t: "out", m: "Checksum -- map: 0x7C2D", ts: Date.now() },
+        { t: "out", m: "Total CPU Time: 8 secs", ts: Date.now() },
+        { t: "ok", m: "Map complete: 0 errors, 0 warnings", ts: Date.now() },
       ],
       // PAR
       [
-        { t: "cmd", m: "prj_run_par" },
-        { t: "out", m: "PAR: Loading mapped design..." },
-        { t: "out", m: "PAR: Running placement..." },
-        { t: "out", m: "PAR: Running routing..." },
-        { t: "out", m: "  LUT4:  48/39600  (0.1%)" },
-        { t: "out", m: "  REG:   8/39744   (0.0%)" },
-        { t: "out", m: "  I/O:   10/220    (4.5%)" },
-        { t: "out", m: "par done!" },
-        { t: "out", m: "PAR_SUMMARY::Run status = Completed" },
-        { t: "out", m: "Total CPU Time: 52 secs" },
-        { t: "ok", m: "Place & Route complete" },
+        { t: "cmd", m: "prj_run_par", ts: Date.now() },
+        { t: "out", m: "PAR: Loading mapped design...", ts: Date.now() },
+        { t: "out", m: "PAR: Running placement...", ts: Date.now() },
+        { t: "out", m: "PAR: Running routing...", ts: Date.now() },
+        { t: "out", m: "  LUT4:  48/39600  (0.1%)", ts: Date.now() },
+        { t: "out", m: "  REG:   8/39744   (0.0%)", ts: Date.now() },
+        { t: "out", m: "  I/O:   10/220    (4.5%)", ts: Date.now() },
+        { t: "out", m: "par done!", ts: Date.now() },
+        { t: "out", m: "PAR_SUMMARY::Run status = Completed", ts: Date.now() },
+        { t: "out", m: "Total CPU Time: 52 secs", ts: Date.now() },
+        { t: "ok", m: "Place & Route complete", ts: Date.now() },
       ],
       // Bitstream
       [
-        { t: "cmd", m: "prj_run_bitstream" },
-        { t: "out", m: "Bitstream: Generating bitstream..." },
-        { t: "out", m: "  8_bit_counter_impl1.bit (811,204 bytes)" },
-        { t: "out", m: "Bitstream generation complete" },
-        { t: "out", m: "Total CPU Time: 6 secs" },
-        { t: "ok", m: "Bitstream generated successfully" },
+        { t: "cmd", m: "prj_run_bitstream", ts: Date.now() },
+        { t: "out", m: "Bitstream: Generating bitstream...", ts: Date.now() },
+        { t: "out", m: "  8_bit_counter_impl1.bit (811,204 bytes)", ts: Date.now() },
+        { t: "out", m: "Bitstream generation complete", ts: Date.now() },
+        { t: "out", m: "Total CPU Time: 6 secs", ts: Date.now() },
+        { t: "ok", m: "Bitstream generated successfully", ts: Date.now() },
       ],
     ];
 
@@ -684,7 +684,7 @@ export default function App() {
         setBuilding(false);
         setBuildDone(true);
         setBuildElapsedSec(elapsed);
-        setLogs((p) => [...p, { t: "ok", m: `\u2550\u2550\u2550 BUILD COMPLETE \u2550\u2550\u2550 ${mins}m ${secs}s` }]);
+        setLogs((p) => [...p, { t: "ok", m: `\u2550\u2550\u2550 BUILD COMPLETE \u2550\u2550\u2550 ${mins}m ${secs}s`, ts: Date.now() }]);
         // Set mock reports
         setRealTimingReport({
           title: "Timing Report",
@@ -770,7 +770,7 @@ export default function App() {
         return;
       }
 
-      const lines = stageLines[stageIdx] ?? [{ t: "out" as const, m: `Running ${stages[stageIdx]?.label ?? "stage"}...` }];
+      const lines = stageLines[stageIdx] ?? [{ t: "out" as const, m: `Running ${stages[stageIdx]?.label ?? "stage"}...`, ts: Date.now() }];
       let lineIdx = 0;
       const lineInterval = setInterval(() => {
         if (lineIdx < lines.length) {
@@ -835,7 +835,7 @@ export default function App() {
     const unlistenStdout = await listen<{ buildId: string; line: string }>(
       "build:stdout",
       (data) => {
-        logsRef.current.push({ t: "out" as const, m: data.line });
+        logsRef.current.push({ t: "out" as const, m: data.line, ts: Date.now() });
       }
     );
 
@@ -960,7 +960,7 @@ export default function App() {
       const errMsg = String(err).replace(/^Error:\s*/, "");
       setLogs((p) => [
         ...p,
-        { t: "err" as const, m: `Build cannot start: ${errMsg}` },
+        { t: "err" as const, m: `Build cannot start: ${errMsg}`, ts: Date.now() },
       ]);
     }
   }, [B, bid, projectDir, buildStages, buildOptions, startLogFlush, stopLogFlush, runMockBuild]);
@@ -974,7 +974,7 @@ export default function App() {
     try {
       const hash = await gitCommit(projectDir, msg);
       if (commitCancelled.current) { setCommitting(false); return; }
-      setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}` }]);
+      setLogs((p) => [...p, { t: "info" as const, m: `Committed ${hash}: ${msg}`, ts: Date.now() }]);
       // Refresh git status/log and HEAD config in parallel (don't block build start)
       Promise.all([
         Promise.all([
@@ -985,7 +985,7 @@ export default function App() {
       ]);
     } catch (err) {
       if (commitCancelled.current) { setCommitting(false); return; }
-      setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}` }]);
+      setLogs((p) => [...p, { t: "warn" as const, m: `Git commit failed: ${err}`, ts: Date.now() }]);
     } finally {
       setCommitting(false);
     }
@@ -1017,7 +1017,7 @@ export default function App() {
   const runClean = useCallback(async () => {
     if (!isTauri || !projectDir) return;
     setCleaning(true);
-    setLogs([{ t: "info", m: "Cleaning build artifacts..." }]);
+    setLogs([{ t: "info", m: "Cleaning build artifacts...", ts: Date.now() }]);
     setSec("build");
     setBuildDone(false);
     setBStep(-1);
@@ -1029,10 +1029,10 @@ export default function App() {
     setSourcesStale(false);
     try {
       const removed = await cleanBuild(projectDir);
-      setLogs((p) => [...p, { t: "ok", m: `Cleaned ${removed} artifact(s)` }]);
+      setLogs((p) => [...p, { t: "ok", m: `Cleaned ${removed} artifact(s)`, ts: Date.now() }]);
       getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
     } catch (err) {
-      setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}` }]);
+      setLogs((p) => [...p, { t: "warn", m: `Clean: ${err}`, ts: Date.now() }]);
     } finally {
       setCleaning(false);
     }
@@ -1042,9 +1042,9 @@ export default function App() {
     if (!building) return;
     try {
       await cancelBuild(buildId ?? "");
-      setLogs((p) => [...p, { t: "warn" as const, m: "Build cancelled by user" }]);
+      setLogs((p) => [...p, { t: "warn" as const, m: "Build cancelled by user", ts: Date.now() }]);
     } catch (err) {
-      setLogs((p) => [...p, { t: "err" as const, m: `Cancel error: ${err}` }]);
+      setLogs((p) => [...p, { t: "err" as const, m: `Cancel error: ${err}`, ts: Date.now() }]);
     }
   }, [building, buildId]);
 
@@ -1066,7 +1066,7 @@ export default function App() {
     setCommitting(true);
     try {
       const hash = await gitCommit(projectDir, msg);
-      setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}` }]);
+      setLogs((p) => [...p, { t: "ok" as const, m: `Committed ${hash}: ${msg}`, ts: Date.now() }]);
       // Refresh git status/log, HEAD config, and file tree in parallel
       Promise.all([
         Promise.all([
@@ -1077,7 +1077,7 @@ export default function App() {
         getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {}),
       ]);
     } catch (err) {
-      setLogs((p) => [...p, { t: "err" as const, m: `Commit failed: ${err}` }]);
+      setLogs((p) => [...p, { t: "err" as const, m: `Commit failed: ${err}`, ts: Date.now() }]);
     } finally {
       setCommitting(false);
     }
@@ -1714,7 +1714,7 @@ export default function App() {
                           deleteDirectory(file.path).then(() => {
                             if (projectDir) getFileTreeMapped(projectDir).then(setRealFiles).catch(() => {});
                           }).catch((err) => {
-                            setLogs((p) => [...p, { t: "err" as const, m: `Delete failed: ${err}` }]);
+                            setLogs((p) => [...p, { t: "err" as const, m: `Delete failed: ${err}`, ts: Date.now() }]);
                           });
                         }
                       },

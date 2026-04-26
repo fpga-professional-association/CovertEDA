@@ -92,6 +92,41 @@ export default memo(function Console({
 
   const matchCount = search ? filteredLogs.length : 0;
 
+  // Time-range summary surfaced at the top of the log so the user can see
+  // at a glance whether the lines they're looking at are from the build
+  // that just ran or are stale from an earlier session.
+  const { firstTs, lastTs } = useMemo(() => {
+    let first: number | undefined;
+    let last: number | undefined;
+    for (const l of logs) {
+      if (typeof l.ts !== "number") continue;
+      if (first === undefined || l.ts < first) first = l.ts;
+      if (last === undefined || l.ts > last) last = l.ts;
+    }
+    return { firstTs: first, lastTs: last };
+  }, [logs]);
+
+  const fmtTime = (ms: number) => {
+    const d = new Date(ms);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  };
+  const fmtDate = (ms: number) => {
+    const d = new Date(ms);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return "today";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+  const fmtAgo = (ms: number) => {
+    const d = (Date.now() - ms) / 1000;
+    if (d < 60) return `${Math.floor(d)}s ago`;
+    if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+    if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+    return `${Math.floor(d / 86400)}d ago`;
+  };
+
   // Auto-scroll only if user was already at bottom
   useEffect(() => {
     const el = logRef.current;
@@ -158,6 +193,59 @@ export default memo(function Console({
           Clear
         </Btn>
       </div>
+
+      {/* Timestamp banner — shows when the visible log started and when the
+          most recent line landed, so the user can tell at a glance whether
+          they're looking at fresh build output or an old session. Hidden
+          entirely when no log lines have a timestamp. */}
+      {firstTs !== undefined && lastTs !== undefined && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "5px 12px",
+            borderBottom: `1px solid ${C.b1}`,
+            background: `${C.accent}08`,
+            fontSize: 8,
+            fontFamily: MONO,
+            color: C.t3,
+            flexWrap: "wrap",
+          }}
+        >
+          <span>
+            <span style={{ color: C.t3 }}>started:</span>
+            {" "}
+            <span style={{ color: C.t1, fontWeight: 600 }}>
+              {fmtTime(firstTs)}
+            </span>
+            {firstTs && fmtDate(firstTs) !== "today" && (
+              <span style={{ color: C.t3 }}> ({fmtDate(firstTs)})</span>
+            )}
+          </span>
+          <span style={{ color: C.b1 }}>{"\u2022"}</span>
+          <span>
+            <span style={{ color: C.t3 }}>latest:</span>
+            {" "}
+            <span style={{ color: C.t1, fontWeight: 600 }}>
+              {fmtTime(lastTs)}
+            </span>
+            <span style={{ color: C.t3 }}> ({fmtAgo(lastTs)})</span>
+          </span>
+          {lastTs - firstTs > 0 && (
+            <>
+              <span style={{ color: C.b1 }}>{"\u2022"}</span>
+              <span>
+                <span style={{ color: C.t3 }}>span:</span>
+                {" "}
+                <span style={{ color: C.t1, fontWeight: 600 }}>
+                  {((lastTs - firstTs) / 1000).toFixed(1)}s
+                </span>
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Search bar */}
       <div
@@ -244,10 +332,23 @@ export default memo(function Console({
               fontFamily: MONO,
               lineHeight: 1.6,
               color: lineColors[l.t] || C.t2,
+              display: "flex",
+              gap: 6,
             }}
           >
-            <span style={{ opacity: 0.5 }}>{linePrefixes[l.t] || ""}</span>
-            <HighlightedText text={l.m} search={search} highlightColor={C.accent} />
+            {typeof l.ts === "number" && (
+              <span style={{
+                color: C.t3, opacity: 0.65, flexShrink: 0,
+                fontVariantNumeric: "tabular-nums",
+                width: 64,
+              }}>
+                {fmtTime(l.ts)}
+              </span>
+            )}
+            <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+              <span style={{ opacity: 0.5 }}>{linePrefixes[l.t] || ""}</span>
+              <HighlightedText text={l.m} search={search} highlightColor={C.accent} />
+            </span>
           </div>
         ))}
         {building && !search && (
