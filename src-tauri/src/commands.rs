@@ -2615,27 +2615,39 @@ mod tests {
 pub fn get_raw_report(project_dir: String, report_type: String) -> Result<String, String> {
     let project_path = PathBuf::from(&project_dir);
 
-    // Search in vendor output dirs, OSS build/ directory, and project root
-    // (Quartus may place reports directly in the project directory)
+    // Search in vendor output dirs, OSS build/ directory, and project root.
+    // The CovertEDA-Examples submodule (and our scripts/run_quartus_project.py)
+    // also stash per-project artefacts under <project>/reports/, so that
+    // directory is checked too.
     let search_dirs: Vec<PathBuf> = vec![
         project_path.join("output_files"),
         project_path.join("impl1"),
         project_path.join("build"),
         project_path.join("output"),
+        project_path.join("reports"),
         project_path.clone(),
     ];
 
-    // Map report type to file extensions/patterns
-    // Includes vendor-specific patterns and OSS log file names
+    // Map report type to file extensions/patterns. Each match is a suffix
+    // check (when the pattern contains '.') or a bare extension match. The
+    // first hit per type wins.
     let patterns: Vec<&str> = match report_type.as_str() {
-        "synth" => vec!["srr", "srp", "syn.rpt", "map.rpt", "synth.log"],
+        // Synthesis: Radiant .srr/.srp, Quartus standard .syn.rpt/.map.rpt,
+        // Quartus Pro produces synthesis.rpt + synthesis.summary at the
+        // batch level too.
+        "synth" => vec![
+            "srr", "srp",
+            "syn.rpt", "map.rpt", "synth.log",
+            "synthesis.rpt", "synthesis.summary",
+            "synthesis.analysis_elab.rpt",
+        ],
         "map" => vec!["mrp", "map.rpt", "fit.rpt", "synth.log"],
-        "par" => vec!["par", "fit.rpt", "pnr.log"],
-        "bitstream" => vec!["bgn", "asm.rpt", "bitstream.log"],
-        "timing" => vec!["twr", "sta.rpt"],
-        "fit" => vec!["fit.rpt", "par"],
-        "sta" => vec!["sta.rpt", "twr"],
-        "asm" => vec!["asm.rpt", "bgn"],
+        "par" => vec!["par", "fit.rpt", "pnr.log", "fit.summary", "place.rpt", "route.rpt"],
+        "bitstream" => vec!["bgn", "asm.rpt", "bitstream.log", "assembler.asm.rpt"],
+        "timing" => vec!["twr", "sta.rpt", "timing_summary.rpt", "sta.summary", "timing.sta.summary"],
+        "fit" => vec!["fit.rpt", "par", "fit.summary"],
+        "sta" => vec!["sta.rpt", "twr", "sta.summary"],
+        "asm" => vec!["asm.rpt", "bgn", "assembler.asm.rpt"],
         "flow" => vec!["flow.rpt", "flow_summary.rpt"],
         _ => return Err(format!("Unknown report type: {}", report_type)),
     };
