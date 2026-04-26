@@ -171,31 +171,47 @@ export default function DevicePicker({ value, onChange, backendId, edition, comp
     );
   }
 
+  // ── Validate the current value against the active backend's device list ──
+  // If the user (or a previous CovertEDA version) saved a part that doesn't
+  // exist in any family for the current backend, surface that visually so
+  // they don't get caught later by "Part name X is invalid" from the tool.
+  const valueIsKnown = !!value && allFamilies.some((f) =>
+    f.parts.some((p) => p.toLowerCase() === value.toLowerCase())
+  );
+  const showInvalid = !!value && !valueIsKnown && allFamilies.length > 0;
+
   // ── Compact trigger button ──
   const trigger = (
     <div
       onClick={handleOpen}
-      title="Click to browse device families and select a target part"
+      title={showInvalid
+        ? `'${value}' is not in this backend's device list. The vendor tool may reject it. Click to pick a supported part.`
+        : "Click to browse device families and select a target part"}
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         width: "100%",
         background: C.bg,
-        border: `1px solid ${C.b1}`,
+        border: `1px solid ${showInvalid ? C.err : C.b1}`,
         borderRadius: 4,
         padding: compact ? "1px 6px" : "5px 8px",
         fontSize,
         fontFamily: MONO,
-        color: C.t1,
+        color: showInvalid ? C.err : C.t1,
         cursor: "pointer",
         boxSizing: "border-box",
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {showInvalid && (
+          <span style={{ marginRight: 4, color: C.err, fontWeight: 700 }}>
+            {"\u26A0"}
+          </span>
+        )}
         {value || "Select device..."}
       </span>
-      <span style={{ fontSize: 7, color: C.t3, marginLeft: 6, flexShrink: 0 }}>{"\u25BC"}</span>
+      <span style={{ fontSize: 7, color: showInvalid ? C.err : C.t3, marginLeft: 6, flexShrink: 0 }}>{"\u25BC"}</span>
     </div>
   );
 

@@ -722,7 +722,12 @@ impl QuartusBackend {
 /// Known unsupported-in-Pro device family prefixes (all legacy Cyclone/Arria/
 /// Stratix/MAX parts that Quartus Prime Pro Edition refuses to elaborate).
 /// Prefixes are case-insensitive; we uppercase the device string before match.
+///
+/// IMPORTANT: order matters — longer / more-specific prefixes must come
+/// first so e.g. "10CL" (Cyclone 10 LP) matches before any shorter prefix.
 const QUARTUS_PRO_UNSUPPORTED: &[(&str, &str)] = &[
+    ("10CL",  "Cyclone 10 LP"),
+    ("10M",   "MAX 10"),
     ("EP1C",  "Cyclone"),
     ("EP2C",  "Cyclone II"),
     ("EP3C",  "Cyclone III"),
@@ -737,8 +742,19 @@ const QUARTUS_PRO_UNSUPPORTED: &[(&str, &str)] = &[
     ("5S",    "Stratix V"),
     ("EP2A",  "Arria II GX"),
     ("5A",    "Arria V"),
-    ("10M",   "MAX 10"),
     ("EPM",   "MAX II / MAX V"),
+];
+
+/// Quartus Prime Pro Edition's supported device prefixes. If a device matches
+/// none of these AND none of the rejection list above, we still allow it
+/// (unknown parts pass) — but we use this list for the positive check that
+/// catches near-miss typos like "10CL" when the user meant "10CX".
+const QUARTUS_PRO_SUPPORTED_PREFIXES: &[&str] = &[
+    "10CX", "10AX", "10AS",                          // Cyclone 10 GX, Arria 10
+    "1SG",  "1SX",  "1SM", "1ST", "1SD",             // Stratix 10
+    "AGF",  "AGB",  "AGI", "AGM",                    // Agilex 7
+    "A5E",  "A5EC", "A5ED", "A5EB", "A5EA",          // Agilex 5
+    "A9PD",                                          // Agilex 9
 ];
 
 impl QuartusBackend {
@@ -757,13 +773,24 @@ impl QuartusBackend {
                             "Device '{device}' is {family}, which is not supported by \
                              Quartus Prime Pro Edition. Use Quartus Prime Standard \
                              or Quartus Prime Lite Edition for this device family, \
-                             or retarget the project to a Cyclone 10 GX / Arria 10 / \
-                             Stratix 10 / Agilex part."
+                             or retarget the project to a Cyclone 10 GX (10CX*), \
+                             Arria 10 (10AX*/10AS*), Stratix 10 (1S*), or Agilex \
+                             (AG*/A5E*/A9PD*) part."
                         ));
                     }
                 }
-                // If we recognize it as a Pro family, accept; otherwise allow
-                // (unknown / future parts shouldn't block the user).
+                // Heuristic: parts starting with "10C" but not 10CX/10CL hit a
+                // common typo where the user wrote "10C" something thinking
+                // any Cyclone 10 part was Pro. Catch it explicitly.
+                if dev.starts_with("10C") && !QUARTUS_PRO_SUPPORTED_PREFIXES.iter().any(|p| dev.starts_with(p)) {
+                    return Err(format!(
+                        "Device '{device}' looks like a Cyclone 10 part but doesn't \
+                         match any Quartus Pro family (10CX is the only Cyclone 10 \
+                         flavour Pro supports — 10CL parts belong in Quartus Standard)."
+                    ));
+                }
+                // Otherwise: if we recognize it as a Pro family, accept; for
+                // truly-unknown prefixes, allow (don't block future parts).
                 Ok(())
             }
             QuartusEdition::Standard => {
