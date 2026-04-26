@@ -1642,6 +1642,10 @@ pub fn switch_backend(
 pub fn get_available_backends(
     _state: State<'_, AppState>,
 ) -> Result<Vec<BackendInfo>, String> {
+    // Upgrade out of deferred mode so each BackendInfo reports a proper
+    // pipeline_stages() list. Without this, the build screen renders
+    // "Stage 1 of 0" because every deferred backend reports pipeline=[].
+    ensure_detected(&_state)?;
     let registry = _state.registry.lock().map_err(|e| e.to_string())?;
     Ok(registry.list())
 }
@@ -1651,6 +1655,7 @@ pub fn get_backend_info(
     _state: State<'_, AppState>,
     backend_id: String,
 ) -> Result<BackendInfo, String> {
+    ensure_detected(&_state)?;
     let registry = _state.registry.lock().map_err(|e| e.to_string())?;
     registry
         .list()
