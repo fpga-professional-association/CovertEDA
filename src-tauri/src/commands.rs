@@ -361,6 +361,84 @@ pub struct IpGenerateResult {
     pub cli_tool: String,
 }
 
+/// On a failed build, scan the vendor's report files for the actual
+/// `Error (NNNNN)` / `Fatal (NNNNN)` / `Critical Warning (NNNNN)` lines
+/// and emit them as `build:stdout` events.
+///
+/// Quartus is the worst offender: when synthesis fails, its stdout shows
+/// only "Error: Quartus Prime Synthesis was unsuccessful. 2 errors, 0
+/// warnings" — the actual two error lines live in
+/// `output_files/<top>.syn.rpt` (and the legacy `*.flow.rpt`). Vivado is
+/// similar with `*.vds`/`*.log`. Surfacing those lines means the failure
+/// banner has something useful to show instead of process diagnostics.
+fn emit_error_lines_from_reports(
+    app_handle: &tauri::AppHandle,
+    build_id: &str,
+    project_path: &std::path::Path,
+) {
+    use tauri::Emitter;
+
+    let candidates: Vec<PathBuf> = {
+        let mut v: Vec<PathBuf> = Vec::new();
+        // Quartus / generic per-project layouts.
+        for sub in &["output_files", "reports", "impl1", "build", "output"] {
+            let dir = project_path.join(sub);
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for e in entries.flatten() {
+                    let p = e.path();
+                    if let Some(s) = p.file_name().and_then(|n| n.to_str()) {
+                        let ls = s.to_ascii_lowercase();
+                        let interesting = ls.ends_with(".syn.rpt")
+                            || ls.ends_with(".map.rpt")
+                            || ls.ends_with(".fit.rpt")
+                            || ls.ends_with(".flow.rpt")
+                            || ls.ends_with(".asm.rpt")
+                            || ls.ends_with(".sta.rpt")
+                            || ls.ends_with("synthesis.rpt")
+                            || ls.ends_with("synthesis.summary")
+                            || ls.ends_with("flow.rpt")
+                            || ls.ends_with("build.log")
+                            || ls.ends_with(".log");
+                        if interesting {
+                            v.push(p);
+                        }
+                    }
+                }
+            }
+        }
+        v
+    };
+
+    let coded_re = regex::Regex::new(
+        r"(?i)\b(?:error|fatal|critical\s+warning)\s*\(\d+\)[^\n]*"
+    ).unwrap();
+
+    let mut emitted: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut total = 0usize;
+    let max_lines = 30;
+    for path in candidates {
+        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        for cap in coded_re.find_iter(&text) {
+            let line = cap.as_str().trim().to_string();
+            if line.is_empty() || emitted.contains(&line) { continue; }
+            emitted.insert(line.clone());
+            let _ = app_handle.emit("build:stdout", serde_json::json!({
+                "buildId": build_id,
+                "line": line,
+            }));
+            total += 1;
+            if total >= max_lines { return; }
+        }
+    }
+
+    if total == 0 {
+        let _ = app_handle.emit("build:stdout", serde_json::json!({
+            "buildId": build_id,
+            "line": "(no Error/Critical lines found in vendor report files; check the build log for raw tool output)",
+        }));
+    }
+}
+
 #[tauri::command]
 pub fn start_build(
     state: State<'_, AppState>,
@@ -1027,6 +1105,19 @@ pub fn start_build(
                             } else {
                                 format!("═══ BUILD FAILED ═══  {} ({}m {}s)", status, mins, secs)
                             };
+
+                            // On failure, scan vendor report files for the
+                            // *real* actionable Error (NNNNN) / Critical
+                            // Warning lines. Quartus's stdout shows only the
+                            // wrapper "X errors, 0 warnings" summary —
+                            // the meaningful diagnostics live in the syn /
+                            // flow report files. Emitting them through
+                            // build:stdout means the failure banner picks
+                            // them up just like any other log line.
+                            if matches!(final_status, BuildStatus::Failed) {
+                                emit_error_lines_from_reports(&app_handle, &build_id_clone, &project_path);
+                            }
+
                             write_log(&mut log_file, &msg);
                             let _ = app_handle.emit("build:finished", BuildEvent {
                                 build_id: build_id_clone.clone(),

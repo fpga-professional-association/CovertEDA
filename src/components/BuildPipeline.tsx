@@ -878,7 +878,7 @@ function PStep({
                   ? `View the failed ${s.label} stage's report`
                   : `View ${s.label} report`}
               >
-                Report \u2192
+                {"Report \u2192"}
               </span>
             )}
           </div>
@@ -1002,28 +1002,53 @@ export default memo(function BuildPipeline({
   //      lines so the user always sees something instead of an empty box.
   const buildErrors = useMemo(() => {
     if (!buildFailed || !logs.length) return [];
-    const errors: string[] = [];
+
+    // Lines we never want to surface — every vendor wraps the real error
+    // with diagnostics about the process itself which add no signal.
     const isNoise = (m: string) =>
-      !m || /^Info\b/i.test(m) || /^Note\b/i.test(m) || /^\s*$/.test(m);
+      !m
+      || /^Info\b/i.test(m)
+      || /^Note\b/i.test(m)
+      || /^\s*$/.test(m)
+      // Quartus / Vivado process-wrapper noise.
+      || /^Error:\s+(System process ID|Elapsed time|Peak virtual memory|Processing ended|Processing started)\b/i.test(m)
+      // Generic "the tool exited unsuccessful" summary — meaningless on its own.
+      || /^Error:\s+(Quartus|Vivado).+(was unsuccessful|failed)\.\s*\d+\s+errors?/i.test(m)
+      // "ERROR: Stage 'X' failed: ERROR: Error(s) found while running ..."
+      || /^ERROR:\s+Error\(s\)\s+found\s+while\s+running\s+an\s+executable/i.test(m)
+      || /^ERROR:\s+Stage\s+'.+'\s+failed:/i.test(m);
+
+    // Strong matches: vendor error codes are unambiguous and almost always
+    // the actionable line.  ("Error (10500): VHDL syntax error ...")
+    const isCoded = (m: string) =>
+      /\b(error|fatal|critical\s+warning)\s*\(\d+\)/i.test(m);
+
+    // Looser matches as a backstop.
     const matchesErrorish = (m: string) => (
-      /^(error|fatal|critical|failed|internal\s+error|cannot|abort|panic)\b/i.test(m)
+      /^(fatal|critical|failed|internal\s+error|cannot|abort|panic|undefined\b)/i.test(m)
+      || /^Error:\s+/i.test(m)
       || /^while\s+executing/i.test(m)
       || /^\(file\s/.test(m)
-      || /\b(error|fatal)\s*\(\d+\)/i.test(m)
     );
 
-    // Walk backwards so the most-recent error is first.
-    for (let i = logs.length - 1; i >= 0 && errors.length < 8; i--) {
+    // Pass 1: prefer error-code lines (most actionable).  Walk backwards so
+    // the most recent error appears first.
+    const coded: string[] = [];
+    const generic: string[] = [];
+    for (let i = logs.length - 1; i >= 0; i--) {
       const l = logs[i];
       if (l.t !== "err" && l.t !== "out") continue;
       const m = l.m.trim();
       if (isNoise(m)) continue;
-      if (matchesErrorish(m)) errors.push(m);
+      if (isCoded(m)) coded.push(m);
+      else if (matchesErrorish(m)) generic.push(m);
+      if (coded.length >= 8) break;
     }
 
-    // Fallback: if we couldn't classify anything, show the last 6 non-noise
-    // lines so the user has *something* to work with instead of "Check the
-    // output log".
+    let errors = coded.length > 0 ? coded : generic;
+
+    // Final fallback — the last 6 non-noise lines so the banner is never
+    // empty even when nothing matches our regexes.
     if (errors.length === 0) {
       for (let i = logs.length - 1; i >= 0 && errors.length < 6; i--) {
         const l = logs[i];
@@ -1034,7 +1059,7 @@ export default memo(function BuildPipeline({
       }
     }
 
-    // Deduplicate, preserve order
+    // Deduplicate, preserve order.
     const seen = new Set<string>();
     const out: string[] = [];
     for (const e of errors) {
@@ -1483,7 +1508,7 @@ export default memo(function BuildPipeline({
                     cursor: "pointer",
                   }}
                 >
-                  Open report \u2192
+                  {"Open report \u2192"}
                 </span>
               )}
               {buildElapsedSec != null && (
