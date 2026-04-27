@@ -974,7 +974,7 @@ mod tests {
     fn test_to_tcl_path_no_backslash_escapes() {
         // Ensure \t and \n in paths are NOT interpreted as tab/newline
         // This is the exact bug reported: C:\top.ldf → C:<tab>op.ldf in TCL
-        let path = std::path::Path::new("/mnt/c/Users/tcove/projects/test/top.ldf");
+        let path = std::path::Path::new("/mnt/c/Users/foo/projects/test/top.ldf");
         let result = to_tcl_path(path);
         assert!(!result.contains('\\'), "TCL path must not contain backslashes: {}", result);
         assert!(result.contains("top.ldf"), "path must preserve filename: {}", result);

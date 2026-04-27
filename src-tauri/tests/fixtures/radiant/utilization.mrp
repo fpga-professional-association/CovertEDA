@@ -14,10 +14,10 @@ Design Information
 ------------------
 
 Command line:   map -pdc
-     C:/Users/tcove/projects/test_radiant_counter/source/impl1.pdc -i
+     C:/Users/foo/projects/test_radiant_counter/source/impl1.pdc -i
      8_bit_counter_impl1_syn.udb -o 8_bit_counter_impl1_map.udb -mp
      8_bit_counter_impl1.mrp -hierrpt -inferGSR -gui -msgset
-     C:/Users/tcove/projects/test_radiant_counter/promote.xml
+     C:/Users/foo/projects/test_radiant_counter/promote.xml
 
 Design Summary
 --------------

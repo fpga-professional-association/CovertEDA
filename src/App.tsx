@@ -761,13 +761,13 @@ export default function App() {
         // Set mock file tree for build artifacts
         setRealFiles([
           { n: "source", d: 0, ty: "folder", open: true },
-          { n: "count_attr.v", d: 1, ty: "rtl", saved: true, git: "clean", synth: true, lines: 42, lang: "Verilog", path: "/mnt/c/Users/tcove/projects/test_radiant_counter/source/count_attr.v" },
+          { n: "count_attr.v", d: 1, ty: "rtl", saved: true, git: "clean", synth: true, lines: 42, lang: "Verilog", path: "/mnt/c/Users/foo/projects/test_radiant_counter/source/count_attr.v" },
           { n: "impl1", d: 0, ty: "folder", open: true },
-          { n: "8_bit_counter_impl1.bit", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/tcove/projects/test_radiant_counter/impl1/8_bit_counter_impl1.bit" },
-          { n: "8_bit_counter_impl1.twr", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/tcove/projects/test_radiant_counter/impl1/8_bit_counter_impl1.twr" },
-          { n: "8_bit_counter_impl1.mrp", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/tcove/projects/test_radiant_counter/impl1/8_bit_counter_impl1.mrp" },
-          { n: "8_bit_counter_impl1.par", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/tcove/projects/test_radiant_counter/impl1/8_bit_counter_impl1.par" },
-          { n: "synlog.srp", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/tcove/projects/test_radiant_counter/impl1/synlog.srp" },
+          { n: "8_bit_counter_impl1.bit", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/foo/projects/test_radiant_counter/impl1/8_bit_counter_impl1.bit" },
+          { n: "8_bit_counter_impl1.twr", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/foo/projects/test_radiant_counter/impl1/8_bit_counter_impl1.twr" },
+          { n: "8_bit_counter_impl1.mrp", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/foo/projects/test_radiant_counter/impl1/8_bit_counter_impl1.mrp" },
+          { n: "8_bit_counter_impl1.par", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/foo/projects/test_radiant_counter/impl1/8_bit_counter_impl1.par" },
+          { n: "synlog.srp", d: 1, ty: "output", saved: true, git: "clean", synth: false, path: "/mnt/c/Users/foo/projects/test_radiant_counter/impl1/synlog.srp" },
         ]);
         return;
       }

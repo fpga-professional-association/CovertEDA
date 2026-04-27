@@ -8,7 +8,7 @@ Copyright (c) 1995-2001 Lucent Technologies Inc.  All rights reserved.
 Copyright (c) 2001 Agere Systems   All rights reserved.
 Copyright (c) 2002-2025 Lattice Semiconductor Corporation,  All rights reserved.
 
-Command line:    timing -sethld -v 10 -u 10 -endpoints 10 -nperend 1 -sp 7_High-Performance_1.0V -hsp m -pwrprd -html -rpt 8_bit_counter_impl1.twr 8_bit_counter_impl1.udb -gui -msgset C:/Users/tcove/projects/test_radiant_counter/promote.xml
+Command line:    timing -sethld -v 10 -u 10 -endpoints 10 -nperend 1 -sp 7_High-Performance_1.0V -hsp m -pwrprd -html -rpt 8_bit_counter_impl1.twr 8_bit_counter_impl1.udb -gui -msgset C:/Users/foo/projects/test_radiant_counter/promote.xml
 
 -------------------------------------------
 Design:          count

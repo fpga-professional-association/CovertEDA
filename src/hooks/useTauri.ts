@@ -499,7 +499,7 @@ export async function checkLicenses(): Promise<LicenseCheckResult> {
   if (!isTauri) {
     return {
       licenseFiles: [
-        { backend: "radiant", path: "/mnt/c/Users/tcove/license.dat" },
+        { backend: "radiant", path: "/mnt/c/Users/foo/license.dat" },
         { backend: "quartus", path: "/mnt/c/intelFPGA_pro/23.1/licenses/license.dat" },
       ],
       features: [
