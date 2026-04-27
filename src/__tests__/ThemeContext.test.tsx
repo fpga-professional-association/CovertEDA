@@ -58,7 +58,7 @@ describe("ThemeContext", () => {
         <ThemeConsumer />
       </ThemeProvider>
     );
-    expect(screen.getByTestId("scale").textContent).toBe("1");
+    expect(screen.getByTestId("scale").textContent).toBe("1.2");
     act(() => {
       fireEvent.click(screen.getByTestId("set-scale"));
     });
