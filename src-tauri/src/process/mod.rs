@@ -26,7 +26,6 @@ pub fn no_window_cmd_async(program: &str) -> Command {
     let mut cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     cmd

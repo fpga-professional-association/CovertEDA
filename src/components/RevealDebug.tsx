@@ -29,6 +29,12 @@ const TOOL_META: Record<string, DebugToolMeta> = {
     subtitle: "Intel/Altera SignalTap II embedded logic analyzer (.stp)",
     commandHint: "quartus_stp + SignalTap auto-instance",
   },
+  quartus_pro: {
+    header: "SIGNAL TAP II",
+    title:  "SignalTap — Logic Analyzer",
+    subtitle: "Intel/Altera Quartus Prime Pro SignalTap II embedded logic analyzer (.stp)",
+    commandHint: "quartus_stp + SignalTap auto-instance",
+  },
   vivado: {
     header: "INTEGRATED LOGIC ANALYZER (ILA)",
     title:  "ILA — Integrated Logic Analyzer",

@@ -144,7 +144,7 @@ pub fn parse_radiant_pad(content: &str) -> BackendResult<PadReport> {
 /// pin assignments with bank, direction, and IO standard information.
 pub fn parse_vivado_pad(content: &str) -> BackendResult<PadReport> {
     let mut assigned_pins = Vec::new();
-    let mut vccio_banks = Vec::new();
+    let vccio_banks = Vec::new();
 
     // Try to parse table format from Vivado pinout reports
     // Format: | Port_Name | Pin | Bank | IO_Standard | Drive | Direction |
@@ -206,7 +206,7 @@ pub fn parse_vivado_pad(content: &str) -> BackendResult<PadReport> {
 /// This parser extracts pin-to-bank mappings and IO standards.
 pub fn parse_diamond_pad(content: &str) -> BackendResult<PadReport> {
     let mut assigned_pins = Vec::new();
-    let mut vccio_banks = Vec::new();
+    let vccio_banks = Vec::new();
 
     let mut in_pin_section = false;
 
@@ -272,7 +272,7 @@ pub fn parse_diamond_pad(content: &str) -> BackendResult<PadReport> {
 /// This parser extracts pin-to-bank mappings from Libero reports.
 pub fn parse_libero_pad(content: &str) -> BackendResult<PadReport> {
     let mut assigned_pins = Vec::new();
-    let mut vccio_banks = Vec::new();
+    let vccio_banks = Vec::new();
 
     let mut in_pin_table = false;
 

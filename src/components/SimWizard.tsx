@@ -7,9 +7,11 @@ import type { CocotbTest, CocotbResult, TopPort } from "../hooks/useTauri";
 interface SimWizardProps {
   projectDir?: string;
   topModuleName?: string;
+  tbPaths?: string[];
+  onTbPathsChange?: (paths: string[]) => void;
 }
 
-export default function SimWizard({ projectDir, topModuleName }: SimWizardProps = {}): React.ReactElement {
+export default function SimWizard({ projectDir, topModuleName, tbPaths = [], onTbPathsChange }: SimWizardProps = {}): React.ReactElement {
   const { C, MONO } = useTheme();
   const [tab, setTab] = useState<"script" | "cocotb">("cocotb");
   const [simulator, setSimulator] = useState<SimConfig["simulator"]>("modelsim");
@@ -183,7 +185,7 @@ export default function SimWizard({ projectDir, topModuleName }: SimWizardProps 
     setCocotbError(null);
     try {
       const { discoverCocotbTests } = await import("../hooks/useTauri");
-      const tests = await discoverCocotbTests(projectDir);
+      const tests = await discoverCocotbTests(projectDir, tbPaths);
       setCocotbTests(tests);
     } catch (e) {
       setCocotbError(String(e));
@@ -191,11 +193,39 @@ export default function SimWizard({ projectDir, topModuleName }: SimWizardProps 
     } finally {
       setCocotbScanning(false);
     }
-  }, [projectDir]);
+  }, [projectDir, tbPaths]);
 
   useEffect(() => {
     if (tab === "cocotb" && projectDir) void scanCocotb();
   }, [tab, projectDir, scanCocotb]);
+
+  const addTbPath = useCallback(async () => {
+    if (!onTbPathsChange) return;
+    try {
+      const { pickDirectory } = await import("../hooks/useTauri");
+      const dir = await pickDirectory();
+      if (!dir) return;
+      // Make the path relative to the project when possible — keeps the
+      // .coverteda config portable across machines.
+      let stored = dir;
+      if (projectDir) {
+        const proj = projectDir.replace(/\\/g, "/");
+        const picked = dir.replace(/\\/g, "/");
+        if (picked.startsWith(proj + "/") || picked === proj) {
+          stored = picked === proj ? "." : picked.slice(proj.length + 1);
+        }
+      }
+      if (tbPaths.includes(stored)) return;
+      onTbPathsChange([...tbPaths, stored]);
+    } catch (e) {
+      setCocotbError(`failed to pick directory: ${e}`);
+    }
+  }, [onTbPathsChange, projectDir, tbPaths]);
+
+  const removeTbPath = useCallback((p: string) => {
+    if (!onTbPathsChange) return;
+    onTbPathsChange(tbPaths.filter((x) => x !== p));
+  }, [onTbPathsChange, tbPaths]);
 
   const runOneCocotb = useCallback(async (t: CocotbTest) => {
     setCocotbRunning(t.dir);
@@ -324,12 +354,58 @@ export default function SimWizard({ projectDir, topModuleName }: SimWizardProps 
             }}>
               Open a project first. Cocotb tests are discovered under
               <code style={{ color: C.t1 }}> &lt;project&gt;/tb/ </code>
-              or <code style={{ color: C.t1 }}> &lt;project&gt;/examples/tb/ </code>.
+              or <code style={{ color: C.t1 }}> &lt;project&gt;/examples/tb/ </code>,
+              plus any extra paths you add below.
             </div>
           )}
 
           {projectDir && (
             <>
+              {/* Testbench paths — extra dirs scanned in addition to tb/ and examples/tb/ */}
+              <div style={{
+                padding: 10, background: C.s1, borderRadius: 6,
+                border: `1px solid ${C.b1}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: tbPaths.length > 0 ? 8 : 0 }}>
+                  <span style={{ fontSize: 9, fontFamily: MONO, fontWeight: 700, color: C.t2, letterSpacing: 0.5 }}>
+                    TESTBENCH PATHS
+                  </span>
+                  <span style={{ fontSize: 9, fontFamily: MONO, color: C.t3 }}>
+                    Default: <code style={{ color: C.t2 }}>tb/</code>, <code style={{ color: C.t2 }}>examples/tb/</code>
+                  </span>
+                  <div style={{ flex: 1 }} />
+                  <Btn small onClick={addTbPath} disabled={!onTbPathsChange}>+ Add Folder</Btn>
+                </div>
+                {tbPaths.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {tbPaths.map((p) => (
+                      <div key={p} style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "4px 8px", background: C.bg, borderRadius: 4,
+                        border: `1px solid ${C.b1}`,
+                        fontSize: 9, fontFamily: MONO, color: C.t2,
+                      }}>
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p}>
+                          {p}
+                        </span>
+                        <button
+                          onClick={() => removeTbPath(p)}
+                          title="Remove this path"
+                          style={{
+                            background: "transparent", border: "none",
+                            color: C.err, cursor: "pointer",
+                            fontSize: 11, fontFamily: MONO, fontWeight: 700,
+                          }}
+                        >
+                          {"\u2715"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+
               {/* Discovery + actions bar */}
               <div style={{
                 padding: 10, background: C.s1, borderRadius: 6,
@@ -389,10 +465,19 @@ export default function SimWizard({ projectDir, topModuleName }: SimWizardProps 
                   <div style={{
                     padding: 24, fontSize: 10, fontFamily: MONO, color: C.t3,
                     textAlign: "center",
+                    lineHeight: 1.6,
                   }}>
                     No cocotb tests found under
                     <code style={{ color: C.t1 }}> tb/ </code>
-                    {" "}or{" "}<code style={{ color: C.t1 }}> examples/tb/ </code>.
+                    {" "}or{" "}<code style={{ color: C.t1 }}> examples/tb/ </code>
+                    {tbPaths.length > 0 && (
+                      <>{" "}or{" "}
+                        <code style={{ color: C.t1 }}>{tbPaths.join(", ")}</code></>
+                    )}
+                    .
+                    <div style={{ marginTop: 8, fontSize: 9, color: C.t3 }}>
+                      Use "+ Add Folder" above to point at a custom testbench location.
+                    </div>
                   </div>
                 ) : (
                   filteredTests.map((t) => {

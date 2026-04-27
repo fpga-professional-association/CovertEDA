@@ -970,7 +970,7 @@ export const GIT: GitState = {
   branch: "feature/pqc-kyber-engine",
   commit: "a3f7c2e",
   commitMsg: "Add Kyber round function pipeline stage",
-  author: "Travis",
+  author: "alice",
   time: "14 min ago",
   ahead: 2,
   behind: 0,
@@ -981,12 +981,12 @@ export const GIT: GitState = {
   stashes: 1,
   tags: ["v0.4.1-rc2"],
   recentCommits: [
-    { hash: "a3f7c2e", msg: "Add Kyber round function pipeline stage", time: "14m", author: "Travis" },
-    { hash: "b91d4f8", msg: "Fix I2C NACK handling in multi-master mode", time: "2h", author: "Travis" },
-    { hash: "e5c0a12", msg: "Update .lpf constraints for bank 2 LVCMOS25", time: "5h", author: "Travis" },
+    { hash: "a3f7c2e", msg: "Add Kyber round function pipeline stage", time: "14m", author: "alice" },
+    { hash: "b91d4f8", msg: "Fix I2C NACK handling in multi-master mode", time: "2h", author: "alice" },
+    { hash: "e5c0a12", msg: "Update .lpf constraints for bank 2 LVCMOS25", time: "5h", author: "alice" },
     { hash: "7f3b901", msg: "Refactor SPI flash controller state machine", time: "1d", author: "Wei" },
-    { hash: "c42e8d6", msg: "Add SHA3 Keccak-f[1600] permutation core", time: "2d", author: "Travis" },
-    { hash: "1a9e7b3", msg: "Initial DC-SCM top-level integration", time: "4d", author: "Travis" },
+    { hash: "c42e8d6", msg: "Add SHA3 Keccak-f[1600] permutation core", time: "2d", author: "alice" },
+    { hash: "1a9e7b3", msg: "Initial DC-SCM top-level integration", time: "4d", author: "alice" },
   ],
 };
 

@@ -1,7 +1,7 @@
 # CovertEDA Implementation Guide
 
 **Version:** 1.0 Draft — February 2026
-**Author:** Covert Logic Labs / Travis
+**Author:** FPGA Professional Association
 **Status:** Architecture & Implementation Specification
 
 ---

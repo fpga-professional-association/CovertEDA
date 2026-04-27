@@ -17,7 +17,7 @@ use regex::Regex;
 pub fn parse_radiant_power(content: &str) -> BackendResult<PowerReport> {
     let mut total_mw = 0.0;
     let mut junction_temp_c = 25.0;
-    let mut ambient_temp_c = 25.0;
+    let ambient_temp_c = 25.0;
     let mut breakdown = vec![];
 
     // Parse total power

@@ -1416,8 +1416,14 @@ export interface CocotbResult {
   testCount: number;
 }
 
-export async function discoverCocotbTests(projectDir: string): Promise<CocotbTest[]> {
-  return invoke<CocotbTest[]>("discover_cocotb_tests", { projectDir });
+export async function discoverCocotbTests(
+  projectDir: string,
+  extraDirs?: string[],
+): Promise<CocotbTest[]> {
+  return invoke<CocotbTest[]>("discover_cocotb_tests", {
+    projectDir,
+    extraDirs: extraDirs && extraDirs.length > 0 ? extraDirs : null,
+  });
 }
 
 export async function runCocotbTest(testDir: string): Promise<CocotbResult> {

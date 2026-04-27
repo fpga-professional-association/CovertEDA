@@ -95,22 +95,24 @@ function mapGitStatus(r: RustGitStatus, logEntries?: GitLogEntry[]): GitState {
 // has a different product for in-system signal capture; the nav label
 // reflects what the user can actually drive on the active backend.
 const DEBUG_TOOL_LABEL: Record<string, string> = {
-  radiant: "Reveal",
-  diamond: "Reveal",
-  quartus: "SignalTap",
-  vivado:  "ILA",
-  libero:  "SmartDebug",
-  ace:     "SnapShot",
-  oss:     "Debug",
+  radiant:     "Reveal",
+  diamond:     "Reveal",
+  quartus:     "SignalTap",
+  quartus_pro: "SignalTap",
+  vivado:      "ILA",
+  libero:      "SmartDebug",
+  ace:         "SnapShot",
+  oss:         "Debug",
 };
 const DEBUG_TOOL_TOOLTIP: Record<string, string> = {
-  radiant: "Reveal Debug — Lattice Radiant integrated logic analyzer",
-  diamond: "Reveal — Lattice Diamond integrated logic analyzer",
-  quartus: "SignalTap II — Intel/Altera integrated logic analyzer",
-  vivado:  "Integrated Logic Analyzer (ILA) — AMD/Xilinx signal capture",
-  libero:  "SmartDebug — Microchip Libero integrated logic analyzer",
-  ace:     "SnapShot — Achronix ACE integrated logic analyzer",
-  oss:     "Debug — generic signal capture (no vendor-native ILA)",
+  radiant:     "Reveal Debug — Lattice Radiant integrated logic analyzer",
+  diamond:     "Reveal — Lattice Diamond integrated logic analyzer",
+  quartus:     "SignalTap II — Intel/Altera integrated logic analyzer",
+  quartus_pro: "SignalTap II — Intel/Altera Quartus Prime Pro integrated logic analyzer",
+  vivado:      "Integrated Logic Analyzer (ILA) — AMD/Xilinx signal capture",
+  libero:      "SmartDebug — Microchip Libero integrated logic analyzer",
+  ace:         "SnapShot — Achronix ACE integrated logic analyzer",
+  oss:         "Debug — generic signal capture (no vendor-native ILA)",
 };
 
 // Fallback backend when none loaded yet
@@ -1651,6 +1653,21 @@ export default function App() {
             <span style={{ fontSize: 12 }}>{"\u2190"}</span>
             Close
           </div>
+          <div
+            title={`CovertEDA v${__APP_VERSION__}`}
+            style={{
+              padding: "4px 0",
+              width: "100%",
+              textAlign: "center",
+              color: C.t3,
+              fontSize: 7,
+              fontFamily: MONO,
+              opacity: 0.6,
+              letterSpacing: 0.3,
+            }}
+          >
+            v{__APP_VERSION__}
+          </div>
         </div>
 
         {/* ══════ FILE TREE ══════ */}
@@ -1972,6 +1989,7 @@ export default function App() {
                   device={project?.device ?? B.defaultDev}
                   constraintFile={constraintFilePath}
                   projectDir={projectDir}
+                  topModule={project?.topModule}
                 />
               </div>
             )}
@@ -2021,7 +2039,17 @@ export default function App() {
             {/* Simulation Wizard Section */}
             {visitedSecs.has("simulation") && (
               <div style={{ display: sec === "simulation" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
-                <SimWizard projectDir={projectDir} topModuleName={project?.topModule} />
+                <SimWizard
+                  projectDir={projectDir}
+                  topModuleName={project?.topModule}
+                  tbPaths={project?.tbPaths ?? []}
+                  onTbPathsChange={(paths) => {
+                    if (!project || !projectDir) return;
+                    const updated = { ...project, tbPaths: paths };
+                    setProject(updated);
+                    saveProject(projectDir, updated).catch(() => {});
+                  }}
+                />
               </div>
             )}
 

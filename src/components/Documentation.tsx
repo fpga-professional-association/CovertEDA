@@ -862,6 +862,7 @@ function SettingsSection() {
         Adjust the UI scale from 50% to 300%. The default is 120%. You can use the slider, preset buttons,
         or keyboard shortcuts (<KeyBadge>Ctrl+=</KeyBadge> / <KeyBadge>Ctrl+-</KeyBadge> / <KeyBadge>Ctrl+0</KeyBadge>).
         Zoom is applied via the native webview API for crisp rendering at any scale.
+        A transient badge in the bottom-right corner reports the current zoom percentage each time it changes.
       </Para>
 
       <SubHeading>AI Assistant Configuration</SubHeading>

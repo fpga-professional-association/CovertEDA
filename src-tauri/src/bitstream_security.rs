@@ -1,6 +1,5 @@
 use crate::backend::BackendResult;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 /// Bitstream encryption mode
 #[derive(Debug, Clone, Serialize, Deserialize)]

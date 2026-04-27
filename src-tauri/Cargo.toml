@@ -2,7 +2,7 @@
 name = "coverteda"
 version = "0.5.2"
 description = "Unified FPGA Development Frontend"
-authors = ["Travis Covert"]
+authors = ["FPGA Professional Association <contact@fpgapa.org>"]
 edition = "2021"
 
 [lib]

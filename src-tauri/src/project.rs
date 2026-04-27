@@ -25,6 +25,11 @@ pub struct ProjectConfig {
     pub build_stages: Vec<String>,
     #[serde(default)]
     pub build_options: HashMap<String, String>,
+    /// Extra directories to scan for cocotb testbenches, in addition to the
+    /// default `tb/` and `examples/tb/`. Paths can be absolute or relative
+    /// to the project root.
+    #[serde(default)]
+    pub tb_paths: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -100,6 +105,7 @@ impl ProjectConfig {
             backend_config: HashMap::new(),
             build_stages: Vec::new(),
             build_options: HashMap::new(),
+            tb_paths: Vec::new(),
             created_at: now.clone(),
             updated_at: now,
         }

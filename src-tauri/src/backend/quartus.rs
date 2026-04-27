@@ -641,7 +641,7 @@ impl QuartusBackend {
         let mut critical_warnings = 0u32;
         let mut warnings = 0u32;
         let mut info = 0u32;
-        let mut waived = 0u32;
+        let waived = 0u32;
         let mut items = vec![];
 
         // Parse summary counts
@@ -906,7 +906,10 @@ impl FpgaBackend for QuartusBackend {
             stages.is_empty() || stages.iter().any(|s| s == id)
         };
 
-        // Resolve project file: explicit option > auto-discover > convention
+        // Resolve project file: explicit option > auto-discover > convention.
+        // In every case the script must guard against the .qpf being absent
+        // (e.g. after a clean) and fall back to project_new — otherwise
+        // project_open errors with "Project does not exist".
         let project_open_tcl = if let Some(pf) = options.get("project_file") {
             let p = if PathBuf::from(pf).is_absolute() {
                 PathBuf::from(pf)
@@ -914,16 +917,23 @@ impl FpgaBackend for QuartusBackend {
                 project_dir.join(pf)
             };
             let qpf_tcl = super::to_tcl_path(&p);
-            // Strip .qpf extension for project_open
             let stem = qpf_tcl.trim_end_matches(".qpf");
             format!(
-                "project_open {stem}"
+                "if {{[file exists {stem}.qpf]}} {{\n\
+                 \tproject_open {stem}\n\
+                 }} else {{\n\
+                 \tproject_new {stem}\n\
+                 }}"
             )
         } else if let Some(qpf) = Self::find_qpf_file(project_dir, top_module) {
             let qpf_tcl = super::to_tcl_path(&qpf);
             let stem = qpf_tcl.trim_end_matches(".qpf");
             format!(
-                "project_open {stem}"
+                "if {{[file exists {stem}.qpf]}} {{\n\
+                 \tproject_open {stem}\n\
+                 }} else {{\n\
+                 \tproject_new {stem}\n\
+                 }}"
             )
         } else {
             format!(

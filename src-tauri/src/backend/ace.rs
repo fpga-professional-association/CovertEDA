@@ -541,7 +541,7 @@ impl FpgaBackend for AceBackend {
     }
 
     /// List package pins for an Achronix Speedster7t device
-    fn list_package_pins(&self, device: &str) -> BackendResult<Vec<PackagePin>> {
+    fn list_package_pins(&self, _device: &str) -> BackendResult<Vec<PackagePin>> {
         if self.deferred {
             return Err(BackendError::ConfigError(
                 "Pin listing not available in deferred mode".into(),

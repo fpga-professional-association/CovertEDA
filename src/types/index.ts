@@ -382,6 +382,8 @@ export interface ProjectConfig {
   backendConfig: Record<string, string>;
   buildStages: string[];
   buildOptions: Record<string, string>;
+  /** Extra directories to scan for cocotb testbenches, in addition to the default tb/ and examples/tb/. */
+  tbPaths?: string[];
   createdAt: string;
   updatedAt: string;
   customIps?: import("../data/ipCatalog").IpCore[];

@@ -1198,17 +1198,18 @@ pub async fn clean_build(project_dir: String) -> Result<u32, String> {
             }
         }
 
-        // Remove Quartus generated files
+        // Remove Quartus generated artifacts. .qpf/.qsf are project-definition
+        // files (the equivalent of a Makefile) — never delete them, otherwise
+        // the next build can't reopen the project.
         if let Ok(entries) = std::fs::read_dir(&project_path) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let name = entry.file_name().to_string_lossy().to_string();
-                let is_quartus = name.ends_with(".qpf") || name.ends_with(".qsf")
-                    || name.ends_with(".qws") || name.ends_with(".done")
+                let is_quartus_artifact = name.ends_with(".qws") || name.ends_with(".done")
                     || name.ends_with(".summary") || name.ends_with(".smsg")
                     || name.ends_with(".jdi") || name.ends_with(".pin")
                     || name.ends_with(".sld") || name.ends_with(".dpf")
                     || name.ends_with(".bak") || name.ends_with(".rpt");
-                if is_quartus && entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                if is_quartus_artifact && entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
                     if std::fs::remove_file(entry.path()).is_ok() {
                         removed += 1;
                     }
@@ -3573,14 +3574,14 @@ pub fn get_ai_api_key_for_provider(provider: String) -> Result<Option<String>, S
 #[tauri::command]
 pub fn set_ai_api_key_for_provider(provider: String, key: Option<String>) -> Result<(), String> {
     let service = format!("coverteda_ai_{}", provider);
-    if let Ok(entry) = keyring::Entry::new(&service, "api_key") {
-        match &key {
-            Some(k) if !k.is_empty() => {
-                entry.set_password(k).map_err(|e| e.to_string())?;
-            }
-            _ => {
-                let _ = entry.delete_credential();
-            }
+    let entry = keyring::Entry::new(&service, "api_key")
+        .map_err(|e| format!("keyring init failed for {}: {}", provider, e))?;
+    match &key {
+        Some(k) if !k.is_empty() => entry
+            .set_password(k)
+            .map_err(|e| format!("keyring write failed for {}: {}", provider, e))?,
+        _ => {
+            let _ = entry.delete_credential();
         }
     }
     Ok(())
@@ -4668,12 +4669,16 @@ pub async fn ssh_create_project(
 // ════════════════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn discover_cocotb_tests(project_dir: String) -> Result<Vec<crate::cocotb::CocotbTest>, String> {
+pub fn discover_cocotb_tests(
+    project_dir: String,
+    extra_dirs: Option<Vec<String>>,
+) -> Result<Vec<crate::cocotb::CocotbTest>, String> {
     let path = PathBuf::from(&project_dir);
     if !path.is_dir() {
         return Err(format!("project dir does not exist: {project_dir}"));
     }
-    Ok(crate::cocotb::discover_tests(&path))
+    let extras = extra_dirs.unwrap_or_default();
+    Ok(crate::cocotb::discover_tests(&path, &extras))
 }
 
 #[tauri::command]

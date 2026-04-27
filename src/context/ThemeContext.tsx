@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { ThemeColors, ThemeId, THEMES, DARK } from "../theme";
 
 const MONO = "'IBM Plex Mono', monospace";
@@ -15,6 +15,51 @@ async function applyNativeZoom(factor: number) {
   } catch {
     // Fallback: no-op in browser dev mode
   }
+}
+
+/** Transient overlay shown for ~1.2s whenever the zoom level changes. */
+function ZoomIndicator({ scaleFactor }: { scaleFactor: number }) {
+  const [visible, setVisible] = useState(false);
+  const skipFirst = useRef(true);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
+    setVisible(true);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setVisible(false), 1200);
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, [scaleFactor]);
+
+  if (!visible) return null;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        padding: "8px 14px",
+        background: "rgba(20, 22, 28, 0.92)",
+        color: "#e6edf3",
+        fontFamily: MONO,
+        fontSize: 13,
+        fontWeight: 700,
+        borderRadius: 6,
+        border: "1px solid rgba(255,255,255,0.1)",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
+        zIndex: 9999,
+        pointerEvents: "none",
+        letterSpacing: 0.5,
+      }}
+    >
+      {Math.round(scaleFactor * 100)}%
+    </div>
+  );
 }
 
 interface ThemeContextValue {
@@ -39,7 +84,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeId, setThemeIdState] = useState<ThemeId>("dark");
-  const [scaleFactor, setScaleFactorState] = useState(1.0);
+  const [scaleFactor, setScaleFactorState] = useState(1.2);
 
   const setThemeId = useCallback((id: ThemeId) => {
     setThemeIdState(id);
@@ -60,6 +105,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <ThemeContext.Provider value={{ C, MONO, SANS, themeId, setThemeId, scaleFactor, setScaleFactor }}>
       {children}
+      <ZoomIndicator scaleFactor={scaleFactor} />
     </ThemeContext.Provider>
   );
 }

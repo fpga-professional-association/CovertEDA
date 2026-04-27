@@ -98,6 +98,7 @@ interface ConstraintEditorProps {
   device: string;
   constraintFile?: string;
   projectDir?: string;
+  topModule?: string;
 }
 
 function cellInput(
@@ -286,15 +287,50 @@ export function detectVirtualPins(
       ports.add(vm[1].replace(/[\[\]"]/g, ""));
       continue;
     }
-    // Radiant PDC — explicit -internal flag
-    const rm = /ldc_set_port\b[^\n]*-internal\s+true[^\n]*\[\s*get_ports\s+\{?\s*([^\}\]\s]+)/i.exec(line);
-    if (rm) {
-      ports.add(rm[1].replace(/[\[\]"]/g, ""));
-      continue;
+    // Radiant PDC — explicit -internal flag. Two syntaxes are common:
+    //   ldc_set_port -port_name <port> -internal true
+    //   ldc_set_port -internal true [get_ports <port>]
+    // Match either, regardless of flag order.
+    if (/ldc_set_port\b/i.test(line) && /-internal\s+true\b/i.test(line)) {
+      const byPortName = /-port_name\s+([^\s\]]+)/i.exec(line);
+      if (byPortName) {
+        ports.add(byPortName[1].replace(/[\[\]"]/g, ""));
+        continue;
+      }
+      const byGetPorts = /\[\s*get_ports\s+\{?\s*([^\}\]\s]+)/i.exec(line);
+      if (byGetPorts) {
+        ports.add(byGetPorts[1].replace(/[\[\]"]/g, ""));
+        continue;
+      }
     }
   }
   void backendId; // reserved — Diamond/Libero/ACE use absence-of-pin convention
   return { count: ports.size, ports: Array.from(ports).sort() };
+}
+
+/// Count physical pin location assignments in a constraint file. Used to
+/// detect the "implicit virtual" state where a project has top-level ports
+/// but no pin floorplan — those ports are effectively floating.
+export function countLocationAssignments(text: string, backendId: string): number {
+  let count = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("//")) continue;
+    // Quartus QSF
+    if (/set_location_assignment\s+-name\s+\S+\s+-to\s+\S+/i.test(line)) { count += 1; continue; }
+    // Vivado XDC
+    if (/set_property\s+PACKAGE_PIN\s+\S+/i.test(line)) { count += 1; continue; }
+    // Lattice Radiant PDC / Diamond LPF
+    if (/ldc_set_location\b/i.test(line)) { count += 1; continue; }
+    if (/^LOCATE\s+COMP\s/i.test(line)) { count += 1; continue; }
+    // Libero
+    if (/set_io\s+\S+\s+.*-pinname\s+\S+/i.test(line)) { count += 1; continue; }
+    // ACE
+    if (/set_pin\s+\S+\s+.*-loc\s+\S+/i.test(line)) { count += 1; continue; }
+    // OSS PCF
+    if (/^set_io\s+\S+\s+\S+/i.test(line) && backendId !== "libero") { count += 1; continue; }
+  }
+  return count;
 }
 
 // ── Constraint file extension per backend ──
@@ -689,7 +725,7 @@ function quickHash(s: string): number {
 const PIN_COLS = ["net", "pin", "dir", "ioStandard", "drive", "pull", "slew", "openDrain", "schmitt", "bank", "diffPair"] as const;
 type CellAddr = { row: number; col: number };
 
-export default function ConstraintEditor({ backendId, device, constraintFile, projectDir }: ConstraintEditorProps) {
+export default function ConstraintEditor({ backendId, device, constraintFile, projectDir, topModule }: ConstraintEditorProps) {
   const { C, MONO } = useTheme();
   const [tab, setTab] = useState<ConstraintTab>("pins");
   const [pins, setPins] = useState<PinAssignment[]>([]);
@@ -738,8 +774,16 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
   // Each backend has its own way of skipping IO buffer placement. We scan
   // the active constraint file (and the QSF on disk for Quartus, since the
   // VIRTUAL_PIN assignments live there rather than in the SDC).
-  const [virtualPins, setVirtualPins] = useState<{ count: number; ports: string[] }>(
-    { count: 0, ports: [] },
+  // mode "explicit": found explicit virtual-pin / unbuffered markers
+  // mode "implicit": no markers, but no physical pin locations either —
+  //                  pins are effectively floating / auto-placed.
+  const [virtualPins, setVirtualPins] = useState<{
+    count: number;
+    ports: string[];
+    mode: "none" | "explicit" | "implicit";
+    locationCount?: number;
+  }>(
+    { count: 0, ports: [], mode: "none" },
   );
 
   // ── File save/load state ──
@@ -776,49 +820,85 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
       setDirty(false);
       lastHash.current = quickHash(fc.content);
       setExternalChange(false);
-      // Virtual-pin scan from the file content we just loaded.
-      const detected = detectVirtualPins(fc.content, backendId);
-      setVirtualPins(detected);
     }).catch(() => {
       // File doesn't exist or can't be read — start empty
       setPins([]);
       setTiming([]);
       setDirty(false);
       lastHash.current = 0;
-      setVirtualPins({ count: 0, ports: [] });
     });
+  }, [constraintFile, backendId]);
 
-    // For Quartus, VIRTUAL_PIN lives in the .qsf at the project root, not in
-    // the .sdc the editor is showing. Check if a .qsf exists alongside the
-    // current project and merge any virtual ports it declares.
-    if ((backendId === "quartus" || backendId === "quartus_pro") && projectDir) {
-      (async () => {
+  // ── Virtual-pin detection effect ──
+  // Runs independently of which constraint file is open, because for some
+  // backends (Quartus) the VIRTUAL_PIN assignments live in the .qsf even
+  // when the editor is showing the .sdc. Also flags the implicit case
+  // where no physical pin locations have been assigned at all — those
+  // ports are effectively floating until the fitter places them.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { readFile: readF } = await import("../hooks/useTauri");
+      const ports = new Set<string>();
+      let mode: "none" | "explicit" | "implicit" = "none";
+      let locationCount = 0;
+
+      // 1. Active constraint file content — covers all backends in-place.
+      if (constraintFile) {
         try {
-          const { readFile: readF } = await import("../hooks/useTauri");
-          const slash = projectDir.replace(/\\/g, "/");
-          const projName = slash.split("/").pop() || "";
-          const qsfCandidates = [
-            `${slash}/${projName}.qsf`,
-            `${slash}/constraints/${projName}.qsf`,
-          ];
-          for (const path of qsfCandidates) {
-            try {
-              const fc = await readF(path);
-              if (!fc || fc.isBinary) continue;
-              const fromQsf = detectVirtualPins(fc.content, "quartus");
-              if (fromQsf.count > 0) {
-                setVirtualPins((prev) => ({
-                  count: prev.count + fromQsf.count,
-                  ports: Array.from(new Set([...prev.ports, ...fromQsf.ports])),
-                }));
-                break;
-              }
-            } catch { /* try next candidate */ }
+          const fc = await readF(constraintFile);
+          if (!fc.isBinary) {
+            const detected = detectVirtualPins(fc.content, backendId);
+            for (const p of detected.ports) ports.add(p);
+            locationCount += countLocationAssignments(fc.content, backendId);
           }
-        } catch { /* ignore — leave as already-detected */ }
-      })();
-    }
-  }, [constraintFile, backendId, projectDir]);
+        } catch { /* ignore */ }
+      }
+
+      // 2. For Quartus, also walk a few candidate .qsf paths regardless of
+      //    which file the editor is currently showing.
+      if ((backendId === "quartus" || backendId === "quartus_pro") && projectDir) {
+        const slash = projectDir.replace(/\\/g, "/");
+        const dirName = slash.split("/").filter(Boolean).pop() || "";
+        const candidates = new Set<string>();
+        for (const stem of [topModule, dirName].filter(Boolean) as string[]) {
+          candidates.add(`${slash}/${stem}.qsf`);
+          candidates.add(`${slash}/constraints/${stem}.qsf`);
+        }
+        for (const path of candidates) {
+          if (path === constraintFile) continue; // already scanned above
+          try {
+            const fc = await readF(path);
+            if (fc.isBinary) continue;
+            const detected = detectVirtualPins(fc.content, "quartus");
+            for (const p of detected.ports) ports.add(p);
+            locationCount += countLocationAssignments(fc.content, "quartus");
+          } catch { /* try next */ }
+        }
+      }
+
+      if (ports.size > 0) {
+        mode = "explicit";
+      } else if (locationCount === 0 && constraintFile) {
+        // No explicit virtual markers AND no physical locations defined
+        // means the design has no pin floorplan at all — that's an
+        // implicit "virtual" state worth surfacing to the user.
+        mode = "implicit";
+      }
+
+      if (!cancelled) {
+        setVirtualPins({
+          count: ports.size,
+          ports: Array.from(ports).sort(),
+          mode,
+          locationCount,
+        });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [constraintFile, backendId, projectDir, topModule]);
 
   // ── External change detection (poll every 3s) ──
   useEffect(() => {
@@ -1525,9 +1605,14 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
             <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>Pin Assignments</span>
             <Badge color={C.accent}>{pins.length} pins</Badge>
             <Badge color={C.ok}>{pins.filter((p) => p.locked).length} locked</Badge>
-            {virtualPins.count > 0 && (
+            {virtualPins.mode === "explicit" && (
               <Badge color={C.purple}>
                 {virtualPins.count} virtual
+              </Badge>
+            )}
+            {virtualPins.mode === "implicit" && (
+              <Badge color={C.purple}>
+                no pin locations
               </Badge>
             )}
             <div style={{ flex: 1 }} />
@@ -1559,7 +1644,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
               using virtual pins so the user understands why physical pin
               locations are absent / why the fitter is skipping I/O
               placement. Lists the affected ports inline. */}
-          {virtualPins.count > 0 && (
+          {virtualPins.mode === "explicit" && (
             <div style={{
               padding: "8px 12px",
               marginBottom: 10,
@@ -1587,6 +1672,36 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
               }}>
                 {virtualPins.ports.slice(0, 12).join(", ")}
                 {virtualPins.ports.length > 12 && ` \u2026 (+${virtualPins.ports.length - 12} more)`}
+              </div>
+            </div>
+          )}
+
+          {/* Implicit-virtual banner — no explicit VIRTUAL_PIN markers and no
+              physical locations either. Tells the user their I/O has no
+              floorplan, so the fitter will either auto-place or treat the
+              ports as virtual depending on backend. */}
+          {virtualPins.mode === "implicit" && (
+            <div style={{
+              padding: "8px 12px",
+              marginBottom: 10,
+              background: `${C.purple}15`,
+              border: `1px solid ${C.purple}50`,
+              borderRadius: 6,
+              fontFamily: MONO,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, marginBottom: 3 }}>
+                No physical pin locations defined
+              </div>
+              <div style={{ fontSize: 8, color: C.t2, lineHeight: 1.5 }}>
+                The active constraint file has zero pin location assignments.
+                {(backendId === "quartus" || backendId === "quartus_pro")
+                  && " Quartus will treat unconstrained top-level ports as VIRTUAL_PIN \u2014 the fitter skips physical I/O placement."}
+                {backendId === "vivado"
+                  && " Vivado will leave ports unplaced \u2014 the design will not produce a usable bitstream."}
+                {backendId === "radiant"
+                  && " Radiant will auto-place I/O at the fitter's discretion \u2014 add LDC location assignments before tape-out."}
+                {!["quartus", "quartus_pro", "vivado", "radiant"].includes(backendId)
+                  && " The fitter will auto-place ports without user-pinned locations."}
               </div>
             </div>
           )}
