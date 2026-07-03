@@ -2057,7 +2057,6 @@ export default function App() {
             {visitedSecs.has("templates") && (
               <div style={{ display: sec === "templates" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
                 <SourceTemplates
-                  templates={null}
                   onInsert={(code) => {
                     console.log("Template inserted:", code);
                   }}
