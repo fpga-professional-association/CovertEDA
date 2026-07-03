@@ -151,6 +151,7 @@ pub struct DrcItem {
 #[serde(rename_all = "snake_case")]
 pub enum DrcSeverity {
     Error,
+    #[serde(rename = "crit_warn")]
     CriticalWarning,
     Warning,
     Info,
