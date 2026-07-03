@@ -130,6 +130,17 @@ pub struct LicenseEnvVar {
 
 /// Build an SSH command for the given config and remote command string.
 pub fn build_ssh_command(cfg: &SshConfig, remote_cmd: &str) -> Command {
+    build_ssh_command_with_password(cfg, remote_cmd, password_for_auth(cfg))
+}
+
+/// Same as [`build_ssh_command`], but takes the Password-auth secret explicitly
+/// instead of loading it from the OS keyring. Split out so tests can exercise
+/// the command-construction logic without touching the real keyring.
+fn build_ssh_command_with_password(
+    cfg: &SshConfig,
+    remote_cmd: &str,
+    password: Option<String>,
+) -> Command {
     let (exe, port_flag) = match &cfg.tool {
         SshToolKind::OpenSsh => ("ssh".to_string(), "-p"),
         SshToolKind::Plink => ("plink".to_string(), "-P"),
@@ -139,38 +150,72 @@ pub fn build_ssh_command(cfg: &SshConfig, remote_cmd: &str) -> Command {
         }
     };
 
-    let mut cmd = Command::new(&exe);
+    let mut args: Vec<String> = Vec::new();
 
     // Port (skip if default 22 for cleaner commands)
     if cfg.port != 22 {
-        cmd.arg(port_flag).arg(cfg.port.to_string());
+        args.push(port_flag.to_string());
+        args.push(cfg.port.to_string());
     }
 
-    // Key file
-    if cfg.auth == SshAuthMethod::Key {
-        if let Some(ref key) = cfg.key_path {
-            cmd.arg("-i").arg(key);
+    match cfg.auth {
+        SshAuthMethod::Key => {
+            if let Some(ref key) = cfg.key_path {
+                args.push("-i".to_string());
+                args.push(key.clone());
+            }
+        }
+        // Plink/pscp accept a password directly on the command line; OpenSSH
+        // has no equivalent flag (by design), so it's handled via sshpass below.
+        SshAuthMethod::Password => {
+            if cfg.tool == SshToolKind::Plink {
+                if let Some(ref pw) = password {
+                    args.push("-pw".to_string());
+                    args.push(pw.clone());
+                }
+            }
+        }
+        SshAuthMethod::Agent => {}
+    }
+
+    // Disable strict host key checking for non-interactive use. BatchMode=yes
+    // must be skipped when we're about to supply a password (via sshpass or
+    // plink -pw): OpenSSH's BatchMode disables password prompting outright,
+    // so leaving it on guarantees "Permission denied" even with a valid password.
+    if cfg.tool == SshToolKind::OpenSsh || cfg.tool == SshToolKind::Custom {
+        args.push("-o".to_string());
+        args.push("StrictHostKeyChecking=accept-new".to_string());
+        if !(cfg.auth == SshAuthMethod::Password && password.is_some()) {
+            args.push("-o".to_string());
+            args.push("BatchMode=yes".to_string());
         }
     }
 
-    // Disable strict host key checking for non-interactive use
-    if cfg.tool == SshToolKind::OpenSsh || cfg.tool == SshToolKind::Custom {
-        cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
-        cmd.arg("-o").arg("BatchMode=yes");
-    }
-
     // user@host
-    cmd.arg(format!("{}@{}", cfg.user, cfg.host));
+    args.push(format!("{}@{}", cfg.user, cfg.host));
 
     // Remote command
-    cmd.arg(remote_cmd);
+    args.push(remote_cmd.to_string());
 
-    cmd
+    wrap_with_sshpass_if_needed(cfg, &exe, &password, args)
 }
 
 /// Build an SCP command for file transfer.
 /// `download=true`: remote→local, `download=false`: local→remote.
 pub fn build_scp_command(cfg: &SshConfig, src: &str, dst: &str, download: bool) -> Command {
+    build_scp_command_with_password(cfg, src, dst, download, password_for_auth(cfg))
+}
+
+/// Same as [`build_scp_command`], but takes the Password-auth secret explicitly
+/// instead of loading it from the OS keyring. Split out so tests can exercise
+/// the command-construction logic without touching the real keyring.
+fn build_scp_command_with_password(
+    cfg: &SshConfig,
+    src: &str,
+    dst: &str,
+    download: bool,
+    password: Option<String>,
+) -> Command {
     let (exe, port_flag) = match &cfg.tool {
         SshToolKind::OpenSsh => ("scp".to_string(), "-P"),
         SshToolKind::Plink => ("pscp".to_string(), "-P"),
@@ -180,35 +225,90 @@ pub fn build_scp_command(cfg: &SshConfig, src: &str, dst: &str, download: bool) 
         }
     };
 
-    let mut cmd = Command::new(&exe);
+    let mut args: Vec<String> = Vec::new();
 
     if cfg.port != 22 {
-        cmd.arg(port_flag).arg(cfg.port.to_string());
+        args.push(port_flag.to_string());
+        args.push(cfg.port.to_string());
     }
 
-    if cfg.auth == SshAuthMethod::Key {
-        if let Some(ref key) = cfg.key_path {
-            cmd.arg("-i").arg(key);
+    match cfg.auth {
+        SshAuthMethod::Key => {
+            if let Some(ref key) = cfg.key_path {
+                args.push("-i".to_string());
+                args.push(key.clone());
+            }
         }
+        SshAuthMethod::Password => {
+            if cfg.tool == SshToolKind::Plink {
+                if let Some(ref pw) = password {
+                    args.push("-pw".to_string());
+                    args.push(pw.clone());
+                }
+            }
+        }
+        SshAuthMethod::Agent => {}
     }
 
     if cfg.tool == SshToolKind::OpenSsh || cfg.tool == SshToolKind::Custom {
-        cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
-        cmd.arg("-o").arg("BatchMode=yes");
+        args.push("-o".to_string());
+        args.push("StrictHostKeyChecking=accept-new".to_string());
+        if !(cfg.auth == SshAuthMethod::Password && password.is_some()) {
+            args.push("-o".to_string());
+            args.push("BatchMode=yes".to_string());
+        }
     }
 
     let remote_prefix = format!("{}@{}", cfg.user, cfg.host);
 
     if download {
         // remote → local
-        cmd.arg(format!("{}:{}", remote_prefix, src));
-        cmd.arg(dst);
+        args.push(format!("{}:{}", remote_prefix, src));
+        args.push(dst.to_string());
     } else {
         // local → remote
-        cmd.arg(src);
-        cmd.arg(format!("{}:{}", remote_prefix, dst));
+        args.push(src.to_string());
+        args.push(format!("{}:{}", remote_prefix, dst));
     }
 
+    wrap_with_sshpass_if_needed(cfg, &exe, &password, args)
+}
+
+/// Look up the saved password for this config's user@host, but only when
+/// Password auth is actually selected.
+fn password_for_auth(cfg: &SshConfig) -> Option<String> {
+    if cfg.auth == SshAuthMethod::Password {
+        load_ssh_password(&cfg.user, &cfg.host)
+    } else {
+        None
+    }
+}
+
+/// For OpenSSH/Custom tools under Password auth, neither `ssh` nor `scp`
+/// accept a password via argument or non-interactive stdin, so the command
+/// is wrapped with `sshpass -e <exe> <args...>`, passing the password via the
+/// SSHPASS environment variable (not argv, to avoid exposing it in `ps`).
+/// Plink/pscp already received `-pw` above and need no wrapping.
+fn wrap_with_sshpass_if_needed(
+    cfg: &SshConfig,
+    exe: &str,
+    password: &Option<String>,
+    args: Vec<String>,
+) -> Command {
+    if cfg.auth == SshAuthMethod::Password
+        && (cfg.tool == SshToolKind::OpenSsh || cfg.tool == SshToolKind::Custom)
+    {
+        if let Some(pw) = password {
+            let mut cmd = Command::new("sshpass");
+            cmd.env("SSHPASS", pw);
+            cmd.arg("-e").arg(exe);
+            cmd.args(&args);
+            return cmd;
+        }
+    }
+
+    let mut cmd = Command::new(exe);
+    cmd.args(&args);
     cmd
 }
 
@@ -1196,6 +1296,118 @@ mod tests {
         assert_eq!(cfg.port, 22);
         assert_eq!(cfg.auth, SshAuthMethod::Agent);
         assert!(cfg.host.is_empty());
+    }
+
+    // ── Regression tests for #209: SSH password auth ──
+    //
+    // These call the `*_with_password` variants directly so they never touch
+    // the real OS keyring (which may not exist at all in a CI/sandbox
+    // environment), while still exercising the exact command-construction
+    // logic that `build_ssh_command`/`build_scp_command` use in production.
+
+    #[test]
+    fn test_openssh_password_auth_wraps_with_sshpass_and_skips_batchmode() {
+        let mut cfg = test_config();
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_ssh_command_with_password(&cfg, "echo hi", Some("hunter2".into()));
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "sshpass");
+        assert!(args.iter().any(|a| a == "-e"));
+        assert!(args.iter().any(|a| a == "ssh"));
+        assert!(args.iter().any(|a| a == "fpga@build-server.local"));
+        // BatchMode=yes would make OpenSSH refuse the password prompt outright.
+        assert!(!args.iter().any(|a| a == "BatchMode=yes"));
+        // The password must travel via env, never as a bare argument.
+        assert!(!args.iter().any(|a| a == "hunter2"));
+        let env_pass = cmd
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new("SSHPASS"))
+            .and_then(|(_, v)| v)
+            .unwrap();
+        assert_eq!(env_pass, "hunter2");
+    }
+
+    #[test]
+    fn test_openssh_password_auth_without_saved_password_falls_back_to_batchmode() {
+        // If the user selected Password auth but never actually saved one
+        // (e.g. keyring lookup failed), we must NOT hang waiting on an
+        // interactive prompt that can never be answered headlessly -- keep
+        // the old BatchMode=yes fail-fast behavior instead.
+        let mut cfg = test_config();
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_ssh_command_with_password(&cfg, "echo hi", None);
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "ssh");
+        assert!(args.iter().any(|a| a == "BatchMode=yes"));
+    }
+
+    #[test]
+    fn test_plink_password_auth_uses_pw_flag() {
+        let mut cfg = test_config();
+        cfg.tool = SshToolKind::Plink;
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_ssh_command_with_password(&cfg, "echo hi", Some("hunter2".into()));
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "plink");
+        assert!(args.iter().any(|a| a == "-pw"));
+        assert!(args.iter().any(|a| a == "hunter2"));
+    }
+
+    #[test]
+    fn test_custom_tool_password_auth_wraps_with_sshpass() {
+        let mut cfg = test_config();
+        cfg.tool = SshToolKind::Custom;
+        cfg.custom_ssh_path = Some("/usr/local/bin/my-ssh".into());
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_ssh_command_with_password(&cfg, "echo hi", Some("s3cret".into()));
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "sshpass");
+        assert!(args.iter().any(|a| a == "/usr/local/bin/my-ssh"));
+    }
+
+    #[test]
+    fn test_scp_password_auth_wraps_with_sshpass() {
+        let mut cfg = test_config();
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_scp_command_with_password(
+            &cfg, "/remote/file.rpt", "/tmp/file.rpt", true, Some("hunter2".into()),
+        );
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "sshpass");
+        assert!(args.iter().any(|a| a == "scp"));
+        assert!(!args.iter().any(|a| a == "BatchMode=yes"));
+        let env_pass = cmd
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new("SSHPASS"))
+            .and_then(|(_, v)| v)
+            .unwrap();
+        assert_eq!(env_pass, "hunter2");
+    }
+
+    #[test]
+    fn test_scp_plink_password_auth_uses_pw_flag() {
+        let mut cfg = test_config();
+        cfg.tool = SshToolKind::Plink;
+        cfg.auth = SshAuthMethod::Password;
+        let cmd = build_scp_command_with_password(
+            &cfg, "/remote/f", "/local/f", true, Some("hunter2".into()),
+        );
+        let prog = cmd.get_program().to_str().unwrap();
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(prog, "pscp");
+        assert!(args.iter().any(|a| a == "-pw"));
+        assert!(args.iter().any(|a| a == "hunter2"));
     }
 
     #[test]

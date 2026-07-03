@@ -1312,6 +1312,7 @@ export async function sshTestConnection(
   keyPath?: string,
   customSsh?: string,
   customScp?: string,
+  auth?: string,
 ): Promise<SshConnectionInfo> {
   if (!isTauri) return { ok: false, error: "Not running in Tauri" };
   return invoke<SshConnectionInfo>("ssh_test_connection", {
@@ -1319,6 +1320,7 @@ export async function sshTestConnection(
     keyPath: keyPath ?? null,
     customSsh: customSsh ?? null,
     customScp: customScp ?? null,
+    auth: auth ?? null,
   });
 }
 
