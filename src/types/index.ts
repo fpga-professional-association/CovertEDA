@@ -480,29 +480,6 @@ export interface LicenseCheckResult {
   features: LicenseFeature[];
 }
 
-// ── Power Analysis ──
-export interface PowerModule {
-  name: string;
-  static_mw: number;
-  dynamic_mw: number;
-  total_mw: number;
-}
-
-export interface PowerReport {
-  total_power_w: number;
-  static_power_w: number;
-  dynamic_power_w: number;
-  logic_power_w: number;
-  io_power_w: number;
-  clock_power_w: number;
-  bram_power_w: number;
-  dsp_power_w: number;
-  junction_temp_c: number;
-  ambient_temp_c: number;
-  thermal_margin_c: number;
-  modules: PowerModule[];
-}
-
 // ── Reveal Debug ──
 export interface TriggerSignal {
   name: string;
