@@ -415,15 +415,16 @@ function parseTimingLines(lines: string[]): TimingConstraint[] {
 }
 
 /** Parse PDC / LPF format (Radiant / Diamond) */
-function parsePdc(text: string): { pins: PinAssignment[]; timing: TimingConstraint[] } {
+function parsePdc(text: string): { pins: PinAssignment[]; timing: TimingConstraint[]; preserved: string[] } {
   const pins: PinAssignment[] = [];
   const timingLines: string[] = [];
+  const preserved: string[] = [];
   const pinMap = new Map<string, Partial<PinAssignment>>();
   const lines = text.split("\n");
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("##")) continue;
+    if (!trimmed) continue;
 
     // ldc_set_location -site {PIN} [get_ports {NET}]
     const locM = trimmed.match(/ldc_set_location\s+-site\s+\{(\S+)\}\s+\[get_ports\s+\{([^}]+)\}\]/);
@@ -461,7 +462,13 @@ function parsePdc(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     // Timing lines — collect for shared parser
     if (/^#?\s*(create_clock|set_input_delay|set_output_delay|set_false_path|set_multicycle_path|set_max_delay|set_min_delay|set_clock_groups)\b/.test(trimmed)) {
       timingLines.push(trimmed);
+      continue;
     }
+
+    // Anything else (comments, sysconfig, ldc_create_group, and any other
+    // directive this editor doesn't model) — preserve verbatim so Save
+    // doesn't silently delete it. See #182.
+    preserved.push(line);
   }
 
   for (const [, p] of pinMap) {
@@ -479,18 +486,19 @@ function parsePdc(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     });
   }
 
-  return { pins, timing: parseTimingLines(timingLines) };
+  return { pins, timing: parseTimingLines(timingLines), preserved };
 }
 
 /** Parse QSF format (Quartus) */
-function parseQsf(text: string): { pins: PinAssignment[]; timing: TimingConstraint[] } {
+function parseQsf(text: string): { pins: PinAssignment[]; timing: TimingConstraint[]; preserved: string[] } {
   const pinMap = new Map<string, Partial<PinAssignment>>();
   const timingLines: string[] = [];
+  const preserved: string[] = [];
   const lines = text.split("\n");
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("##")) continue;
+    if (!trimmed) continue;
 
     // set_location_assignment PIN_XX -to net
     const locM = trimmed.match(/set_location_assignment\s+PIN_(\S+)\s+-to\s+(\S+)/);
@@ -556,7 +564,13 @@ function parseQsf(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     // Timing
     if (/^#?\s*(create_clock|set_input_delay|set_output_delay|set_false_path|set_multicycle_path|set_max_delay|set_min_delay|set_clock_groups)\b/.test(trimmed)) {
       timingLines.push(trimmed);
+      continue;
     }
+
+    // Anything else (FAMILY/DEVICE/TOP_LEVEL_ENTITY/VERILOG_FILE assignments,
+    // comments, and any other directive this editor doesn't model) --
+    // preserve verbatim so Save doesn't silently delete it. See #182.
+    preserved.push(line);
   }
 
   const pins: PinAssignment[] = [];
@@ -574,18 +588,19 @@ function parseQsf(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     });
   }
 
-  return { pins, timing: parseTimingLines(timingLines) };
+  return { pins, timing: parseTimingLines(timingLines), preserved };
 }
 
 /** Parse XDC format (Vivado) */
-function parseXdc(text: string): { pins: PinAssignment[]; timing: TimingConstraint[] } {
+function parseXdc(text: string): { pins: PinAssignment[]; timing: TimingConstraint[]; preserved: string[] } {
   const pinMap = new Map<string, Partial<PinAssignment>>();
   const timingLines: string[] = [];
+  const preserved: string[] = [];
   const lines = text.split("\n");
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("##")) continue;
+    if (!trimmed) continue;
 
     // set_property PACKAGE_PIN XX [get_ports {net}]
     const pkgM = trimmed.match(/set_property\s+PACKAGE_PIN\s+(\S+)\s+\[get_ports\s+\{?([^}\]]+)\}?\]/);
@@ -646,7 +661,13 @@ function parseXdc(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     // Timing
     if (/^#?\s*(create_clock|set_input_delay|set_output_delay|set_false_path|set_multicycle_path|set_max_delay|set_min_delay|set_clock_groups)\b/.test(trimmed)) {
       timingLines.push(trimmed);
+      continue;
     }
+
+    // Anything else (comments, create_generated_clock, CFGBVS/pblock
+    // properties, and any other directive this editor doesn't model) --
+    // preserve verbatim so Save doesn't silently delete it. See #182.
+    preserved.push(line);
   }
 
   const pins: PinAssignment[] = [];
@@ -663,13 +684,14 @@ function parseXdc(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     });
   }
 
-  return { pins, timing: parseTimingLines(timingLines) };
+  return { pins, timing: parseTimingLines(timingLines), preserved };
 }
 
 /** Parse PCF format (OSS CAD Suite) */
-function parsePcf(text: string): { pins: PinAssignment[]; timing: TimingConstraint[] } {
+function parsePcf(text: string): { pins: PinAssignment[]; timing: TimingConstraint[]; preserved: string[] } {
   const pins: PinAssignment[] = [];
   const timingLines: string[] = [];
+  const preserved: string[] = [];
   const lines = text.split("\n");
 
   for (const line of lines) {
@@ -698,14 +720,19 @@ function parsePcf(text: string): { pins: PinAssignment[]; timing: TimingConstrai
     // Standard SDC timing in PCF
     if (/^#?\s*(create_clock|set_input_delay|set_output_delay|set_false_path|set_multicycle_path|set_max_delay|set_min_delay|set_clock_groups)\b/.test(trimmed)) {
       timingLines.push(trimmed);
+      continue;
     }
+
+    // Anything else (comments, other pragmas) -- preserve verbatim so Save
+    // doesn't silently delete it. See #182.
+    preserved.push(line);
   }
 
-  return { pins, timing: parseTimingLines(timingLines) };
+  return { pins, timing: parseTimingLines(timingLines), preserved };
 }
 
 /** Dispatch to the right parser based on backend */
-function parseConstraintFile(text: string, backendId: string): { pins: PinAssignment[]; timing: TimingConstraint[] } {
+function parseConstraintFile(text: string, backendId: string): { pins: PinAssignment[]; timing: TimingConstraint[]; preserved: string[] } {
   if (backendId === "radiant" || backendId === "diamond") return parsePdc(text);
   if (backendId === "quartus") return parseQsf(text);
   if (backendId === "vivado") return parseXdc(text);
@@ -730,6 +757,10 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
   const [tab, setTab] = useState<ConstraintTab>("pins");
   const [pins, setPins] = useState<PinAssignment[]>([]);
   const [timing, setTiming] = useState<TimingConstraint[]>([]);
+  // Lines from the original file this editor doesn't model (comments,
+  // FAMILY/DEVICE/TOP_LEVEL_ENTITY assignments, sysconfig, pblocks, etc.).
+  // Re-emitted verbatim on Save so they're never silently destroyed. #182
+  const [preservedLines, setPreservedLines] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<CellAddr | null>(null);
   const [editingCell, setEditingCell] = useState<CellAddr | null>(null);
@@ -817,6 +848,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
       const parsed = parseConstraintFile(fc.content, backendId);
       setPins(parsed.pins);
       setTiming(parsed.timing);
+      setPreservedLines(parsed.preserved);
       setDirty(false);
       lastHash.current = quickHash(fc.content);
       setExternalChange(false);
@@ -824,6 +856,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
       // File doesn't exist or can't be read — start empty
       setPins([]);
       setTiming([]);
+      setPreservedLines([]);
       setDirty(false);
       lastHash.current = 0;
     });
@@ -935,6 +968,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
       const parsed = parseConstraintFile(fc.content, backendId);
       setPins(parsed.pins);
       setTiming(parsed.timing);
+      setPreservedLines(parsed.preserved);
       setDirty(false);
       lastHash.current = quickHash(fc.content);
       setExternalChange(false);
@@ -1365,6 +1399,18 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
   const generateConstraintText = useMemo(() => {
     const lines: string[] = [];
 
+    // Content from the original file this editor doesn't model (comments,
+    // FAMILY/DEVICE/TOP_LEVEL_ENTITY assignments, sysconfig, pblocks,
+    // create_generated_clock, etc.) is re-emitted verbatim up front so
+    // Save never silently destroys it. See #182. Original relative
+    // ordering against the pin/timing sections below isn't preserved,
+    // but no directive is lost.
+    if (preservedLines.length > 0) {
+      lines.push(`## Preserved from original file (not editable here)`);
+      lines.push(...preservedLines);
+      lines.push("");
+    }
+
     if (backendId === "radiant" || backendId === "diamond") {
       lines.push(`## Pin Constraints (PDC/LPF format)`);
       for (const p of pins) {
@@ -1435,7 +1481,7 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
     }
 
     return lines.join("\n");
-  }, [pins, timing, backendId]);
+  }, [pins, timing, backendId, preservedLines]);
 
   // ── Save ──
   const doSave = useCallback(async (path: string) => {
