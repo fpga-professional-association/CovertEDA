@@ -206,6 +206,11 @@ pub fn generate_ip_script(
     instance_name: String,
     params: HashMap<String, String>,
 ) -> Result<IpGenerateResult, String> {
+    // Security: `device` is interpolated verbatim into generated TCL (e.g.
+    // `prj_create ... -dev {device}`) here too -- same injection class as
+    // start_build, see validate_tcl_safe_identifier's docs.
+    crate::backend::validate_tcl_safe_identifier(&device, "Device")?;
+
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     let backend = registry
         .get(&backend_id)
@@ -471,6 +476,15 @@ pub fn start_build(
                 .into(),
         );
     }
+
+    // Security: top_module/device are interpolated verbatim into generated
+    // TCL (e.g. `synth_design -top {top_module}`) by every backend. Since
+    // .coverteda is untrusted input (can arrive via a cloned/shared
+    // project), reject anything outside a safe identifier charset here --
+    // the single chokepoint all backends flow through -- rather than
+    // relying on every backend's TCL quoting to be injection-proof.
+    crate::backend::validate_tcl_safe_identifier(&config.top_module, "Top-level module")?;
+    crate::backend::validate_tcl_safe_identifier(&config.device, "Device")?;
 
     // Pre-build sanity: device must be compatible with the selected backend.
     // We run a fast local pattern match (validate_device_compat on the backend
