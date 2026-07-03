@@ -15,8 +15,20 @@ pub fn parse_radiant_utilization(content: &str, device: &str) -> BackendResult<R
 
 /// Shared parser for Lattice .mrp files (Diamond and Radiant use same format)
 fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceReport> {
+    // "Number of <resource>: <used> out of <total>" (older Diamond/Radiant
+    // .mrp reports, plain integers) or "Number of <resource>: <used> of
+    // <total>" (newer reports, thousands-separated with commas).
     let resource_re = Regex::new(
-        r"Number of (\w[\w\s/()-]*?):\s+(\d+)\s+out of\s+(\d+)"
+        r"Number of (\w[\w\s/()-]*?):\s+([\d,]+)\s+(?:out of|of)\s+([\d,]+)"
+    ).unwrap();
+
+    // Radiant's alternate tabular summary:
+    //   Resource Type          | Used | Total | Util%  | Status
+    //   LUT4                   | 245  | 2560  |  9.6%  | OK
+    // Requires a non-empty name so the header/separator/blank-spacer rows
+    // (whose first column has no word characters) are skipped naturally.
+    let table_row_re = Regex::new(
+        r"(?m)^([A-Za-z][\w\s()x/-]*?)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|"
     ).unwrap();
 
     let mut logic_items = vec![];
@@ -26,16 +38,10 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
     let mut clock_items = vec![];
     let mut other_items = vec![];
 
-    for cap in resource_re.captures_iter(content) {
-        let name = cap[1].trim().to_string();
-        let used: u64 = cap[2].parse().unwrap_or(0);
-        let total: u64 = cap[3].parse().unwrap_or(0);
-
-        // Skip entries with zero total resources
+    let mut push_item = |name: String, used: u64, total: u64| {
         if total == 0 {
-            continue;
+            return;
         }
-
         let item = ResourceItem {
             resource: name.clone(),
             used,
@@ -47,6 +53,10 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
         if name_lower.contains("register")
             || name_lower.contains("lut")
             || name_lower.contains("slice")
+            || name_lower.contains("dff")
+            || name_lower.contains("adder")
+            || name_lower.contains("comparator")
+            || name_lower.contains("multiplexer")
         {
             logic_items.push(item);
         } else if name_lower.contains("pio")
@@ -54,7 +64,7 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
             || name_lower.contains("ddr")
         {
             io_items.push(item);
-        } else if name_lower.contains("ram") {
+        } else if name_lower.contains("ram") || name_lower.contains("ebr") {
             memory_items.push(item);
         } else if name_lower.contains("dsp")
             || name_lower.contains("mult")
@@ -71,6 +81,33 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
             clock_items.push(item);
         } else {
             other_items.push(item);
+        }
+    };
+
+    // Decided up front (before any items are pushed) so checking it doesn't
+    // need to borrow the vecs `push_item` already holds mutably.
+    let has_number_of_format = resource_re.is_match(content);
+
+    for cap in resource_re.captures_iter(content) {
+        let name = cap[1].trim().to_string();
+        let used: u64 = cap[2].replace(',', "").parse().unwrap_or(0);
+        let total: u64 = cap[3].replace(',', "").parse().unwrap_or(0);
+        push_item(name, used, total);
+    }
+
+    // Only try the pipe-table format if the "Number of ..." format wasn't
+    // present at all -- Diamond/Radiant reports use one or the other, never
+    // both, and the table regex is loose enough to risk false positives on
+    // unrelated pipe-delimited text elsewhere in a report.
+    if !has_number_of_format {
+        for cap in table_row_re.captures_iter(content) {
+            let name = cap[1].trim().to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let used: u64 = cap[2].parse().unwrap_or(0);
+            let total: u64 = cap[3].parse().unwrap_or(0);
+            push_item(name, used, total);
         }
     }
 
@@ -960,152 +997,183 @@ Number of PLL sites: 1 out of 4
 
     // ── Radiant Fixture Tests ──
 
+    /// Find a specific resource item by (case-insensitive substring) name across all categories.
+    fn find_item<'a>(report: &'a ResourceReport, name_substr: &str) -> Option<&'a ResourceItem> {
+        report.categories.iter().flat_map(|c| &c.items).find(|i| {
+            i.resource.to_lowercase().contains(&name_substr.to_lowercase())
+        })
+    }
+
     #[test]
     fn test_radiant_example_blinky_led_utilization_parses() {
+        // Regression test for #207: this fixture uses Radiant's pipe-table
+        // format ("LUT4 | 48 | 2560 | 1.9% | OK"), which the old
+        // "Number of X: N out of M" regex could never match.
         let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty(), "expected resource categories, got none: {:?}", report);
+        let lut4 = find_item(&report, "lut4").expect("LUT4 row should be parsed from the pipe table");
+        assert_eq!(lut4.used, 48);
+        assert_eq!(lut4.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_blinky_led_utilization_has_categories() {
         let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        // Real file may have limited data due to table-based format
-        assert!(report.device == "LIFCL-40");
+        assert!(report.categories.iter().any(|c| c.name == "Logic"));
     }
 
     #[test]
     fn test_radiant_example_uart_controller_utilization_parses() {
         let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let lut4 = find_item(&report, "lut4").expect("LUT4 row should be parsed from the pipe table");
+        assert_eq!(lut4.used, 387);
+        assert_eq!(lut4.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_uart_controller_utilization_preserves_device() {
         let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        assert_eq!(report.device, "LIFCL-40");
     }
 
     #[test]
     fn test_radiant_example_spi_flash_utilization_parses() {
         let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let ebr = find_item(&report, "ebr").expect("EBR row should be parsed from the pipe table");
+        assert_eq!(ebr.used, 2);
+        assert_eq!(ebr.total, 10);
     }
 
     #[test]
     fn test_radiant_example_spi_flash_utilization_device() {
         let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_radiant_example_i2c_bridge_utilization_parses() {
         let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let pll = find_item(&report, "pll").expect("PLL row should be parsed from the pipe table");
+        assert_eq!(pll.used, 1);
+        assert_eq!(pll.total, 2);
     }
 
     #[test]
     fn test_radiant_example_i2c_bridge_utilization_returns_report() {
         let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_radiant_example_dsp_fir_filter_utilization_parses() {
         let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let dff = find_item(&report, "dff").expect("DFF row should be parsed from the pipe table");
+        assert_eq!(dff.used, 128);
+        assert_eq!(dff.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_dsp_fir_filter_utilization_succeeds() {
         let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     // ── Diamond Fixture Tests ──
+    //
+    // Regression tests for #207: these fixtures use "N of M" with
+    // comma-separated thousands (e.g. "1,234 of 6,912"), which the old
+    // regex (requiring literal "out of" and plain digits) could never
+    // match. `.unwrap()` (not `if let Ok`) is used deliberately so a
+    // parsing regression fails the test instead of being silently skipped.
 
     #[test]
     fn test_diamond_example_blinky_led_utilization_parses() {
         let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_utilization.mrp");
-        if let Ok(report) = parse_diamond_utilization(content, "LCMXO3LF") {
-            assert!(!report.device.is_empty());
-        }
+        let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
+        let slices = find_item(&report, "slice").expect("Slices should be parsed despite comma-separated totals");
+        assert_eq!(slices.used, 9);
+        assert_eq!(slices.total, 1280);
     }
 
     #[test]
     fn test_diamond_example_blinky_led_utilization_device() {
         let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        assert_eq!(report.device, "LCMXO3LF");
     }
 
     #[test]
     fn test_diamond_example_uart_bridge_utilization_parses() {
         let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_utilization.mrp");
-        if let Ok(report) = parse_diamond_utilization(content, "LCMXO3LF") {
-            assert!(!report.device.is_empty());
-        }
+        let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
+        let slices = find_item(&report, "slice").expect("Slices should be parsed despite comma-separated totals");
+        assert_eq!(slices.used, 156);
+        assert_eq!(slices.total, 2304);
     }
 
     #[test]
     fn test_diamond_example_uart_bridge_utilization_succeeds() {
         let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_diamond_example_serdes_loopback_utilization_parses() {
         let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_utilization.mrp");
-        if let Ok(report) = parse_diamond_utilization(content, "LCMXO3LF") {
-            assert!(!report.device.is_empty());
-        }
+        let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
+        let slices = find_item(&report, "slice").expect("Slices should be parsed despite comma-separated totals");
+        assert_eq!(slices.used, 562);
+        assert_eq!(slices.total, 7680);
     }
 
     #[test]
     fn test_diamond_example_serdes_loopback_utilization_device() {
         let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        assert_eq!(report.device, "LCMXO3LF");
     }
 
     #[test]
     fn test_diamond_example_video_scaler_utilization_parses() {
         let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_utilization.mrp");
-        if let Ok(report) = parse_diamond_utilization(content, "LCMXO3LF") {
-            assert!(!report.device.is_empty());
-        }
+        let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
+        let slices = find_item(&report, "slice").expect("Slices should be parsed despite comma-separated totals");
+        assert_eq!(slices.used, 2456);
+        assert_eq!(slices.total, 7680);
     }
 
     #[test]
     fn test_diamond_example_video_scaler_utilization_succeeds() {
         let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     #[test]
     fn test_diamond_example_wishbone_soc_utilization_parses() {
         let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_utilization.mrp");
-        if let Ok(report) = parse_diamond_utilization(content, "LCMXO3LF") {
-            assert!(!report.device.is_empty());
-        }
+        let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
+        let slices = find_item(&report, "slice").expect("Slices should be parsed despite comma-separated totals");
+        assert_eq!(slices.used, 1234);
+        assert_eq!(slices.total, 6912);
     }
 
     #[test]
     fn test_diamond_example_wishbone_soc_utilization_succeeds() {
         let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        assert!(!report.categories.is_empty());
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -1359,71 +1427,90 @@ Number of PLL sites: 1 out of 4
     fn test_radiant_example_blinky_led_utilization_simple() {
         let content = include_str!("../../tests/fixtures/radiant/examples/blinky_led_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        // Blinky is a simple design
-        assert!(!report.device.is_empty());
+        let dff = find_item(&report, "dff").expect("DFF row should be parsed from the pipe table");
+        assert_eq!(dff.used, 32);
+        assert_eq!(dff.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_uart_controller_utilization_io() {
         let content = include_str!("../../tests/fixtures/radiant/examples/uart_controller_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let dff = find_item(&report, "dff").expect("DFF row should be parsed from the pipe table");
+        assert_eq!(dff.used, 256);
+        assert_eq!(dff.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_spi_flash_utilization_fifo() {
         let content = include_str!("../../tests/fixtures/radiant/examples/spi_flash_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let dff = find_item(&report, "dff").expect("DFF row should be parsed from the pipe table");
+        assert_eq!(dff.used, 384);
+        assert_eq!(dff.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_i2c_bridge_utilization_memory() {
         let content = include_str!("../../tests/fixtures/radiant/examples/i2c_bridge_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let dff = find_item(&report, "dff").expect("DFF row should be parsed from the pipe table");
+        assert_eq!(dff.used, 189);
+        assert_eq!(dff.total, 2560);
     }
 
     #[test]
     fn test_radiant_example_dsp_fir_filter_utilization_dsp() {
         let content = include_str!("../../tests/fixtures/radiant/examples/dsp_fir_filter_utilization.mrp");
         let report = parse_radiant_utilization(content, "LIFCL-40").unwrap();
-        assert!(!report.device.is_empty());
+        let adder = find_item(&report, "adder").expect("Adder row should be parsed from the pipe table");
+        assert_eq!(adder.used, 8);
+        assert_eq!(adder.total, 640);
     }
 
     #[test]
     fn test_diamond_example_blinky_led_utilization_simple_design() {
         let content = include_str!("../../tests/fixtures/diamond/examples/blinky_led_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        let io = find_item(&report, "io block").expect("IO Blocks should be parsed despite comma-separated totals");
+        assert_eq!(io.used, 5);
+        assert_eq!(io.total, 104);
     }
 
     #[test]
     fn test_diamond_example_uart_bridge_utilization_uart() {
         let content = include_str!("../../tests/fixtures/diamond/examples/uart_bridge_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        let io = find_item(&report, "io block").expect("IO Blocks should be parsed despite comma-separated totals");
+        assert_eq!(io.used, 31);
+        assert_eq!(io.total, 172);
     }
 
     #[test]
     fn test_diamond_example_serdes_loopback_utilization_serdes() {
         let content = include_str!("../../tests/fixtures/diamond/examples/serdes_loopback_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        let serdes = find_item(&report, "serdes").expect("SERDES should be parsed despite comma-separated totals");
+        assert_eq!(serdes.used, 2);
+        assert_eq!(serdes.total, 8);
     }
 
     #[test]
     fn test_diamond_example_video_scaler_utilization_video_processing() {
         let content = include_str!("../../tests/fixtures/diamond/examples/video_scaler_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        let dsp = find_item(&report, "dsp block").expect("DSP Blocks should be parsed despite comma-separated totals");
+        assert_eq!(dsp.used, 8);
+        assert_eq!(dsp.total, 240);
     }
 
     #[test]
     fn test_diamond_example_wishbone_soc_utilization_interconnect() {
         let content = include_str!("../../tests/fixtures/diamond/examples/wishbone_soc_utilization.mrp");
         let report = parse_diamond_utilization(content, "LCMXO3LF").unwrap();
-        assert!(!report.device.is_empty());
+        let io = find_item(&report, "io block").expect("IO Blocks should be parsed despite comma-separated totals");
+        assert_eq!(io.used, 16);
+        assert_eq!(io.total, 216);
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
