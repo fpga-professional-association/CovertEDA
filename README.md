@@ -145,6 +145,9 @@ Every build is recorded with its timestamp, status, Fmax, utilization, and linke
 ### Git Integration
 Status bar showing branch, commit, dirty state, and ahead/behind counts. Commit-before-build workflow links each build to a specific source state. Uses libgit2 for fast, reliable git operations.
 
+### SSH Remote Builds
+Execute builds on a remote Linux host with FPGA toolchains installed. Configure hostname, SSH port, authentication, and remote project directory. Auto-detect installed tools, stream build logs in real-time, and fetch reports from the remote output.
+
 ### AI Assistant
 Built-in chat interface supporting multiple AI providers (Anthropic Claude, OpenAI, Google Gemini, Mistral, xAI, DeepSeek, and local Ollama). Includes a prompt library with 8 built-in FPGA prompts, user-saved prompts, and reusable skills with `{{placeholder}}` substitution. The assistant automatically receives full project context including source file contents, reports, and build state. A `.coverteda_ai` project file provides persistent AI notes that are included in every conversation.
 
@@ -385,7 +388,6 @@ src-tauri/              # Rust backend
 - [ ] Cross-platform installers (Windows, macOS, Linux)
 
 ### Future
-- [ ] Remote build server support
 - [ ] Team collaboration features (shared build history, report sharing)
 - [ ] Resource estimation before synthesis (pre-build utilization prediction)
 - [ ] Formal verification integration

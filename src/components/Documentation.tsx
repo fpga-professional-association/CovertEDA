@@ -22,6 +22,7 @@ const DOC_SECTIONS: DocSection[] = [
   { id: "file-tree", title: "File Tree", icon: "\u2630", color: "accent" },
   { id: "ai-assistant", title: "AI Assistant", icon: "\u2605", color: "pink" },
   { id: "git-integration", title: "Git Integration", icon: "\u2387", color: "cyan" },
+  { id: "ssh-remote", title: "SSH Remote Builds", icon: "\u26A4", color: "cyan" },
   { id: "license-management", title: "License Management", icon: "\u26BF", color: "warn" },
   { id: "command-palette", title: "Command Palette", icon: "\u2318", color: "accent" },
   { id: "keyboard-shortcuts", title: "Keyboard Shortcuts", icon: "\u2328", color: "accent" },
@@ -689,6 +690,61 @@ function GitIntegrationSection() {
   );
 }
 
+function SshRemoteSection() {
+  const { C } = useTheme();
+  return (
+    <div>
+      <SectionHeader title="SSH Remote Builds" icon={"\u26A4"} color={C.cyan} />
+
+      <SubHeading>Connect to Remote Host</SubHeading>
+      <Para>
+        The SSH panel allows you to build designs on a remote machine running Linux with access to FPGA toolchains.
+        This is useful when your local machine lacks vendor tools or when you want to centralize builds on a dedicated server.
+      </Para>
+
+      <SubHeading>Configuration</SubHeading>
+      <Para>
+        To connect to a remote host, configure the following in the SSH Remote panel:
+      </Para>
+      <div style={{ paddingLeft: 16, marginBottom: 10 }}>
+        <Para>
+          <strong style={{ color: C.t1 }}>Hostname</strong> -- IP address or DNS name of the remote machine<br />
+          <strong style={{ color: C.t1 }}>SSH Port</strong> -- SSH daemon port (default 22)<br />
+          <strong style={{ color: C.t1 }}>Username</strong> -- Login account on the remote system<br />
+          <strong style={{ color: C.t1 }}>Authentication</strong> -- Password or public key authentication<br />
+          <strong style={{ color: C.t1 }}>Project Directory</strong> -- Path on remote where your project lives
+        </Para>
+      </div>
+
+      <SubHeading>Tool Detection</SubHeading>
+      <Para>
+        After connecting, click <strong>Detect Tools</strong> to scan the remote for installed FPGA toolchains
+        (Lattice Radiant, Intel Quartus, AMD Vivado, Yosys/nextpnr). Detected tools are displayed with their
+        install paths so you can select which backend to use.
+      </Para>
+
+      <SubHeading>Remote Builds</SubHeading>
+      <Para>
+        When a remote host is configured and connected, the build system automatically runs on the remote machine.
+        Build logs stream back to your local console in real-time. Timing, utilization, and DRC reports are fetched
+        from the remote build output and displayed locally.
+      </Para>
+
+      <SubHeading>Remote Diagnostics</SubHeading>
+      <Para>
+        The <strong>Remote Diagnostics</strong> tab displays system information about the remote machine including
+        SSH version, terminal type, and detected tool versions. This helps verify the remote environment is
+        correctly set up for your chosen backend.
+      </Para>
+
+      <InfoBox variant="tip">
+        Use SSH key-based authentication for automated builds and CI/CD pipelines. Password authentication
+        requires manual intervention.
+      </InfoBox>
+    </div>
+  );
+}
+
 function LicenseManagementSection() {
   const { C } = useTheme();
   return (
@@ -1050,6 +1106,7 @@ const SECTION_COMPONENTS: Record<string, () => JSX.Element> = {
   "file-tree": FileTreeSection,
   "ai-assistant": AiAssistantSection,
   "git-integration": GitIntegrationSection,
+  "ssh-remote": SshRemoteSection,
   "license-management": LicenseManagementSection,
   "command-palette": CommandPaletteSection,
   "keyboard-shortcuts": KeyboardShortcutsSection,
