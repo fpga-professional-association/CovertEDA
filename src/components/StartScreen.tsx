@@ -213,6 +213,7 @@ export default function StartScreen({
         auth === "key" ? sshKeyPath || undefined : undefined,
         sshConfig?.customSshPath ?? undefined,
         sshConfig?.customScpPath ?? undefined,
+        auth,
       );
       setSshInfo(info);
       if (info.ok) {

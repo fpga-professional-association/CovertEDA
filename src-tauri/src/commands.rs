@@ -4467,16 +4467,20 @@ pub async fn ssh_test_connection(
     key_path: Option<String>,
     custom_ssh: Option<String>,
     custom_scp: Option<String>,
+    auth: Option<String>,
 ) -> Result<crate::ssh::SshConnectionInfo, String> {
     let tool_kind = match tool.as_str() {
         "plink" => crate::ssh::SshToolKind::Plink,
         "custom" => crate::ssh::SshToolKind::Custom,
         _ => crate::ssh::SshToolKind::OpenSsh,
     };
-    let auth = if key_path.is_some() {
-        crate::ssh::SshAuthMethod::Key
-    } else {
-        crate::ssh::SshAuthMethod::Agent
+    let auth = match auth.as_deref() {
+        Some("password") => crate::ssh::SshAuthMethod::Password,
+        Some("key") => crate::ssh::SshAuthMethod::Key,
+        Some("agent") => crate::ssh::SshAuthMethod::Agent,
+        // Back-compat for callers not yet passing `auth`: infer from key_path.
+        None if key_path.is_some() => crate::ssh::SshAuthMethod::Key,
+        _ => crate::ssh::SshAuthMethod::Agent,
     };
     let cfg = crate::ssh::SshConfig {
         enabled: true,

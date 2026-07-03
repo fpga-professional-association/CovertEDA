@@ -98,6 +98,11 @@ export default function SshPanel({ onLog }: SshPanelProps) {
     setTesting(true);
     setTestResult(null);
     try {
+      // Password auth is verified via the OS keyring (never sent as a plain
+      // IPC argument), so persist it first if the user hasn't saved yet.
+      if (auth === "password" && password) {
+        await sshSetPassword(password);
+      }
       const res = await sshTestConnection(
         host,
         parseInt(port) || 22,
@@ -106,6 +111,7 @@ export default function SshPanel({ onLog }: SshPanelProps) {
         auth === "key" ? keyPath : undefined,
         tool === "custom" ? customSsh : undefined,
         tool === "custom" ? customScp : undefined,
+        auth,
       );
       setTestResult(res);
       if (res.ok) {
@@ -122,7 +128,7 @@ export default function SshPanel({ onLog }: SshPanelProps) {
       addConnLog(`Error: ${msg}`, false);
     }
     setTesting(false);
-  }, [host, port, user, tool, auth, keyPath, customSsh, customScp, onLog, addConnLog]);
+  }, [host, port, user, tool, auth, keyPath, password, customSsh, customScp, onLog, addConnLog]);
 
   const handleDetect = useCallback(async () => {
     setDetecting(true);
@@ -297,6 +303,12 @@ export default function SshPanel({ onLog }: SshPanelProps) {
               boxSizing: "border-box",
             }}
           />
+        )}
+        {auth === "password" && tool !== "plink" && (
+          <div style={{ fontSize: 9, fontFamily: MONO, color: C.t3, marginTop: 4 }}>
+            Requires the <code>sshpass</code> utility on this machine (OpenSSH/scp have no
+            non-interactive password flag). PuTTY&apos;s plink/pscp don&apos;t need it.
+          </div>
         )}
       </div>
 
