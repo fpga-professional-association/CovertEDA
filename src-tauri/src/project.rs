@@ -9,6 +9,41 @@ const RECENT_FILE: &str = "recent.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct IpParam {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
+    pub default: String,
+    #[serde(default)]
+    pub choices: Option<Vec<String>>,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub unit: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IpCore {
+    pub name: String,
+    pub category: String,
+    pub description: String,
+    pub families: Vec<String>,
+    #[serde(default)]
+    pub params: Option<Vec<IpParam>>,
+    #[serde(default)]
+    pub template: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub is_custom: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectConfig {
     pub name: String,
     #[serde(default)]
@@ -30,6 +65,8 @@ pub struct ProjectConfig {
     /// to the project root.
     #[serde(default)]
     pub tb_paths: Vec<String>,
+    #[serde(default)]
+    pub custom_ips: Option<Vec<IpCore>>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -106,6 +143,7 @@ impl ProjectConfig {
             build_stages: Vec::new(),
             build_options: HashMap::new(),
             tb_paths: Vec::new(),
+            custom_ips: None,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -255,6 +293,58 @@ mod tests {
         assert_eq!(loaded.backend_id, "radiant");
         assert_eq!(loaded.device, "LIFCL-40");
         assert_eq!(loaded.top_module, "counter");
+    }
+
+    #[test]
+    fn test_project_config_custom_ips_roundtrip() {
+        // Regression test for #215: customIps was silently dropped on save/load
+        // because the Rust ProjectConfig struct had no matching field.
+        let tmp = tempfile::tempdir().unwrap();
+        let mut config = ProjectConfig::new_with_defaults("test_proj", "radiant", "LIFCL-40", "counter");
+        config.custom_ips = Some(vec![IpCore {
+            name: "my_custom_fifo".to_string(),
+            category: "Memory".to_string(),
+            description: "A user-defined FIFO core".to_string(),
+            families: vec!["LIFCL".to_string()],
+            params: Some(vec![IpParam {
+                key: "DEPTH".to_string(),
+                label: "FIFO Depth".to_string(),
+                param_type: "number".to_string(),
+                default: "512".to_string(),
+                choices: None,
+                min: Some(1.0),
+                max: Some(65536.0),
+                unit: None,
+            }]),
+            template: Some("fifo #(.DEPTH({DEPTH})) u_fifo (...)".to_string()),
+            source: Some("user".to_string()),
+            is_custom: Some(true),
+        }]);
+        config.save(tmp.path()).unwrap();
+
+        let loaded = ProjectConfig::load(tmp.path()).unwrap();
+        let ips = loaded.custom_ips.expect("customIps should survive save/load roundtrip");
+        assert_eq!(ips.len(), 1);
+        assert_eq!(ips[0].name, "my_custom_fifo");
+        assert_eq!(ips[0].is_custom, Some(true));
+        assert_eq!(ips[0].params.as_ref().unwrap()[0].key, "DEPTH");
+    }
+
+    #[test]
+    fn test_project_config_load_without_custom_ips_field() {
+        // Older .coverteda files (or non-IP projects) won't have customIps at all;
+        // it must default to None rather than failing to deserialize.
+        let tmp = tempfile::tempdir().unwrap();
+        let config = ProjectConfig::new_with_defaults("legacy_proj", "diamond", "LCMXO3", "top");
+        let json = serde_json::to_string(&config).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut obj = value.as_object().unwrap().clone();
+        obj.remove("customIps");
+        let stripped = serde_json::Value::Object(obj);
+        std::fs::write(tmp.path().join(".coverteda"), stripped.to_string()).unwrap();
+
+        let loaded = ProjectConfig::load(tmp.path()).unwrap();
+        assert!(loaded.custom_ips.is_none());
     }
 
     #[test]
