@@ -1632,7 +1632,13 @@ export default function ConstraintEditor({ backendId, device, constraintFile, pr
             <Btn small onClick={() => { setShowBrowsePins(true); fetchPackagePins(); }}>Browse Pins</Btn>
             {selectedRows.size > 1 && (
               <Btn small onClick={() => {
-                setPins((prev) => prev.filter((_, i) => !selectedRows.has(i)));
+                // selectedRows holds indices into `filtered`, not `pins` --
+                // resolve to the actual pin objects (filtered preserves
+                // object references) before removing from the real array.
+                const toDelete = new Set(
+                  Array.from(selectedRows).map((i) => filtered[i]).filter(Boolean)
+                );
+                setPins((prev) => prev.filter((p) => !toDelete.has(p)));
                 setSelectedRows(new Set());
                 setSelected(null);
                 setDirty(true);
