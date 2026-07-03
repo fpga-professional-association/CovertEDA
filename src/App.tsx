@@ -58,6 +58,8 @@ import {
   gitCommit,
   getGitStatus,
   gitLog,
+  gitPull,
+  gitPush,
   saveBuildRecord,
   getProjectConfigAtHead,
   detectToolEdition,
@@ -1085,6 +1087,45 @@ export default function App() {
     }
   }, [projectDir, project]);
 
+  const handleGitPull = useCallback(async () => {
+    if (!projectDir) return;
+    setCommitting(true);
+    try {
+      const result = await gitPull(projectDir);
+      setLogs((p) => [...p, { t: "ok" as const, m: `Pull succeeded: ${result}`, ts: Date.now() }]);
+      Promise.all([
+        getGitStatus(projectDir),
+        gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+      ]).then(([r, log]) => setGitState(mapGitStatus(r, log))).catch(() => {});
+    } catch (err) {
+      setLogs((p) => [...p, { t: "err" as const, m: `Pull failed: ${err}`, ts: Date.now() }]);
+    } finally {
+      setCommitting(false);
+    }
+  }, [projectDir]);
+
+  const handleGitPush = useCallback(async () => {
+    if (!projectDir) return;
+    setCommitting(true);
+    try {
+      const result = await gitPush(projectDir);
+      setLogs((p) => [...p, { t: "ok" as const, m: `Push succeeded: ${result}`, ts: Date.now() }]);
+      Promise.all([
+        getGitStatus(projectDir),
+        gitLog(projectDir, 20).catch(() => [] as GitLogEntry[]),
+      ]).then(([r, log]) => setGitState(mapGitStatus(r, log))).catch(() => {});
+    } catch (err) {
+      setLogs((p) => [...p, { t: "err" as const, m: `Push failed: ${err}`, ts: Date.now() }]);
+    } finally {
+      setCommitting(false);
+    }
+  }, [projectDir]);
+
+  const handleGitStash = useCallback(async () => {
+    if (!projectDir) return;
+    setLogs((p) => [...p, { t: "warn" as const, m: `Git stash is not yet implemented`, ts: Date.now() }]);
+  }, [projectDir]);
+
   const handleToggleSynth = useCallback((file: ProjectFile) => {
     setRealFiles((prev) => {
       if (!prev) return prev;
@@ -1341,6 +1382,9 @@ export default function App() {
         setGitExpanded={setGitExpanded}
         onRefresh={refreshAll}
         onCommit={handleGitCommit}
+        onPull={handleGitPull}
+        onPush={handleGitPush}
+        onStash={handleGitStash}
         committing={committing}
         onInit={projectDir ? async () => {
           try {
