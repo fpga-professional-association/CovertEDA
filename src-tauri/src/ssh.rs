@@ -34,6 +34,7 @@ impl Default for SshAuthMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SshConfig {
     pub enabled: bool,
     pub tool: SshToolKind,
@@ -48,6 +49,7 @@ pub struct SshConfig {
     pub auth: SshAuthMethod,
     #[serde(default)]
     pub key_path: Option<String>,
+    #[serde(default)]
     pub remote_project_dir: String,
     #[serde(default)]
     pub remote_tool_paths: HashMap<String, String>,
@@ -1480,5 +1482,47 @@ Linux 5.15.0
     fn test_parse_coverteda_not_found() {
         let output = "__NOT_FOUND__";
         assert_eq!(output.trim(), "__NOT_FOUND__");
+    }
+
+    #[test]
+    fn test_ssh_config_deserializes_camel_case_payload_from_frontend() {
+        // Regression test for #210: SshConfig previously had no rename_all,
+        // so it expected snake_case wire fields while SshPanel.tsx sends the
+        // camelCase payload below. Deserialization used to fail with
+        // "missing field `remote_project_dir`".
+        let json = r#"{
+            "enabled": true,
+            "tool": "openssh",
+            "customSshPath": "/usr/local/bin/ssh",
+            "customScpPath": "/usr/local/bin/scp",
+            "host": "build-server.local",
+            "port": 22,
+            "user": "fpga",
+            "auth": "key",
+            "keyPath": "/home/fpga/.ssh/id_ed25519",
+            "remoteProjectDir": "/home/fpga/projects/counter",
+            "remoteToolPaths": {"radiant": "/opt/lscc/radiant/bin/radiantc"}
+        }"#;
+        let cfg: SshConfig = serde_json::from_str(json)
+            .expect("SshConfig must deserialize the camelCase payload SshPanel.tsx sends");
+        assert_eq!(cfg.remote_project_dir, "/home/fpga/projects/counter");
+        assert_eq!(cfg.custom_ssh_path.as_deref(), Some("/usr/local/bin/ssh"));
+        assert_eq!(cfg.key_path.as_deref(), Some("/home/fpga/.ssh/id_ed25519"));
+        assert_eq!(
+            cfg.remote_tool_paths.get("radiant").map(String::as_str),
+            Some("/opt/lscc/radiant/bin/radiantc")
+        );
+    }
+
+    #[test]
+    fn test_ssh_config_serializes_to_camel_case_for_frontend() {
+        // Regression test for #210: ssh_load_config previously returned
+        // snake_case JSON that SshPanel read as cfg.remoteProjectDir /
+        // cfg.keyPath / cfg.customSshPath, all undefined.
+        let cfg = test_config();
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains("\"remoteProjectDir\""));
+        assert!(!json.contains("\"remote_project_dir\""));
+        assert!(json.contains("\"remoteToolPaths\""));
     }
 }
