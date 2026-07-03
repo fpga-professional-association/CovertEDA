@@ -604,6 +604,24 @@ export default function App() {
   }, [backends]);
 
   const handleCloseProject = useCallback(() => {
+    // Tear down any in-flight build before switching projects -- otherwise
+    // its Tauri event listeners keep streaming the old project's stdout
+    // into whatever project opens next, its build:finished handler
+    // overwrites the new project's Reports tabs, and the orphaned vendor
+    // process (no longer reachable via cancelBuild) can race a second
+    // build against the same impl directory.
+    if (building) {
+      cancelBuild(buildId ?? "").catch(() => {});
+    }
+    if (buildCleanup.current) {
+      buildCleanup.current();
+      buildCleanup.current = null;
+    }
+    stopLogFlush();
+    setBuilding(false);
+    setBuildId(null);
+    setBuildFailed(false);
+
     sessionStorage.removeItem("coverteda_projectDir");
     setView("start");
     setProject(null);
@@ -618,7 +636,7 @@ export default function App() {
     setRealIoReport(null);
     setBuildDone(false);
     setActiveStage(null);
-  }, []);
+  }, [building, buildId, stopLogFlush]);
 
   const buildCleanup = useRef<(() => void) | null>(null);
   const commitCancelled = useRef(false);
