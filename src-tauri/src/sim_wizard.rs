@@ -168,8 +168,7 @@ iverilog -o simulation.vvp \
     }
 
     script.push_str(
-        r#"
-    2>/dev/null || {{ echo "Compilation failed"; exit 1; }}
+        r#"    2>/dev/null || { echo "Compilation failed"; exit 1; }
 
 # Run simulation
 vvp -n simulation.vvp -l simulation.log
@@ -207,10 +206,9 @@ fn generate_verilator_sh(config: &SimConfig) -> BackendResult<String> {
     }
 
     script.push_str(
-        r#"
-    2>&1 | tee verilator.log
+        r#"    2>&1 | tee verilator.log
 
-if [ $? -eq 0 ]; then
+if [ ${PIPESTATUS[0]} -eq 0 ]; then
     echo "Verilator compilation successful"
     ./obj_dir/V"#,
     );
@@ -299,6 +297,116 @@ mod tests {
         assert!(script.contains("Verilator"));
         assert!(script.contains("--trace"));
         assert!(script.contains("--build"));
+    }
+
+    // ── Regression tests for #208: generated scripts must be valid bash ──
+    //
+    // These execute the generated script under a real `bash` with fake
+    // iverilog/vvp/verilator/tee stubs on PATH, so they catch the actual
+    // runtime defect (broken line continuation + literal `{{`/`}}`) rather
+    // than just checking for substrings.
+
+    #[test]
+    fn test_icarus_script_has_no_literal_double_braces() {
+        let config = SimConfig::default();
+        let script = generate_icarus_sh(&config).unwrap();
+        assert!(!script.contains("{{"), "script must not contain literal '{{': {script}");
+        assert!(!script.contains("}}"), "script must not contain literal '}}': {script}");
+    }
+
+    #[test]
+    fn test_verilator_script_has_no_literal_double_braces() {
+        let config = SimConfig::default();
+        let script = generate_verilator_sh(&config).unwrap();
+        assert!(!script.contains("{{"), "script must not contain literal '{{': {script}");
+        assert!(!script.contains("}}"), "script must not contain literal '}}': {script}");
+    }
+
+    fn write_executable(dir: &std::path::Path, name: &str, body: &str) {
+        let path = dir.join(name);
+        std::fs::write(&path, format!("#!/bin/bash\n{body}\n")).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&path, perms).unwrap();
+        }
+    }
+
+    /// Run `bash <script_path>` with `bin_dir` prepended to PATH, in `work_dir`.
+    fn run_script(script_path: &std::path::Path, bin_dir: &std::path::Path, work_dir: &std::path::Path) -> std::process::Output {
+        let path_var = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+        std::process::Command::new("bash")
+            .arg(script_path)
+            .current_dir(work_dir)
+            .env("PATH", path_var)
+            .output()
+            .expect("failed to run bash")
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_icarus_script_runs_vvp_when_compilation_succeeds() {
+        let work = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        write_executable(bin.path(), "iverilog", "exit 0");
+        write_executable(bin.path(), "vvp", "echo VVP_RAN");
+
+        let mut config = SimConfig::default();
+        config.source_files = vec![PathBuf::from("top.v"), PathBuf::from("tb_top.v")];
+        let script = generate_icarus_sh(&config).unwrap();
+        let script_path = work.path().join("run.sh");
+        std::fs::write(&script_path, script).unwrap();
+
+        let output = run_script(&script_path, bin.path(), work.path());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "script should succeed: stdout={stdout} stderr={}", String::from_utf8_lossy(&output.stderr));
+        assert!(stdout.contains("VVP_RAN"), "vvp must actually run on successful compile: {stdout}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_icarus_script_exits_nonzero_and_skips_vvp_when_compilation_fails() {
+        let work = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        write_executable(bin.path(), "iverilog", "exit 1");
+        write_executable(bin.path(), "vvp", "echo VVP_RAN");
+
+        let mut config = SimConfig::default();
+        config.source_files = vec![PathBuf::from("top.v"), PathBuf::from("tb_top.v")];
+        let script = generate_icarus_sh(&config).unwrap();
+        let script_path = work.path().join("run.sh");
+        std::fs::write(&script_path, script).unwrap();
+
+        let output = run_script(&script_path, bin.path(), work.path());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!output.status.success(), "script must fail when iverilog fails");
+        assert!(stdout.contains("Compilation failed"), "must report the real failure: {stdout}");
+        assert!(!stdout.contains("VVP_RAN"), "vvp must NOT run after a failed compile: {stdout}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_verilator_script_detects_failure_through_tee_pipeline() {
+        let work = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        write_executable(bin.path(), "verilator", "echo fake verilator error 1>&2; exit 1");
+        // Real `tee`/`cat` are used from the system PATH (appended after bin/).
+
+        let mut config = SimConfig::default();
+        config.source_files = vec![PathBuf::from("top.v")];
+        let script = generate_verilator_sh(&config).unwrap();
+        let script_path = work.path().join("run.sh");
+        std::fs::write(&script_path, script).unwrap();
+
+        let output = run_script(&script_path, bin.path(), work.path());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("Verilator compilation failed"),
+            "must detect verilator's own exit code through the tee pipe (PIPESTATUS), not tee's: {stdout}"
+        );
+        assert!(!stdout.contains("Verilator compilation successful"), "must not report success: {stdout}");
     }
 
     #[test]
