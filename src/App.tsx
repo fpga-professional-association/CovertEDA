@@ -2007,7 +2007,12 @@ export default function App() {
             {/* Power Calculator Section */}
             {visitedSecs.has("power") && (
               <div style={{ display: sec === "power" ? undefined : "none", height: "100%", overflow: "auto", padding: 12 }}>
-                <PowerCalculator />
+                <PowerCalculator
+                  report={realPowerReport}
+                  onAnalyze={() => {
+                    if (projectDir) loadReportsFromDisk(projectDir, B.name);
+                  }}
+                />
               </div>
             )}
 
