@@ -106,4 +106,65 @@ describe("ConstraintEditor", () => {
       expect(screen.getByText("A5")).toBeInTheDocument();
     });
   });
+
+  it("bulk-deletes the correct pins when a search filter narrows the row indices (regression for #212)", async () => {
+    renderWithTheme(<ConstraintEditor backendId="radiant" device="LIFCL-40" />);
+    fireEvent.click(screen.getByText("+ Add Pin"));
+    const inputs = screen.getAllByRole("textbox");
+    const netInput = inputs[1];
+    const pinInput = inputs[2];
+
+    // pins[] insertion order: alpha(0), target_1(1), beta(2), target_2(3), gamma(4)
+    const toAdd: [string, string][] = [
+      ["alpha", "P1"],
+      ["target_1", "P2"],
+      ["beta", "P3"],
+      ["target_2", "P4"],
+      ["gamma", "P5"],
+    ];
+    for (const [net, pin] of toAdd) {
+      fireEvent.change(netInput, { target: { value: net } });
+      fireEvent.change(pinInput, { target: { value: pin } });
+      fireEvent.click(screen.getByText("Add"));
+      // getAllByText: the net-name AutoInput's suggestion dropdown can also
+      // render the just-added name, so more than one match is expected.
+      await waitFor(() => expect(screen.getAllByText(net).length).toBeGreaterThan(0));
+    }
+    fireEvent.click(screen.getByText("Cancel"));
+
+    // Filtering to "target" makes the visible rows [target_1, target_2],
+    // at filtered-view indices 0 and 1 -- NOT their indices (1, 3) in the
+    // underlying pins array.
+    const searchInput = screen.getByPlaceholderText("Filter nets/pins...");
+    fireEvent.change(searchInput, { target: { value: "target" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("target_1")).toBeInTheDocument();
+      expect(screen.getByText("target_2")).toBeInTheDocument();
+      expect(screen.queryByText("alpha")).not.toBeInTheDocument();
+    });
+
+    // Select both visible rows via click + shift-click on the Net cells.
+    fireEvent.click(screen.getByText("target_1"));
+    fireEvent.click(screen.getByText("target_2"), { shiftKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByText("Delete 2 Selected")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Delete 2 Selected"));
+
+    // Clear the filter and verify target_1/target_2 (the actually-selected
+    // rows) are gone, while alpha/beta/gamma (never selected) survive. The
+    // old bug deleted pins[0] and pins[1] instead (alpha, target_1),
+    // leaving target_2 behind and wrongly destroying alpha.
+    fireEvent.change(searchInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("target_1")).not.toBeInTheDocument();
+      expect(screen.queryByText("target_2")).not.toBeInTheDocument();
+      expect(screen.getByText("alpha")).toBeInTheDocument();
+      expect(screen.getByText("beta")).toBeInTheDocument();
+      expect(screen.getByText("gamma")).toBeInTheDocument();
+    });
+  });
 });
