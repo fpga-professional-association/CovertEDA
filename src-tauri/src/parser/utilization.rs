@@ -140,7 +140,7 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
 
 /// Parse Quartus .fit.rpt utilization report
 ///
-/// Quartus fitter reports contain a Resource Usage Summary table:
+/// Quartus Prime fitter reports contain a bordered Resource Usage Summary table:
 ///   ; Resource                                  ; Used   ; Total  ; % Used   ;
 ///   ; Logic utilization (ALMs needed / total)   ; 45     ; 32070  ; < 1 %    ;
 ///   ; Total I/O Pins                            ; 18     ; 480    ; 4 %      ;
@@ -148,11 +148,24 @@ fn parse_lattice_mrp(content: &str, device: &str) -> BackendResult<ResourceRepor
 /// And a per-entity hierarchy table:
 ///   ; |top                      ; 45   ; 80   ; 18   ; 2    ; 0            ;
 ///   ;    |counter               ; 12   ; 16   ; 0    ; 0    ; 0            ;
+///
+/// Other Quartus versions/report generators instead emit a plain-text
+/// summary with no table at all:
+///   Total Logic Elements               31 (out of 6272) (0.5%)
+///   Total Block Memory                 32 M bits (out of 3,840 M bits)
+///       M9K RAM/ROM Blocks             32 (out of 432)
+///   Total PLLs                         1 (out of 2)
 pub fn parse_quartus_utilization(content: &str, device: &str) -> BackendResult<ResourceReport> {
     // Parse the Resource Usage Summary table
     // Format: ; <resource name> ; <used> ; <total> ; <% used> ;
     let row_re = Regex::new(
         r"(?m);\s*([\w\s/()\-]+?)\s*;\s*(\d+)\s*;\s*(\d+)\s*;\s*"
+    ).unwrap();
+
+    // Plain-text "Total <resource>   <used>[ <unit words>] (out of <total>...)"
+    // summary lines, with optional comma-separated thousands in the total.
+    let plain_re = Regex::new(
+        r"(?m)^\s*([A-Za-z][\w\s/-]*?)\s+(\d+)(?:\s*[A-Za-z]+)*\s*\(out of\s*([\d,]+)"
     ).unwrap();
 
     let mut logic_items = vec![];
@@ -162,18 +175,13 @@ pub fn parse_quartus_utilization(content: &str, device: &str) -> BackendResult<R
     let mut clock_items = vec![];
     let mut other_items = vec![];
 
-    for cap in row_re.captures_iter(content) {
-        let name = cap[1].trim().to_string();
-        let used: u64 = cap[2].parse().unwrap_or(0);
-        let total: u64 = cap[3].parse().unwrap_or(0);
-
+    let mut push_item = |name: String, used: u64, total: u64| {
         if total == 0 {
-            continue;
+            return;
         }
-
         // Skip summary/header rows
         if name == "Resource" || name.contains("Compilation Hierarchy") || name.contains("Node") {
-            continue;
+            return;
         }
 
         let item = ResourceItem {
@@ -204,6 +212,26 @@ pub fn parse_quartus_utilization(content: &str, device: &str) -> BackendResult<R
             clock_items.push(item);
         } else {
             other_items.push(item);
+        }
+    };
+
+    let has_table_format = row_re.is_match(content);
+
+    for cap in row_re.captures_iter(content) {
+        let name = cap[1].trim().to_string();
+        let used: u64 = cap[2].parse().unwrap_or(0);
+        let total: u64 = cap[3].parse().unwrap_or(0);
+        push_item(name, used, total);
+    }
+
+    // Only try the plain-text format if the bordered table wasn't present at
+    // all -- the two formats are never mixed in one real report.
+    if !has_table_format {
+        for cap in plain_re.captures_iter(content) {
+            let name = cap[1].trim().to_string();
+            let used: u64 = cap[2].parse().unwrap_or(0);
+            let total: u64 = cap[3].replace(',', "").parse().unwrap_or(0);
+            push_item(name, used, total);
         }
     }
 
@@ -1194,41 +1222,65 @@ Number of PLL sites: 1 out of 4
     // Quartus utilization fixture tests
     // ══════════════════════════════════════════════════════════════════════════════
 
+    /// Find a specific resource item by (case-insensitive substring) name across all categories.
+    fn find_quartus_item<'a>(report: &'a ResourceReport, name_substr: &str) -> Option<&'a ResourceItem> {
+        report.categories.iter().flat_map(|c| &c.items).find(|i| {
+            i.resource.to_lowercase().contains(&name_substr.to_lowercase())
+        })
+    }
+
+    // Regression tests for #206: these fixtures use Quartus's plain-text
+    // "Total <resource>   <used> (out of <total>)" summary (no ";"-table at
+    // all), which the old table-only regex could never match. `.unwrap()`
+    // (not `if let Ok`) is used deliberately so a parsing regression fails
+    // the test instead of being silently skipped.
+
     #[test]
     fn test_quartus_example_blinky_led_utilization_parses() {
         let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_utilization.fit.rpt");
         let report = parse_quartus_utilization(content, "EP4CE6E22C8").unwrap();
-        assert!(!report.device.is_empty());
-        assert!(report.categories.len() >= 0);
+        assert!(!report.categories.is_empty(), "expected resource categories, got none: {:?}", report);
+        let logic = find_quartus_item(&report, "logic elements").expect("Total Logic Elements should be parsed");
+        assert_eq!(logic.used, 31);
+        assert_eq!(logic.total, 6272);
     }
 
     #[test]
     fn test_quartus_example_nios_hello_utilization_parses() {
         let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_utilization.fit.rpt");
         let report = parse_quartus_utilization(content, "EP4CGX22CF23I7").unwrap();
-        assert!(report.categories.len() >= 0);
+        let logic = find_quartus_item(&report, "logic elements").expect("Total Logic Elements should be parsed");
+        assert_eq!(logic.used, 4523);
+        assert_eq!(logic.total, 114600);
     }
 
     #[test]
     fn test_quartus_example_ethernet_mac_utilization_parses() {
         let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_utilization.fit.rpt");
-        if let Ok(report) = parse_quartus_utilization(content, "EP4CGX22CF23I7") {
-            assert!(report.categories.len() >= 0);
-        }
+        let report = parse_quartus_utilization(content, "EP4CGX22CF23I7").unwrap();
+        let alms = find_quartus_item(&report, "total alms").expect("Total ALMs should be parsed");
+        assert_eq!(alms.used, 2891);
+        assert_eq!(alms.total, 72000);
     }
 
     #[test]
     fn test_quartus_example_pcie_endpoint_utilization_parses() {
         let content = include_str!("../../tests/fixtures/quartus/examples/pcie_endpoint_utilization.fit.rpt");
         let report = parse_quartus_utilization(content, "EP4SGX530KH40C2").unwrap();
-        assert!(report.categories.len() >= 0);
+        // Total is comma-separated in this fixture ("out of 427200" has no
+        // comma, but ALM total is large -- exercised here for a big design).
+        let alms = find_quartus_item(&report, "total alms").expect("Total ALMs should be parsed");
+        assert_eq!(alms.used, 12456);
+        assert_eq!(alms.total, 427200);
     }
 
     #[test]
     fn test_quartus_example_signal_proc_utilization_parses() {
         let content = include_str!("../../tests/fixtures/quartus/examples/signal_proc_utilization.fit.rpt");
         let report = parse_quartus_utilization(content, "EP4SGX110KF40C3").unwrap();
-        assert!(report.categories.len() >= 0);
+        let dsp = find_quartus_item(&report, "dsp blocks").expect("Total DSP Blocks should be parsed");
+        assert_eq!(dsp.used, 32);
+        assert_eq!(dsp.total, 384);
     }
 
     #[test]
@@ -1236,23 +1288,25 @@ Number of PLL sites: 1 out of 4
         let content = include_str!("../../tests/fixtures/quartus/examples/blinky_led_utilization.fit.rpt");
         let device = "EP4CE6E22C8";
         let report = parse_quartus_utilization(content, device).unwrap();
-        assert!(!report.device.is_empty());
+        assert_eq!(report.device, device);
     }
 
     #[test]
     fn test_quartus_utilization_extracts_logic_elements() {
         let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_utilization.fit.rpt");
-        if let Ok(report) = parse_quartus_utilization(content, "EP4CGX22CF23I7") {
-            assert!(report.categories.len() >= 0);
-        }
+        let report = parse_quartus_utilization(content, "EP4CGX22CF23I7").unwrap();
+        assert!(report.categories.iter().any(|c| c.name == "Logic"));
     }
 
     #[test]
     fn test_quartus_utilization_has_memory_info() {
-        let content = include_str!("../../tests/fixtures/quartus/examples/ethernet_mac_utilization.fit.rpt");
-        if let Ok(report) = parse_quartus_utilization(content, "EP4CGX22CF23I7") {
-            assert!(report.categories.len() >= 0);
-        }
+        // "Total Block Memory   32 M bits (out of 3,840 M bits)" -- the
+        // comma-separated total is the specific defect this test guards.
+        let content = include_str!("../../tests/fixtures/quartus/examples/nios_hello_utilization.fit.rpt");
+        let report = parse_quartus_utilization(content, "EP4CGX22CF23I7").unwrap();
+        let mem = find_quartus_item(&report, "block memory").expect("Total Block Memory should be parsed despite comma-separated total");
+        assert_eq!(mem.used, 32);
+        assert_eq!(mem.total, 3840);
     }
 
     #[test]
@@ -1260,12 +1314,10 @@ Number of PLL sites: 1 out of 4
         let blinky = include_str!("../../tests/fixtures/quartus/examples/blinky_led_utilization.fit.rpt");
         let signal_proc = include_str!("../../tests/fixtures/quartus/examples/signal_proc_utilization.fit.rpt");
 
-        if let Ok(report_blinky) = parse_quartus_utilization(blinky, "EP4CE6E22C8") {
-            assert!(report_blinky.categories.len() >= 0);
-        }
-        if let Ok(report_signal) = parse_quartus_utilization(signal_proc, "EP4SGX110KF40C3") {
-            assert!(report_signal.categories.len() >= 0);
-        }
+        let report_blinky = parse_quartus_utilization(blinky, "EP4CE6E22C8").unwrap();
+        assert!(!report_blinky.categories.is_empty());
+        let report_signal = parse_quartus_utilization(signal_proc, "EP4SGX110KF40C3").unwrap();
+        assert!(!report_signal.categories.is_empty());
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
