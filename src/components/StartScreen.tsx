@@ -222,6 +222,8 @@ export default function StartScreen({
         const cfg: SshConfig = {
           enabled: true,
           tool,
+          customSshPath: sshConfig?.customSshPath,
+          customScpPath: sshConfig?.customScpPath,
           host: sshHost,
           port: sshConfig?.port ?? 22,
           user: sshUser,

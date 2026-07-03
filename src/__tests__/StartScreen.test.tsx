@@ -1,7 +1,8 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
 import { renderWithTheme } from "../test/helpers";
 import StartScreen from "../components/StartScreen";
 import { vi } from "vitest";
+import * as tauriHooks from "../hooks/useTauri";
 
 vi.mock("../hooks/useTauri", () => ({
   getRecentProjects: vi.fn(() => Promise.resolve([
@@ -30,6 +31,7 @@ vi.mock("../hooks/useTauri", () => ({
   sshTestConnection: vi.fn(() => Promise.resolve({ ok: false })),
   sshDetectTools: vi.fn(() => Promise.resolve([])),
   sshCheckProjectDir: vi.fn(() => Promise.resolve(null)),
+  sshGetSystemInfo: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("../components/NewProjectWizard", () => ({
@@ -77,5 +79,38 @@ describe("StartScreen", () => {
     renderWithTheme(<StartScreen onOpenProject={onOpenProject} />);
     expect(screen.queryByText("PROJECT TEMPLATES")).not.toBeInTheDocument();
     expect(screen.queryByText("EXAMPLE PROJECTS")).not.toBeInTheDocument();
+  });
+
+  it("preserves customSshPath/customScpPath when saving config after connect (regression for #214)", async () => {
+    const savedConfig = {
+      enabled: true,
+      tool: "custom" as const,
+      customSshPath: "/opt/homebrew/bin/ssh",
+      customScpPath: "/opt/homebrew/bin/scp",
+      host: "build-server.local",
+      port: 22,
+      user: "fpga",
+      auth: "key" as const,
+      keyPath: "~/.ssh/id_rsa",
+      remoteProjectDir: "/home/fpga/projects/counter",
+      remoteToolPaths: {},
+    };
+    vi.mocked(tauriHooks.sshLoadConfig).mockResolvedValueOnce(savedConfig);
+    vi.mocked(tauriHooks.sshTestConnection).mockResolvedValueOnce({ ok: true, hostname: "build-server" });
+
+    renderWithTheme(<StartScreen onOpenProject={onOpenProject} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Connect")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Connect"));
+
+    await waitFor(() => {
+      expect(tauriHooks.sshSaveConfig).toHaveBeenCalled();
+    });
+
+    const persisted = vi.mocked(tauriHooks.sshSaveConfig).mock.calls[0][0];
+    expect(persisted.customSshPath).toBe("/opt/homebrew/bin/ssh");
+    expect(persisted.customScpPath).toBe("/opt/homebrew/bin/scp");
   });
 });
