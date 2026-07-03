@@ -20,6 +20,9 @@ interface GitStatusBarProps {
   onRefresh?: () => void;
   onCommit?: () => void;
   onInit?: () => void;
+  onPull?: () => void;
+  onPush?: () => void;
+  onStash?: () => void;
   committing?: boolean;
 }
 
@@ -32,6 +35,9 @@ export default function GitStatusBar({
   onRefresh,
   onCommit,
   onInit,
+  onPull,
+  onPush,
+  onStash,
   committing,
 }: GitStatusBarProps) {
   const { C, MONO } = useTheme();
@@ -176,13 +182,13 @@ export default function GitStatusBar({
             {committing ? "Committing\u2026" : "Commit"}
           </Btn>
         )}
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title="Pull changes from remote">
+        <Btn small onClick={onPull} style={{ padding: "1px 6px", fontSize: 8 }} title="Pull changes from remote">
           Pull
         </Btn>
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title={`Push ${git.ahead} commit${git.ahead === 1 ? "" : "s"} to remote`}>
+        <Btn small onClick={onPush} style={{ padding: "1px 6px", fontSize: 8 }} title={`Push ${git.ahead} commit${git.ahead === 1 ? "" : "s"} to remote`}>
           Push {"\u2191"}{git.ahead}
         </Btn>
-        <Btn small style={{ padding: "1px 6px", fontSize: 8 }} title="Stash uncommitted changes">
+        <Btn small onClick={onStash} style={{ padding: "1px 6px", fontSize: 8 }} title="Stash uncommitted changes">
           Stash
         </Btn>
       </div>
