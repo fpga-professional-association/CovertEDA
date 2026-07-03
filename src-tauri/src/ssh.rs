@@ -84,6 +84,7 @@ pub struct SshConnectionInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteToolInfo {
     pub backend_id: String,
     pub name: String,
@@ -1480,5 +1481,26 @@ Linux 5.15.0
     fn test_parse_coverteda_not_found() {
         let output = "__NOT_FOUND__";
         assert_eq!(output.trim(), "__NOT_FOUND__");
+    }
+
+    #[test]
+    fn test_remote_tool_info_serializes_backend_id_as_camel_case() {
+        // Regression test for #236: RemoteToolInfo previously had no
+        // rename_all, so ssh_detect_tools returned "backend_id" while
+        // SshPanel.tsx reads t.backendId (used as React key and as the
+        // remoteToolPaths map key), making every row's backendId undefined.
+        let tool = RemoteToolInfo {
+            backend_id: "radiant".into(),
+            name: "Lattice Radiant".into(),
+            path: "/opt/lscc/radiant/2025.2/bin/lin64/radiantc".into(),
+            available: true,
+            version: Some("2025.2".into()),
+        };
+        let json = serde_json::to_string(&tool).unwrap();
+        assert!(json.contains("\"backendId\":\"radiant\""));
+        assert!(!json.contains("\"backend_id\""));
+
+        let parsed: RemoteToolInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.backend_id, "radiant");
     }
 }
